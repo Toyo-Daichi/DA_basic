@@ -1,0 +1,1 @@
+gfortran -fbounds-check -o Lorenz96_B_4DVAR lbfgs.f90 minimizer.f90 kinddef.f90 Lorenz96_B_4DVAR.f90

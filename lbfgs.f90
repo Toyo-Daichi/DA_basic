@@ -1,0 +1,890 @@
+      SUBROUTINE VA15AD(N,M,X,F,G,DIAGCO,DIAG,IPRINT,EPS,S,Y, &
+                POINT,W,IFLAG,ITER)
+!
+!
+      DOUBLE PRECISION X(N),G(N),S(M*N),Y(M*N),DIAG(N),W(N+2*M)
+      DOUBLE PRECISION FTOL,GTOL,XTOL,STPMIN,STPMAX,STP,F,YS,SQ, &
+                    YR,BETA,ONE,ZERO,EPS,XNORM,GNORM,YY,DDOT,STP1
+!
+      INTEGER BOUND,MP,LP,ITER,NFUN,NFEV,IPRINT(2),POINT,CP,IFLAG
+      LOGICAL FINISH,DIAGCO
+      COMMON /VA15DD/ MP, LP, GTOL
+      SAVE
+      DATA ONE,ZERO/1.0D+0,0.0D+0/
+!
+!     ------------------------------------------------------------
+!     INITIALIZE
+!     ------------------------------------------------------------
+!
+      IF(IFLAG.EQ.0) GO TO 1
+      GO TO (72,10) IFLAG
+   1  ITER= 0
+      CALL VA15CD
+!
+      IF(N.LE.0.OR.M.LE.0) GO TO 96
+      IF(GTOL.LE.1.D-04) THEN
+        IF(LP.GT.0) WRITE(LP,145)
+        GTOL=1.D-04
+!        GTOL=1.D-02
+      ENDIF
+      NFUN= 1
+      POINT= 0
+      FINISH= .FALSE.
+      IF(DIAGCO) THEN
+         DO 3 I=1,N
+ 3       IF (DIAG(I).LE.ZERO) GO TO 95
+      ELSE
+         DO 4 I=1,N
+ 4       DIAG(I)= 1.0D0
+      ENDIF
+      DO 5 I=1,N
+ 5    S(I)= -G(I)*DIAG(I)
+      GNORM= DSQRT(DDOT(N,G,1,G,1))
+
+      STP1= ONE/GNORM
+!
+!     PARAMETERS FOR LINE SEARCH ROUTINE
+!     ----------------------------------
+      FTOL= 1.0D-4
+      GTOL= 9.0D-1
+!X      FTOL = 1.0D-5
+!X      GTOL = 1.0D-5
+      XTOL= 1.0D-17
+      STPMIN= 1.0D-20
+      STPMAX= 1.0D+20
+      MAXFEV= 10
+!      MAXFEV= 20
+!
+       CALL VA15BD(IPRINT,ITER,NFUN, &
+                           N,M,X,F,G,STP,FINISH)
+!
+!    ------------------------------------------------------------
+!     MAIN ITERATION LOOP
+!    --------------------------------------------------------
+!
+ 8    ITER= ITER+1
+      INFO=0
+      BOUND=ITER-1
+      IF (ITER .GT. M)BOUND=M
+      IF(ITER.EQ.1) GO TO 65
+!
+!     ------------------------------------------------------------
+!     COMPUTE -HG AND THE DIAGONAL SCALING MATRIX IN DIAG
+!     ------------------------------------------------------------
+!
+      IF(.NOT.DIAGCO) THEN
+!ZOU         PRINT*,'form scaling ITER=', ITER
+         DO 9 I=1,N
+   9     DIAG(I)= YS/YY
+      ELSE
+         IFLAG=2
+         RETURN
+      ENDIF
+  10  CONTINUE
+      DO 11 I=1,N
+  11  IF (DIAG(I).LE.ZERO) GO TO 95
+!
+      CP= POINT
+      IF (POINT.EQ.0) CP=M
+      W(N+CP)= ONE/YS
+      DO 12 I=1,N
+  12  W(I)= -G(I)
+      CP= POINT
+      DO 25 II= 1,BOUND
+         CP=CP-1
+         IF (CP.EQ. -1)CP=M-1
+         SQ= DDOT(N,S(CP*N+1),1,W,1)
+         W(N+M+CP+1)= W(N+CP+1)*SQ
+         DO 20 K=1,N
+  20     W(K)= W(K)-W(N+M+CP+1)*Y(CP*N+K)
+  25  CONTINUE
+!
+      DO 30 I=1,N
+  30  W(I)=DIAG(I)*W(I)
+      DO 45 II=1,BOUND
+         YR= DDOT(N,Y(CP*N+1),1,W,1)
+         BETA= W(N+CP+1)*YR
+         DO 40 K=1,N
+  40     W(K)= W(K)+S(CP*N+K)*(W(N+M+CP+1)-BETA)
+         CP=CP+1
+         IF (CP.EQ.M)CP=0
+  45  CONTINUE
+!
+!     ------------------------------------------------------------
+!     STORE THE NEW DIRECTION IN S
+!     ------------------------------------------------------------
+!
+       DO 60 J=1,N
+  60   S(POINT*N+J)= W(J)
+!
+!     ------------------------------------------------------------
+!     OBTAIN THE MINIMIZER OF THE FUNCTION ALONG THE
+!     DIRECTION S BY USING THE LINE SEARCH ROUTINE OF VD05AD
+!     ------------------------------------------------------------
+  65  NFEV=0
+      STP=ONE
+      IF (ITER.EQ.1) STP=STP1
+      DO 70 I=1,N
+  70  W(I)=G(I)
+  72  CONTINUE
+!
+      CALL VD05AD(N,X,F,G,S(POINT*N+1),STP,FTOL,GTOL, &
+                  XTOL,STPMIN,STPMAX,MAXFEV,INFO,NFEV,DIAG)
+!
+      IF (INFO .EQ. -1) THEN
+        IFLAG=1
+        RETURN
+      ENDIF
+      IF (INFO .NE. 1) GO TO 90
+      NFUN= NFUN + NFEV
+!
+!     ------------------------------------------------------------
+!     COMPUTE THE NEW S AND Y
+!     ------------------------------------------------------------
+!
+      NPT=POINT*N
+      DO 75 I=1,N
+      S(NPT+I)= STP*S(NPT+I)
+  75  Y(NPT+I)= G(I)-W(I)
+      YS= DDOT(N,Y(NPT+1),1,S(NPT+1),1)
+      YY= DDOT(N,Y(NPT+1),1,Y(NPT+1),1)
+      POINT=POINT+1
+      IF (POINT.EQ.M)POINT=0
+!
+!     ------------------------------------------------------------
+!     CONVERGENCE CHECK
+!     ------------------------------------------------------------
+!
+      GNORM= DDOT(N,G,1,G,1)
+      GNORM=DSQRT(GNORM)
+      XNORM= DDOT(N,X,1,X,1)
+      XNORM=DSQRT(XNORM)
+      XNORM= DMAX1(1.0D0,XNORM)
+!
+!ZOU start
+!      XIAO=GNORM/XNORM
+!      PRINT*,'GNORM/(1, XNORM)=', XIAO
+!ZOU end
+      IF (GNORM/XNORM .LE. EPS) FINISH=.TRUE.
+!
+      CALL VA15BD(IPRINT,ITER,NFUN, &
+                     N,M,X,F,G,STP,FINISH)
+      IF (FINISH) THEN
+         IFLAG=0
+         RETURN
+      ENDIF
+      GO TO 8
+!
+!     ------------------------------------------------------------
+!     END OF MAIN ITERATION LOOP. ERROR EXITS.
+!     ------------------------------------------------------------
+!
+  90  IF(LP.LE.0) RETURN
+      IF (INFO.EQ.0) THEN
+           IFLAG= -1
+           WRITE(LP,100)IFLAG
+      ELSE IF (INFO.EQ.2) THEN
+           IFLAG= -2
+           WRITE(LP,105)IFLAG
+      ELSE IF (INFO.EQ.3) THEN
+           IFLAG= -3
+           WRITE(LP,110)IFLAG
+      ELSE IF (INFO.EQ.4) THEN
+           IFLAG= -4
+           WRITE(LP,115)IFLAG
+      ELSE IF (INFO.EQ.5) THEN
+           IFLAG= -5
+           WRITE(LP,120)IFLAG
+      ELSE IF (INFO.EQ.6) THEN
+           IFLAG= -6
+           WRITE(LP,125)IFLAG
+      ENDIF
+      RETURN
+!
+  95  IFLAG= -7
+      IF(LP.GT.0) WRITE(LP,135)IFLAG,I
+      RETURN
+  96  IFLAG= -8
+      IF(LP.GT.0) WRITE(LP,140)IFLAG
+!
+!     ------------------------------------------------------------
+!     FORMATS
+!     ------------------------------------------------------------
+!
+ 100  FORMAT(/' IFLAG= ',I2,/' IMPROPER INPUT PARAMETERS DURING', &
+             ' THE LINE SEARCH.')
+ 105  FORMAT(/' IFLAG= ',I2,/' RELATIVE WIDTH OF THE INTERVAL OF', &
+             ' UNCERTAINTY IN THE LINE SEARCH'/'IS OF THE ORDER OF &
+                MACHINE ROUNDOFF.')
+ 110  FORMAT(/' IFLAG= ',I2,/' NUMBER OF CALLS TO FUNCTION IN THE', &
+             ' LINE SEARCH HAS REACHED 10.')
+!     .       ' LINE SEARCH HAS REACHED 20.')
+ 115  FORMAT(/' IFLAG= ',I2,/' THE STEP IN THE LINE SEARCH IS', &
+             ' TOO SMALL.')
+ 120  FORMAT(/' IFLAG= ',I2,/' THE STEP IN THE LINE SEARCH IS', &
+             ' TOO LARGE.')
+ 125  FORMAT(/' IFLAG= ',I2,/' ROUNDING ERRORS PREVENT FURTHER', &
+             ' PROGRESS IN THE LINE SEARCH.')
+ 135  FORMAT(/' IFLAG= ',I2,/' THE',I5,'-TH DIAGONAL ELEMENT OF THE', &
+             ' INVERSE HESSIAN APPROXIMATION IS NOT POSITIVE')
+ 140  FORMAT(/' IFLAG= ',I2,/' IMPROPER INPUT PARAMETERS (N OR M', &
+             ' ARE NOT POSITIVE)')
+ 145  FORMAT(/'  GTOL IS LESS THAN OR EQUAL TO 1.D-04', &
+             / 'IT HAS BEEN RESET TO 1.D-04')
+!     .       / 'IT HAS BEEN RESET TO 1.D-02')
+      RETURN
+      END
+!
+!
+!
+!
+      SUBROUTINE VA15BD(IPRINT,ITER,NFUN, &
+                           N,M,X,F,G,STP,FINISH)
+!
+!     ------------------------------------------------------------------
+!     THIS ROUTINE PRINTS MONITORING INFORMATION. THE FREQUENCY AND AMOU
+!     OF OUTPUT ARE SPECIFIED AS FOLLOWS:
+!
+!     IPRINT(1) < 0 : NO OUTPUT IS GENERATED
+!     IPRINT(1) = 0 : OUTPUT ONLY AT FIRST AND LAST ITERATION
+!     IPRINT(1) > 0 : OUTPUT EVERY IPRINT(1) ITERATION
+!     IPRINT(2) = 0 : ITERATION COUNT, FUNCTION VALUE, NORM OF THE GRADI
+!                     ,NUMBER OF FUNCTION CALLS AND STEP LENGTH
+!     IPRINT(2) = 1 : + VECTOR OF VARIABLES AND GRADIENT VECTOR AT THE
+!                       INITIAL POINT
+!     IPRINT(2) = 2 : + VECTOR OF VARIABLES
+!     IPRINT(2) = 3 : + GRADIENT VECTOR
+!     ------------------------------------------------------------------
+!
+      DOUBLE PRECISION X(N),G(N),F,GNORM,STP,FACTOR,DDOT,GTOL
+      INTEGER IPRINT(2),ITER,NFUN,PROB,LP
+      LOGICAL FINISH
+      COMMON /SET/ FACTOR,PROB
+      COMMON /VA15DD/MP,LP, GTOL
+!
+      IF (IPRINT(1).LT.0)RETURN
+      GNORM= DDOT(N,G,1,G,1)
+      GNORM= DSQRT(GNORM)
+
+      IF (ITER.EQ.0)THEN
+           WRITE(MP,10)
+           WRITE(MP,20) PROB,N,M
+           WRITE(MP,30)F,GNORM
+                 IF (IPRINT(2).GE.1)THEN
+                     WRITE(MP,40)
+                     WRITE(MP,50) (X(I),I=1,N)
+                     WRITE(MP,60)
+                     WRITE(MP,50) (G(I),I=1,N)
+                  ENDIF
+           WRITE(MP,10)
+           WRITE(MP,70)
+      ELSE
+          IF ((IPRINT(1).EQ.0).AND.(ITER.NE.1.AND..NOT.FINISH))RETURN
+              IF (IPRINT(1).NE.0)THEN
+                   IF(MOD(ITER-1,IPRINT(1)).EQ.0.OR.FINISH)THEN
+                         WRITE(MP,80)ITER,NFUN,F,GNORM,STP
+                   ELSE
+                         RETURN
+                   ENDIF
+              ELSE
+                   WRITE(MP,80)ITER,NFUN,F,GNORM,STP
+              ENDIF
+              IF (IPRINT(2).EQ.2.OR.IPRINT(2).EQ.3)THEN
+                    IF (FINISH)THEN
+                        WRITE(MP,90)
+               WRITE(MP,50) (X(I),I=1,N)
+        WRITE(MP,60)
+        WRITE(MP,50) (G(I),I=1,N)
+                    ENDIF
+              ENDIF
+            IF (FINISH) WRITE(MP,100)
+      ENDIF
+!
+!10   FORMAT('*************************************************')
+ 10   FORMAT(/'*************************************************')
+!20   FORMAT(' PROB=',I3,'   N=',I5,'   NUMBER OF CORRECTIONS=',I2)
+ 20   FORMAT(' PROB=',I3,'   N=',I7,'   NUMBER OF CORRECTIONS=',I2)
+ 30   FORMAT('    ',E15.8,'          ',E15.8)
+ 40   FORMAT(' VECTOR X= ')
+ 50   FORMAT(6(2X,1E15.8))
+ 60   FORMAT(' GRADIENT VECTOR G= ')
+!70   FORMAT(/'I    NFN',4X,'FUNC',8X,'GNORM',7X,'STEPLENGTH'/)
+ 70   FORMAT(/3X,'I',2X,'NFN',11X,'FUNC',12X,'GNORM',9X,'STEPLENGTH'/)
+ 80   FORMAT(2(I4,1X),3X,3(E15.8,2X))
+ 90   FORMAT(' FINAL POINT X= ')
+ 100  FORMAT(/' THE MINIMIZATION TERMINATED WITHOUT DETECTING ERRORS.', &
+             /' IFLAG = 0')
+!
+      RETURN
+      END
+!
+!   ----------------------------------------------------------
+!   DATA BLOCK
+!   ----------------------------------------------------------
+!
+!TT   BLOCK DATA VA15CD
+      SUBROUTINE VA15CD
+      COMMON /VA15DD/MP,LP,GTOL
+      INTEGER MP, LP
+      DOUBLE PRECISION GTOL
+!TT   DATA MP,LP,GTOL/6,6,9.0D-01/
+!     MP   = 6
+!     LP   = 6
+!     GTOL = 9.0D-01
+      MP   = 66
+      LP   = 66
+      GTOL = 9.0D-01
+!TS
+      RETURN
+!TE
+      END
+!
+!   -------------------------------------------------------------
+!
+      SUBROUTINE VD05AD(N,X,F,G,S,STP,FTOL,GTOL,XTOL, &
+                        STPMIN,STPMAX,MAXFEV,INFO,NFEV,WA)
+      INTEGER N,MAXFEV,INFO,NFEV
+      DOUBLE PRECISION F,STP,FTOL,GTOL,XTOL,STPMIN,STPMAX
+      DOUBLE PRECISION X(N),G(N),S(N),WA(N)
+      SAVE
+!     **********
+!
+!     SUBROUTINE VD05AD
+!
+!     THE PURPOSE OF VD05AD IS TO FIND A STEP WHICH SATISFIES
+!     A SUFFICIENT DECREASE CONDITION AND A CURVATURE CONDITION.
+!     THE USER MUST PROVIDE A SUBROUTINE WHICH CALCULATES THE
+!     FUNCTION AND THE GRADIENT.
+!
+!     AT EACH STAGE THE SUBROUTINE UPDATES AN INTERVAL OF
+!     UNCERTAINTY WITH ENDPOINTS STX AND STY. THE INTERVAL OF
+!     UNCERTAINTY IS INITIALLY CHOSEN SO THAT IT CONTAINS A
+!     MINIMIZER OF THE MODIFIED FUNCTION
+!
+!          F(X+STP*S) - F(X) - FTOL*STP*(GRADF(X)'S).
+!
+!     IF A STEP IS OBTAINED FOR WHICH THE MODIFIED FUNCTION
+!     HAS A NONPOSITIVE FUNCTION VALUE AND NONNEGATIVE DERIVATIVE,
+!     THEN THE INTERVAL OF UNCERTAINTY IS CHOSEN SO THAT IT
+!     CONTAINS A MINIMIZER OF F(X+STP*S).
+!
+!     THE ALGORITHM IS DESIGNED TO FIND A STEP WHICH SATISFIES
+!     THE SUFFICIENT DECREASE CONDITION
+!
+!           F(X+STP*S) .LE. F(X) + FTOL*STP*(GRADF(X)'S),
+!
+!     AND THE CURVATURE CONDITION
+!
+!           ABS(GRADF(X+STP*S)'S)) .LE. GTOL*ABS(GRADF(X)'S).
+!
+!     IF FTOL IS LESS THAN GTOL AND IF, FOR EXAMPLE, THE FUNCTION
+!     IS BOUNDED BELOW, THEN THERE IS ALWAYS A STEP WHICH SATISFIES
+!     BOTH CONDITIONS. IF NO STEP CAN BE FOUND WHICH SATISFIES BOTH
+!     CONDITIONS, THEN THE ALGORITHM USUALLY STOPS WHEN ROUNDING
+!     ERRORS PREVENT FURTHER PROGRESS. IN THIS CASE STP ONLY
+!     SATISFIES THE SUFFICIENT DECREASE CONDITION.
+!
+!     THE SUBROUTINE STATEMENT IS
+!
+!        SUBROUTINE VD05AD(N,X,F,G,S,STP,FTOL,GTOL,XTOL,
+!                          STPMIN,STPMAX,MAXFEV,INFO,NFEV,WA)
+!     WHERE
+!
+!       N IS A POSITIVE INTEGER INPUT VARIABLE SET TO THE NUMBER
+!         OF VARIABLES.
+!
+!       X IS AN ARRAY OF LENGTH N. ON INPUT IT MUST CONTAIN THE
+!         BASE POINT FOR THE LINE SEARCH. ON OUTPUT IT CONTAINS
+!         X + STP*S.
+!
+!       F IS A VARIABLE. ON INPUT IT MUST CONTAIN THE VALUE OF F
+!         AT X. ON OUTPUT IT CONTAINS THE VALUE OF F AT X + STP*S.
+!
+!       G IS AN ARRAY OF LENGTH N. ON INPUT IT MUST CONTAIN THE
+!         GRADIENT OF F AT X. ON OUTPUT IT CONTAINS THE GRADIENT
+!         OF F AT X + STP*S.
+!
+!       S IS AN INPUT ARRAY OF LENGTH N WHICH SPECIFIES THE
+!         SEARCH DIRECTION.
+!
+!       STP IS A NONNEGATIVE VARIABLE. ON INPUT STP CONTAINS AN
+!         INITIAL ESTIMATE OF A SATISFACTORY STEP. ON OUTPUT
+!         STP CONTAINS THE FINAL ESTIMATE.
+!
+!       FTOL AND GTOL ARE NONNEGATIVE INPUT VARIABLES. TERMINATION
+!         OCCURS WHEN THE SUFFICIENT DECREASE CONDITION AND THE
+!         DIRECTIONAL DERIVATIVE CONDITION ARE SATISFIED.
+!
+!       XTOL IS A NONNEGATIVE INPUT VARIABLE. TERMINATION OCCURS
+!         WHEN THE RELATIVE WIDTH OF THE INTERVAL OF UNCERTAINTY
+!         IS AT MOST XTOL.
+!
+!       STPMIN AND STPMAX ARE NONNEGATIVE INPUT VARIABLES WHICH
+!         SPECIFY LOWER AND UPPER BOUNDS FOR THE STEP.
+!
+!       MAXFEV IS A POSITIVE INTEGER INPUT VARIABLE. TERMINATION
+!         OCCURS WHEN THE NUMBER OF CALLS TO FCN IS AT LEAST
+!         MAXFEV BY THE END OF AN ITERATION.
+!
+!       INFO IS AN INTEGER OUTPUT VARIABLE SET AS FOLLOWS:
+!
+!         INFO = 0  IMPROPER INPUT PARAMETERS.
+!
+!         INFO =-1  A RETURN IS MADE TO COMPUTE THE FUNCTION AND GRADIEN
+!
+!         INFO = 1  THE SUFFICIENT DECREASE CONDITION AND THE
+!                   DIRECTIONAL DERIVATIVE CONDITION HOLD.
+!
+!         INFO = 2  RELATIVE WIDTH OF THE INTERVAL OF UNCERTAINTY
+!                   IS AT MOST XTOL.
+!
+!         INFO = 3  NUMBER OF CALLS TO FCN HAS REACHED MAXFEV.
+!
+!         INFO = 4  THE STEP IS AT THE LOWER BOUND STPMIN.
+!
+!         INFO = 5  THE STEP IS AT THE UPPER BOUND STPMAX.
+!
+!         INFO = 6  ROUNDING ERRORS PREVENT FURTHER PROGRESS.
+!                   THERE MAY NOT BE A STEP WHICH SATISFIES THE
+!                   SUFFICIENT DECREASE AND CURVATURE CONDITIONS.
+!                   TOLERANCES MAY BE TOO SMALL.
+!
+!       NFEV IS AN INTEGER OUTPUT VARIABLE SET TO THE NUMBER OF
+!         CALLS TO FCN.
+!
+!       WA IS A WORK ARRAY OF LENGTH N.
+!
+!     SUBPROGRAMS CALLED
+!
+!       HARWELL-SUPPLIED...VD05BD
+!
+!       FORTRAN-SUPPLIED...ABS,MAX,MIN
+!
+!     ARGONNE NATIONAL LABORATORY. MINPACK PROJECT. JUNE 1983
+!     JORGE J. MORE', DAVID J. THUENTE
+!
+!     **********
+      INTEGER INFOC,J
+      LOGICAL BRACKT,STAGE1
+      DOUBLE PRECISION DG,DGM,DGINIT,DGTEST,DGX,DGXM,DGY,DGYM, &
+             FINIT,FTEST1,FM,FX,FXM,FY,FYM,P5,P66,STX,STY, &
+             STMIN,STMAX,WIDTH,WIDTH1,XTRAPF,ZERO
+      DATA P5,P66,XTRAPF,ZERO /0.5D0,0.66D0,4.0D0,0.0D0/
+      IF(INFO.EQ.-1) GO TO 45
+      INFOC = 1
+!
+!     CHECK THE INPUT PARAMETERS FOR ERRORS.
+!
+      IF (N .LE. 0 .OR. STP .LE. ZERO .OR. FTOL .LT. ZERO .OR. &
+          GTOL .LT. ZERO .OR. XTOL .LT. ZERO .OR. STPMIN .LT. ZERO &
+          .OR. STPMAX .LT. STPMIN .OR. MAXFEV .LE. 0) RETURN
+!
+!     COMPUTE THE INITIAL GRADIENT IN THE SEARCH DIRECTION
+!     AND CHECK THAT S IS A DESCENT DIRECTION.
+!
+      DGINIT = ZERO
+      DO 10 J = 1, N
+         DGINIT = DGINIT + G(J)*S(J)
+   10    CONTINUE
+      IF (DGINIT .GE. ZERO) RETURN
+!
+!     INITIALIZE LOCAL VARIABLES.
+!
+      BRACKT = .FALSE.
+      STAGE1 = .TRUE.
+      NFEV = 0
+      FINIT = F
+      DGTEST = FTOL*DGINIT
+      WIDTH = STPMAX - STPMIN
+      WIDTH1 = WIDTH/P5
+      DO 20 J = 1, N
+         WA(J) = X(J)
+   20    CONTINUE
+!
+!     THE VARIABLES STX, FX, DGX CONTAIN THE VALUES OF THE STEP,
+!     FUNCTION, AND DIRECTIONAL DERIVATIVE AT THE BEST STEP.
+!     THE VARIABLES STY, FY, DGY CONTAIN THE VALUE OF THE STEP,
+!     FUNCTION, AND DERIVATIVE AT THE OTHER ENDPOINT OF
+!     THE INTERVAL OF UNCERTAINTY.
+!     THE VARIABLES STP, F, DG CONTAIN THE VALUES OF THE STEP,
+!     FUNCTION, AND DERIVATIVE AT THE CURRENT STEP.
+!
+      STX = ZERO
+      FX = FINIT
+      DGX = DGINIT
+      STY = ZERO
+      FY = FINIT
+      DGY = DGINIT
+!
+!     START OF ITERATION.
+!
+   30 CONTINUE
+!
+!        SET THE MINIMUM AND MAXIMUM STEPS TO CORRESPOND
+!        TO THE PRESENT INTERVAL OF UNCERTAINTY.
+!
+         IF (BRACKT) THEN
+            STMIN = MIN(STX,STY)
+            STMAX = MAX(STX,STY)
+         ELSE
+            STMIN = STX
+            STMAX = STP + XTRAPF*(STP - STX)
+            END IF
+!
+!        FORCE THE STEP TO BE WITHIN THE BOUNDS STPMAX AND STPMIN.
+!
+         STP = MAX(STP,STPMIN)
+         STP = MIN(STP,STPMAX)
+!
+!        IF AN UNUSUAL TERMINATION IS TO OCCUR THEN LET
+!        STP BE THE LOWEST POINT OBTAINED SO FAR.
+!
+         IF ((BRACKT .AND. (STP .LE. STMIN .OR. STP .GE. STMAX)) &
+            .OR. NFEV .GE. MAXFEV-1 .OR. INFOC .EQ. 0 &
+            .OR. (BRACKT .AND. STMAX-STMIN .LE. XTOL*STMAX)) STP = STX
+!
+!        EVALUATE THE FUNCTION AND GRADIENT AT STP
+!        AND COMPUTE THE DIRECTIONAL DERIVATIVE.
+!
+         DO 40 J = 1, N
+            X(J) = WA(J) + STP*S(J)
+   40       CONTINUE
+         INFO=-1
+         RETURN
+!
+   45    INFO=0
+         NFEV = NFEV + 1
+         DG = ZERO
+         DO 50 J = 1, N
+            DG = DG + G(J)*S(J)
+   50       CONTINUE
+         FTEST1 = FINIT + STP*DGTEST
+!
+!        TEST FOR CONVERGENCE.
+!
+         IF ((BRACKT .AND. (STP .LE. STMIN .OR. STP .GE. STMAX)) &
+            .OR. INFOC .EQ. 0) INFO = 6
+         IF (STP .EQ. STPMAX .AND. &
+             F .LE. FTEST1 .AND. DG .LE. DGTEST) INFO = 5
+         IF (STP .EQ. STPMIN .AND. &
+             (F .GT. FTEST1 .OR. DG .GE. DGTEST)) INFO = 4
+         IF (NFEV .GE. MAXFEV) INFO = 3
+         IF (BRACKT .AND. STMAX-STMIN .LE. XTOL*STMAX) INFO = 2
+         IF (F .LE. FTEST1 .AND. ABS(DG) .LE. GTOL*(-DGINIT)) INFO = 1
+!
+!        CHECK FOR TERMINATION.
+!
+         IF (INFO .NE. 0) RETURN
+!
+!        IN THE FIRST STAGE WE SEEK A STEP FOR WHICH THE MODIFIED
+!        FUNCTION HAS A NONPOSITIVE VALUE AND NONNEGATIVE DERIVATIVE.
+!
+         IF (STAGE1 .AND. F .LE. FTEST1 .AND. &
+             DG .GE. MIN(FTOL,GTOL)*DGINIT) STAGE1 = .FALSE.
+!
+!        A MODIFIED FUNCTION IS USED TO PREDICT THE STEP ONLY IF
+!        WE HAVE NOT OBTAINED A STEP FOR WHICH THE MODIFIED
+!        FUNCTION HAS A NONPOSITIVE FUNCTION VALUE AND NONNEGATIVE
+!        DERIVATIVE, AND IF A LOWER FUNCTION VALUE HAS BEEN
+!        OBTAINED BUT THE DECREASE IS NOT SUFFICIENT.
+!
+         IF (STAGE1 .AND. F .LE. FX .AND. F .GT. FTEST1) THEN
+!
+!           DEFINE THE MODIFIED FUNCTION AND DERIVATIVE VALUES.
+!
+            FM = F - STP*DGTEST
+            FXM = FX - STX*DGTEST
+            FYM = FY - STY*DGTEST
+            DGM = DG - DGTEST
+            DGXM = DGX - DGTEST
+            DGYM = DGY - DGTEST
+!
+!           CALL CSTEP TO UPDATE THE INTERVAL OF UNCERTAINTY
+!           AND TO COMPUTE THE NEW STEP.
+!
+            CALL VD05BD(STX,FXM,DGXM,STY,FYM,DGYM,STP,FM,DGM, &
+                       BRACKT,STMIN,STMAX,INFOC)
+!
+!           RESET THE FUNCTION AND GRADIENT VALUES FOR F.
+!
+            FX = FXM + STX*DGTEST
+            FY = FYM + STY*DGTEST
+            DGX = DGXM + DGTEST
+            DGY = DGYM + DGTEST
+         ELSE
+!
+!           CALL VD05BD TO UPDATE THE INTERVAL OF UNCERTAINTY
+!           AND TO COMPUTE THE NEW STEP.
+!
+            CALL VD05BD(STX,FX,DGX,STY,FY,DGY,STP,F,DG, &
+                       BRACKT,STMIN,STMAX,INFOC)
+            END IF
+!
+!        FORCE A SUFFICIENT DECREASE IN THE SIZE OF THE
+!        INTERVAL OF UNCERTAINTY.
+!
+         IF (BRACKT) THEN
+            IF (ABS(STY-STX) .GE. P66*WIDTH1) &
+               STP = STX + P5*(STY - STX)
+            WIDTH1 = WIDTH
+            WIDTH = ABS(STY-STX)
+            END IF
+!
+!        END OF ITERATION.
+!
+         GO TO 30
+!
+!     LAST CARD OF SUBROUTINE VD05AD.
+!
+      END
+      SUBROUTINE VD05BD(STX,FX,DX,STY,FY,DY,STP,FP,DP,BRACKT, &
+                       STPMIN,STPMAX,INFO)
+      INTEGER INFO
+      DOUBLE PRECISION STX,FX,DX,STY,FY,DY,STP,FP,DP,STPMIN,STPMAX
+      LOGICAL BRACKT,BOUND
+!     **********
+!
+!     SUBROUTINE VD05BD
+!
+!     THE PURPOSE OF VD05BD IS TO COMPUTE A SAFEGUARDED STEP FOR
+!     A LINESEARCH AND TO UPDATE AN INTERVAL OF UNCERTAINTY FOR
+!     A MINIMIZER OF THE FUNCTION.
+!
+!     THE PARAMETER STX CONTAINS THE STEP WITH THE LEAST FUNCTION
+!     VALUE. THE PARAMETER STP CONTAINS THE CURRENT STEP. IT IS
+!     ASSUMED THAT THE DERIVATIVE AT STX IS NEGATIVE IN THE
+!     DIRECTION OF THE STEP. IF BRACKT IS SET TRUE THEN A
+!     MINIMIZER HAS BEEN BRACKETED IN AN INTERVAL OF UNCERTAINTY
+!     WITH ENDPOINTS STX AND STY.
+!
+!     THE SUBROUTINE STATEMENT IS
+!
+!       SUBROUTINE VD05BD(STX,FX,DX,STY,FY,DY,STP,FP,DP,BRACKT,
+!                        STPMIN,STPMAX,INFO)
+!
+!     WHERE
+!
+!       STX, FX, AND DX ARE VARIABLES WHICH SPECIFY THE STEP,
+!         THE FUNCTION, AND THE DERIVATIVE AT THE BEST STEP OBTAINED
+!         SO FAR. THE DERIVATIVE MUST BE NEGATIVE IN THE DIRECTION
+!         OF THE STEP, THAT IS, DX AND STP-STX MUST HAVE OPPOSITE
+!         SIGNS. ON OUTPUT THESE PARAMETERS ARE UPDATED APPROPRIATELY.
+!
+!       STY, FY, AND DY ARE VARIABLES WHICH SPECIFY THE STEP,
+!         THE FUNCTION, AND THE DERIVATIVE AT THE OTHER ENDPOINT OF
+!         THE INTERVAL OF UNCERTAINTY. ON OUTPUT THESE PARAMETERS ARE
+!         UPDATED APPROPRIATELY.
+!
+!       STP, FP, AND DP ARE VARIABLES WHICH SPECIFY THE STEP,
+!         THE FUNCTION, AND THE DERIVATIVE AT THE CURRENT STEP.
+!         IF BRACKT IS SET TRUE THEN ON INPUT STP MUST BE
+!         BETWEEN STX AND STY. ON OUTPUT STP IS SET TO THE NEW STEP.
+!
+!       BRACKT IS A LOGICAL VARIABLE WHICH SPECIFIES IF A MINIMIZER
+!         HAS BEEN BRACKETED. IF THE MINIMIZER HAS NOT BEEN BRACKETED
+!         THEN ON INPUT BRACKT MUST BE SET FALSE. IF THE MINIMIZER
+!         IS BRACKETED THEN ON OUTPUT BRACKT IS SET TRUE.
+!
+!       STPMIN AND STPMAX ARE INPUT VARIABLES WHICH SPECIFY LOWER
+!         AND UPPER BOUNDS FOR THE STEP.
+!
+!       INFO IS AN INTEGER OUTPUT VARIABLE SET AS FOLLOWS:
+!         IF INFO = 1,2,3,4,5, THEN THE STEP HAS BEEN COMPUTED
+!         ACCORDING TO ONE OF THE FIVE CASES BELOW. OTHERWISE
+!         INFO = 0, AND THIS INDICATES IMPROPER INPUT PARAMETERS.
+!
+!     SUBPROGRAMS CALLED
+!
+!       FORTRAN-SUPPLIED ... ABS,MAX,MIN,SQRT
+!
+!     ARGONNE NATIONAL LABORATORY. MINPACK PROJECT. JUNE 1983
+!     JORGE J. MORE', DAVID J. THUENTE
+!
+!     **********
+      DOUBLE PRECISION GAMMA,P,Q,R,S,SGND,STPC,STPF,STPQ,THETA
+      INFO = 0
+!
+!     CHECK THE INPUT PARAMETERS FOR ERRORS.
+!
+      IF ((BRACKT .AND. (STP .LE. MIN(STX,STY) .OR. &
+          STP .GE. MAX(STX,STY))) .OR. &
+          DX*(STP-STX) .GE. 0.0 .OR. STPMAX .LT. STPMIN) RETURN
+!
+!     DETERMINE IF THE DERIVATIVES HAVE OPPOSITE SIGN.
+!
+      SGND = DP*(DX/ABS(DX))
+!
+!     FIRST CASE. A HIGHER FUNCTION VALUE.
+!     THE MINIMUM IS BRACKETED. IF THE CUBIC STEP IS CLOSER
+!     TO STX THAN THE QUADRATIC STEP, THE CUBIC STEP IS TAKEN,
+!     ELSE THE AVERAGE OF THE CUBIC AND QUADRATIC STEPS IS TAKEN.
+!
+      IF (FP .GT. FX) THEN
+         INFO = 1
+         BOUND = .TRUE.
+         THETA = 3*(FX - FP)/(STP - STX) + DX + DP
+         S = MAX(ABS(THETA),ABS(DX),ABS(DP))
+         GAMMA = S*SQRT((THETA/S)**2 - (DX/S)*(DP/S))
+         IF (STP .LT. STX) GAMMA = -GAMMA
+         P = (GAMMA - DX) + THETA
+         Q = ((GAMMA - DX) + GAMMA) + DP
+         R = P/Q
+         STPC = STX + R*(STP - STX)
+         STPQ = STX + ((DX/((FX-FP)/(STP-STX)+DX))/2)*(STP - STX)
+         IF (ABS(STPC-STX) .LT. ABS(STPQ-STX)) THEN
+            STPF = STPC
+         ELSE
+           STPF = STPC + (STPQ - STPC)/2
+           END IF
+         BRACKT = .TRUE.
+!
+!     SECOND CASE. A LOWER FUNCTION VALUE AND DERIVATIVES OF
+!     OPPOSITE SIGN. THE MINIMUM IS BRACKETED. IF THE CUBIC
+!     STEP IS CLOSER TO STX THAN THE QUADRATIC (SECANT) STEP,
+!     THE CUBIC STEP IS TAKEN, ELSE THE QUADRATIC STEP IS TAKEN.
+!
+      ELSE IF (SGND .LT. 0.0) THEN
+         INFO = 2
+         BOUND = .FALSE.
+         THETA = 3*(FX - FP)/(STP - STX) + DX + DP
+         S = MAX(ABS(THETA),ABS(DX),ABS(DP))
+         GAMMA = S*SQRT((THETA/S)**2 - (DX/S)*(DP/S))
+         IF (STP .GT. STX) GAMMA = -GAMMA
+         P = (GAMMA - DP) + THETA
+         Q = ((GAMMA - DP) + GAMMA) + DX
+         R = P/Q
+         STPC = STP + R*(STX - STP)
+         STPQ = STP + (DP/(DP-DX))*(STX - STP)
+         IF (ABS(STPC-STP) .GT. ABS(STPQ-STP)) THEN
+            STPF = STPC
+         ELSE
+            STPF = STPQ
+            END IF
+         BRACKT = .TRUE.
+!
+!     THIRD CASE. A LOWER FUNCTION VALUE, DERIVATIVES OF THE
+!     SAME SIGN, AND THE MAGNITUDE OF THE DERIVATIVE DECREASES.
+!     THE CUBIC STEP IS ONLY USED IF THE CUBIC TENDS TO INFINITY
+!     IN THE DIRECTION OF THE STEP OR IF THE MINIMUM OF THE CUBIC
+!     IS BEYOND STP. OTHERWISE THE CUBIC STEP IS DEFINED TO BE
+!     EITHER STPMIN OR STPMAX. THE QUADRATIC (SECANT) STEP IS ALSO
+!     COMPUTED AND IF THE MINIMUM IS BRACKETED THEN THE THE STEP
+!     CLOSEST TO STX IS TAKEN, ELSE THE STEP FARTHEST AWAY IS TAKEN.
+!
+      ELSE IF (ABS(DP) .LT. ABS(DX)) THEN
+         INFO = 3
+         BOUND = .TRUE.
+         THETA = 3*(FX - FP)/(STP - STX) + DX + DP
+         S = MAX(ABS(THETA),ABS(DX),ABS(DP))
+!
+!        THE CASE GAMMA = 0 ONLY ARISES IF THE CUBIC DOES NOT TEND
+!        TO INFINITY IN THE DIRECTION OF THE STEP.
+!
+         GAMMA = S*SQRT(MAX(0.0D0,(THETA/S)**2 - (DX/S)*(DP/S)))
+         IF (STP .GT. STX) GAMMA = -GAMMA
+         P = (GAMMA - DP) + THETA
+         Q = (GAMMA + (DX - DP)) + GAMMA
+         R = P/Q
+         IF (R .LT. 0.0 .AND. GAMMA .NE. 0.0) THEN
+            STPC = STP + R*(STX - STP)
+         ELSE IF (STP .GT. STX) THEN
+            STPC = STPMAX
+         ELSE
+            STPC = STPMIN
+            END IF
+         STPQ = STP + (DP/(DP-DX))*(STX - STP)
+         IF (BRACKT) THEN
+            IF (ABS(STP-STPC) .LT. ABS(STP-STPQ)) THEN
+               STPF = STPC
+            ELSE
+               STPF = STPQ
+               END IF
+         ELSE
+            IF (ABS(STP-STPC) .GT. ABS(STP-STPQ)) THEN
+               STPF = STPC
+            ELSE
+               STPF = STPQ
+               END IF
+            END IF
+!
+!     FOURTH CASE. A LOWER FUNCTION VALUE, DERIVATIVES OF THE
+!     SAME SIGN, AND THE MAGNITUDE OF THE DERIVATIVE DOES
+!     NOT DECREASE. IF THE MINIMUM IS NOT BRACKETED, THE STEP
+!     IS EITHER STPMIN OR STPMAX, ELSE THE CUBIC STEP IS TAKEN.
+!
+      ELSE
+         INFO = 4
+         BOUND = .FALSE.
+         IF (BRACKT) THEN
+            THETA = 3*(FP - FY)/(STY - STP) + DY + DP
+            S = MAX(ABS(THETA),ABS(DY),ABS(DP))
+            GAMMA = S*SQRT((THETA/S)**2 - (DY/S)*(DP/S))
+            IF (STP .GT. STY) GAMMA = -GAMMA
+            P = (GAMMA - DP) + THETA
+            Q = ((GAMMA - DP) + GAMMA) + DY
+            R = P/Q
+            STPC = STP + R*(STY - STP)
+            STPF = STPC
+         ELSE IF (STP .GT. STX) THEN
+            STPF = STPMAX
+         ELSE
+            STPF = STPMIN
+            END IF
+         END IF
+!
+!     UPDATE THE INTERVAL OF UNCERTAINTY. THIS UPDATE DOES NOT
+!     DEPEND ON THE NEW STEP OR THE CASE ANALYSIS ABOVE.
+!
+      IF (FP .GT. FX) THEN
+         STY = STP
+         FY = FP
+         DY = DP
+      ELSE
+         IF (SGND .LT. 0.0) THEN
+            STY = STX
+            FY = FX
+            DY = DX
+            END IF
+         STX = STP
+         FX = FP
+         DX = DP
+         END IF
+!
+!     COMPUTE THE NEW STEP AND SAFEGUARD IT.
+!
+      STPF = MIN(STPMAX,STPF)
+      STPF = MAX(STPMIN,STPF)
+      STP = STPF
+      IF (BRACKT .AND. BOUND) THEN
+         IF (STY .GT. STX) THEN
+            STP = MIN(STX+0.66*(STY-STX),STP)
+         ELSE
+            STP = MAX(STX+0.66*(STY-STX),STP)
+            END IF
+         END IF
+      RETURN
+!
+!     LAST CARD OF SUBROUTINE VD05BD.
+!
+      END
+
+
+
+
+       DOUBLE PRECISION FUNCTION DDOT(N,D,I1,S,I2)
+!
+!      -------------------------------------------------------
+!      THIS FUNCTION COMPUTES THE INNER PRODUCT OF TWO VECTORS
+!      -------------------------------------------------------
+!
+       DOUBLE PRECISION D(N),S(N),PROD
+       INTEGER I1,I2
+!
+        PROD=0.0D0
+        DO 10 I=1,N
+ 10     PROD= PROD+D(I)*S(I)
+!
+        DDOT= PROD
+!
+       RETURN
+       END
