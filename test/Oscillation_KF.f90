@@ -67,6 +67,7 @@
       gnoise=sqrt(R(1,1))*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
       ! Generate observation by adding Gaussian noise to true value
       x_obs(it/obs_interval)=x_t(it)+gnoise
+      write(6,*) x_obs
     end if
   end do
 
