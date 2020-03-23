@@ -8,7 +8,7 @@ x_tinit=5.0d0; v_tinit=0.0d0
 x_sinit=4.0d0; v_sinit=1.0d0
 
 Pf_init=( 1.0d0 0.0d0 0.0d0 1.0d0 )
-R_init=( 0.01d0 )
+R_init=( 0.1d0 )
 Kg_init=( 0.0d0 )
 H_init=( 1.0d0 0.0d0 )
 

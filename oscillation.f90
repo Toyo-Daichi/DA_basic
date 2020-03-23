@@ -6,8 +6,8 @@ program oscillation
   implicit none
 
   ! --- setting Parameters
-  integer, parameter  :: nt_asm       = 400 ! Period of data assimilation
-  integer, parameter  :: nt_prd       = 400 ! Period of prediction
+  integer, parameter  :: nt_asm       = 800 ! Period of data assimilation
+  integer, parameter  :: nt_prd       = 1200 ! Period of prediction
   integer, parameter  :: obs_interval = 40  ! Interval of observation
   integer, parameter  :: r_size       = 8   ! Byte 
 
