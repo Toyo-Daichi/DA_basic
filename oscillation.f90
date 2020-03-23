@@ -34,7 +34,8 @@ program oscillation
   
   ! --- Output control
   integer, parameter  :: output_interval = 20
-  character(7)        :: obs_chr(0:nt_asm)
+  character(7)        :: obs_chr(0:nt_asm+nt_prd)
+  character(256)      :: linebuf
   
   ! --- Working variable
   integer :: it
@@ -166,7 +167,7 @@ program oscillation
   !----------------------------------------------------------------------
   ! Identical Twin Experiment
   
-  obs_chr(0:nt_asm) = 'No obs'
+  obs_chr(0:nt_asm+nt_prd) = 'None'
   do it = 1, nt_asm
     if (mod(it, obs_interval) == 0) then
       write(obs_chr(it), '(F7.3)') x_obs(it/obs_interval)
@@ -210,5 +211,31 @@ program oscillation
     end if
   end do
 
+  open (1, file='./output/oscillation_KF.csv', status='replace')
+  write(1,*) 'timestep, x_true, x_sim, x_da, v_true, v_sim, v_da, obs_data'
+  do it = 0, nt_asm+nt_prd
+      if (mod(it, output_interval) == 0) then
+        write(linebuf, *) dt*it, ',', x_true(it), ',', x_sim(it), ',', x_da(it), ',', &
+                          v_true(it), ',', v_sim(it), ',', v_da(it), ',', obs_chr(it)
+        call del_spaces(linebuf)
+        write (1, '(a)') trim(linebuf)
+      end if
+    end do
+  close(1)
+
+contains
+
+  subroutine del_spaces(s)
+    character (*), intent (inout) :: s
+    character (len=len(s)) tmp
+    integer i, j
+    j = 1
+    do i = 1, len(s)
+      if (s(i:i)==' ') cycle
+      tmp(j:j) = s(i:i)
+      j = j + 1
+    end do
+    s = tmp(1:j-1)
+  end subroutine del_spaces
 
 end program oscillation
