@@ -1,6 +1,6 @@
 # コンパイル情報
 ```
-gfortran -fbounds-check
+gfortran -fbounds-check ${prg}
 ```
 
 # 作成情報
