@@ -4,25 +4,28 @@
 
 program oscillation
   implicit none
-
+  integer, parameter  :: r_size       = 8   ! Byte
+  
   ! --- setting Parameters
-  integer, parameter  :: nt_asm       = 800 ! Period of data assimilation
-  integer, parameter  :: nt_prd       = 1200 ! Period of prediction
-  integer, parameter  :: obs_interval = 40  ! Interval of observation
-  integer, parameter  :: r_size       = 8   ! Byte 
+  integer :: nt_asm       ! Period of data assimilation
+  integer :: nt_prd       ! Period of prediction
+  integer :: obs_interval ! Interval of observation
 
   real(r_size), parameter  :: mass = 1.0d0
   real(r_size), parameter  :: k    = 0.5d0
   real(r_size), parameter  :: dump = 0.3d0  ! Damping coefficinet
   real(r_size), parameter  :: dt   = 1.0d-2 ! Time step
   real(r_size), parameter  :: pi   = 3.14159265358979d0
+
+  character(5) :: da_method
   
   ! --- Physical variable
-  real(r_size) :: x_true(0:nt_asm+nt_prd), v_true(0:nt_asm+nt_prd)
-  real(r_size) :: x_sim(0:nt_asm+nt_prd), v_sim(0:nt_asm+nt_prd)
+  real(r_size), allocatable :: x_true(:), v_true(:)
+  real(r_size), allocatable :: x_sim(:), v_sim(:)
   
-  real(r_size) :: x_da(0:nt_asm+nt_prd), v_da(0:nt_asm+nt_prd)
-  real(r_size) :: x_obs(0:nt_asm/obs_interval)
+  real(r_size), allocatable :: x_da_m(:, :), v_da_m(:, :)
+  real(r_size), allocatable :: x_da(:), v_da(:) ! if EnKF: ensemble mean
+  real(r_size), allocatable :: x_obs(:)
   
   ! --- Matrix(element 1:x, 2:v)
   real(r_size) :: M(2,2)   ! state transient matrix
@@ -35,22 +38,25 @@ program oscillation
   ! --- Output control
   integer, parameter  :: output_interval = 20
   character(7)        :: obs_chr(0:nt_asm+nt_prd)
+  logical             :: opt_beach
   character(256)      :: linebuf
-  
+  character(256)      :: output_file
+
   ! --- Working variable
   integer :: it
-  integer :: irec
+  integer :: mems, imem
   integer :: ierr
   integer :: iflag
   real(r_size) :: x_innov
   real(r_size) :: Ptmp(2,2)
   real(r_size) :: noise1, noise2, Gnoise ! Gaussian noise
+
   !======================================================================
   ! Data assimilation
   !
   ! --- Sec.1 Input control
   !----------------------------------------------------------------------
-  ! +++ open namelist
+  ! +++ open namelist, allocation
   !----------------------------------------------------------------------
   real(r_size) :: x_tinit, v_tinit
   real(r_size) :: x_sinit, v_sinit
@@ -59,30 +65,29 @@ program oscillation
   real(r_size) :: Kg_init(2)
   real(r_size) :: H_init(2)
   
-  namelist /initial_osc/ &
-  x_tinit, v_tinit, &
-  x_sinit, v_sinit, &
-  Pf_init, &
-  R_init,  &
-  Kg_init, &
-  H_init
-  
-  open(1, file='initial_Osc.cnf')
-    read(1, nml=initial_osc, iostat=ierr)
-  close(1)
-  
-  ! namelist check for debug
-  if (ierr < 0) then
-    write(6,*) '   Msg : Main[ main /  initial_osc ] '
-    write(6,*) '   Not found namelist.        '
-    write(6,*) '   Use default values.        '
-  else if (ierr > 0) then
-    write(6,*) '   Msg : Main[ main /  initial_osc ] '
-    write(6,*) '   *** Warning : Not appropriate names in namelist !! Check !!'
-    write(6,*) '   Stop : oscillation.f90              '
-    stop
-  end if
+  namelist /set_parm/ nt_asm, nt_prd, obs_interval
+  namelist /da_setting/ da_method
+  namelist /EnKF/ mem
+  namelist /initial_osc/ x_tinit, v_tinit, x_sinit, v_sinit
+  namelist /initial_que/ Pf_init, R_init, Kg_init, H_init
+  namelist /output/ output_file, opt_beach
+ 
+  read(5, nml=set_parm)
+  read(5, nml=da_setting)
+  if ( da_method == 'EnKF' ) then; read(5, nml=EnKF)
+  read(5, nml=initial_osc)
+  read(5, nml=initial_que)
+  read(5, nml=output)
 
+  allocatable(x_true(nt_asm+nt_prd), v_true(nt_asm+nt_prd))
+  allocatable(x_sim(nt_asm+nt_prd), v_sim(nt_asm+nt_prd))
+  allocatable(x_da_m(nt_asm, mems), v_true(nt_asm, mems))
+  allocatable(x_da(nt_asm+nt_prd), v_da(nt_asm+nt_prd))
+  allocatable(x_obs(nt_asm/obs_interval))
+  
+  !----------------------------------------------------------------------
+  ! +++ initial setting
+  
   x_true(0) = x_tinit; v_true(0) = v_tinit
   x_sim(0)  = x_sinit; v_sim(0)  = v_sinit
   
@@ -121,41 +126,112 @@ program oscillation
   end do
 
   ! --- Sec4. Data assimilation
-  x_da(0) = x_sim(0) 
-  v_da(0) = v_sim(0)
+  if ( da_method == 'KF' ) then
+    x_da(0) = x_sim(0) 
+    v_da(0) = v_sim(0)
   
-  do it = 1, nt_asm
-    ! 4.1: Time integration
-    x_da(it) = x_da(it-1) + dt*v_da(it-1)
-    v_da(it) = -(k * dt / mass) * x_da(it-1) + (1.0d0 - dump * dt / mass ) * v_da(it-1)
-    ! 4.2: Kalman filter
-    ! >> 4.2.1 State Transient Matix
-    M(1,1) = 1.0d0
-    M(1,2) = dt
-    M(2,1) = -k * dt / mass
-    M(2,2) = 1.0d0 - dump * dt / mass
+    do it = 1, nt_asm
+      ! 4.1: Time integration
+      x_da(it) = x_da(it-1) + dt*v_da(it-1)
+      v_da(it) = -(k * dt / mass) * x_da(it-1) + (1.0d0 - dump * dt / mass ) * v_da(it-1)
+      ! 4.2: Kalman filter
+      ! >> 4.2.1 State Transient Matix
+      M(1,1) = 1.0d0
+      M(1,2) = dt
+      M(2,1) = -k * dt / mass
+      M(2,2) = 1.0d0 - dump * dt / mass
+      ! >> 4.2.2 Lyapunov equation: Obtain Pf
+      Ptmp = transpose(M)
+      Ptmp = matmul(Pf, Ptmp)
+      Pf   = matmul(M, Ptmp)
+      
+      if (mod(it, obs_interval) == 0) then
+        ! >> 4.2.3 Kalman gain: Weighting of model result and obs.
+        ! (Note) Observation only in x ----> component 1(x) only 
+        !        In this case, Inverse matrix ----> scalar matrix
+        write(6,*) 'Pf(1,1) / (R(1,1) + Pf(1,1))'
+        write(6,*) '=', Pf(1,1), '/', R(1,1) , '+', Pf(1,1)
+        write(6,*) 'Kg(1,1) = ', Kg(1,1)
+        Kg(1,1) = Pf(1,1) / (R(1,1) + Pf(1,1))
+        write(6,*) 'Pf(2,1) / (R(1,1) + Pf(1,1))'
+        write(6,*) '=', Pf(2,1), '/', R(1,1) , '+', Pf(1,1)
+        write(6,*) 'Kg(2,1) = ', Kg(1,1)
+        Kg(2,1) = Pf(2,1) / (R(1,1) + Pf(1,1)) 
+        ! >> 4.2.4 calculate innovation and correction
+        x_innov  = x_obs(it / obs_interval) - x_da(it)
+        x_da(it) = x_da(it) + Kg(1,1) * x_innov  
+        v_da(it) = v_da(it) + Kg(2,1) * x_innov
+        ! >> 4.2.5 analysis error covariance matrix
+        Pa = Pf - matmul(matmul(Kg, H), Pf)
+        Pf = Pa
+        write(6,'(A, F8.2, A, 5F10.3)') 'time = ', dt*it, ', Pa =,', Pa
+      end if
+    end do
+    
+  else if ( da_method == 'EnKF' ) then
+    ! making ensemble intial score
+    do imem = 1, mems
+      ! Generate Gaussian Noise (Gnoise) from uniform random number
+      ! based on Box-Muller method
+      call random_number(noise1)
+      call random_number(noise2)
+      Gnoise=sqrt(Pa(1,1))*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
+      x_da_m(0,imem) = x_sim(0) + Gnoise ! perturbation
 
-    ! >> 4.2.2 Lyapunov equation: Obtain Pf
-    Ptmp = transpose(M)
-    Ptmp = matmul(Pf, Ptmp)
-    Pf   = matmul(M, Ptmp)
-    if (mod(it, obs_interval) == 0) then
-      ! >> 4.2.3 Kalman gain: Weighting of model result and obs.
-      ! (Note) Observation only in x ----> component 1(x) only 
-      !        In this case, Inverse matrix ----> scalar matrix
-      Kg(1,1) = Pf(1,1) / (R(1,1) + Pf(1,1)) 
-      Kg(2,1) = Pf(2,1) / (R(1,1) + Pf(1,1)) 
-      ! >> 4.2.4 calculate innovation and correction
-      x_innov  = x_obs(it / obs_interval) - x_da(it)
-      x_da(it) = x_da(it) + Kg(1,1) * x_innov  
-      v_da(it) = v_da(it) + Kg(2,1) * x_innov
-      ! >> 4.2.5 analysis error covariance matrix
-      Pa = Pf - matmul(matmul(Kg, H), Pf)
-      Pf = Pa
-      write(6,'(A, F8.2, A, 5F10.3)') 'time = ', dt*it, ', Pa =,', Pa
-    end if
-  end do
+      call random_number(noise1)
+      call random_number(noise2)
+      Gnoise=sqrt(Pa(2,1))*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
+      v_da_m(0,imem) = v_sim(0) + Gnoise　! perturbation
+    end do
 
+    x_da(0) = sum(x_da_m(0,1:mems))/mems
+    v_da(0) = sum(v_da_m(0,1:mems))/mems
+
+    do it = 1, nt_asm
+      ! 4.1: Time integration
+      do imem = 1, mems
+        x_da_m(it, imem) = x_da_m(it-1, imem) + dt*v_da(it-1, imem)
+        v_da_m(it, imem) = -(k * dt / mass) * x_da(it-1, imem) + (1.0d0 - dump * dt / mass ) * v_da(it-1, imem)
+      end do
+
+      if(mod(it,obs_interval) == 0) then
+        x_da(it)=sum(x_da_m(it,1:mems))/mems
+        v_da(it)=sum(v_da_m(it,1:mems))/mems
+        Pf=0.0d0
+        do imem=1,mems
+          x_prtb(imem)=x_da_m(it, imem) - x_da(it)
+          v_prtb(imem)=v_da_m(it, imem) - v_da(it)
+          Pf(1,1) = Pf(1,1) + x_prtb(imem)**2/(mems-1)
+          Pf(1,2) = Pf(1,2) + x_prtb(imem)*v_prtb(imem)/(mems-1)
+          Pf(2,1) = Pf(2,1) + v_prtb(imem)*x_prtb(imem)/(mems-1)
+          Pf(2,2) = Pf(2,2) + v_prtb(imem)**2/(mems-1)
+        end do
+        ! Section 4-2-2: Kalman gain: Weighting of model result and obs.
+        ! (Note) Obsevation only in x --> component 1(x) only
+        !        In this case, inverse matrix --> scalar inverse
+        Kg(1,1)=Pf(1,1)/(R(1,1)+Pf(1,1))
+        Kg(2,1)=Pf(2,1)/(R(1,1)+Pf(1,1))
+        ! Section 4-2-3: calculate innovation and correction
+        do imem=1, mems
+          ! Generate Gaussian Noise (gnoise) from uniform random number 
+          call random_number(noise1)
+          call random_number(noise2)
+          gnoise=sqrt(R(1,1))*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
+          x_innov=x_obs(it/obs_interval)+gnoise-x_da_m(it,iens)
+          x_da_m(it,iens)=x_da_m(it,iens)+Kg(1,1)*x_innov
+          v_da_m(it,iens)=v_da_m(it,iens)+Kg(2,1)*x_innov
+        end do
+        ! Section 4-2-4: analysis error covariance matrix
+        Pa=Pf-matmul(matmul(Kg,H),Pf)
+        Pf=Pa
+        write(*,'(A,F8.2,A,5F10.3)') "time=",dt*it, ", Pa=", Pa
+      end if
+      x_da(it)=sum(x_da_m(it,1:nens))/nens
+      v_da(it)=sum(v_da_m(it,1:nens))/nens
+    end do
+
+  end if
+  
   ! --- Sec5. Prediction after Data assimilation
   do it = nt_asm+1, nt_asm + nt_prd
     x_da(it) = x_da(it-1) + dt*v_da(it-1)
