@@ -12,7 +12,7 @@ nt_asm=400
 nt_prd=400
 obs_interval=40
 DA_METHOD='EnKF' #or 'EnKF' or 'Ajoint'
-mem=500
+mem=5000
 
 # +++ initial value
 x_tinit=5.0d0; v_tinit=0.0d0
