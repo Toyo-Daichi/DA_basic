@@ -32,12 +32,13 @@ program oscillation
   real(r_size), allocatable :: x_obs(:)
   
   ! --- Matrix(element 1:x, 2:v)
-  ! +++ sample 
+  ! +++ default setting
   ! Pf = (  Pxx: 1.0  Pxv: 0.0
   !         Pyx: 0.0  Pyy: 1.0  )
 
   real(r_size) :: M(2,2)   ! state transient matrix
-  real(r_size) :: Pf(2,2)  ! Forecast error convariance matrix
+  real(r_size) :: Pf(2,2)  ! Forecast error convariance matrix (in KF, EnKF)
+  real(r_size) :: B(2,2)   ! Background error convariance matrix (in 4DVar Ajoint)
   real(r_size) :: Pa(2,2)  ! Analysis error convariance matrix
   real(r_size) :: R(1,1)   ! Observation error convariance matrix
   real(r_size) :: Kg(2,1)  ! Kalman gain
@@ -68,7 +69,7 @@ program oscillation
   !----------------------------------------------------------------------
   real(r_size) :: x_tinit, v_tinit
   real(r_size) :: x_sinit, v_sinit
-  real(r_size) :: Pf_init(4)
+  real(r_size) :: Pf_init(4), B_init(4)
   real(r_size) :: R_init
   real(r_size) :: Kg_init(2)
   real(r_size) :: H_init(2)
@@ -77,7 +78,7 @@ program oscillation
   namelist /da_setting/ da_method
   namelist /ensemble_size/ mems
   namelist /initial_osc/ x_tinit, v_tinit, x_sinit, v_sinit
-  namelist /initial_que/ Pf_init, R_init, Kg_init, H_init
+  namelist /initial_que/ Pf_init, B_init, R_init, Kg_init, H_init
   namelist /output/ output_file ! opt_beach
  
   read(5, nml=set_parm)
@@ -253,6 +254,9 @@ program oscillation
       x_da(it)=sum(x_da_m(it,1:mems))/mems
       v_da(it)=sum(v_da_m(it,1:mems))/mems
     end do
+
+  else if ( da_method == 'Ajoint' ) then
+    ! not yet
   end if
   
   ! --- Sec5. Prediction after Data assimilation

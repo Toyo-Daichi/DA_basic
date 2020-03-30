@@ -1,5 +1,5 @@
 #!/bin/bash
-# attach by oscillation.f90
+# attached by oscillation.f90
 
 # set -ex
 prg=maintools
@@ -21,7 +21,10 @@ x_sinit=4.0d0; v_sinit=1.0d0
 # +++ initial matrix
 # Forecast error covariance matrix
 Pf_init=( 1.0d0 0.0d0 
-          0.0d0 1.0d0 ) 
+          0.0d0 1.0d0 )
+# Background error covariance matrix 
+B_init=(  1.0d0 0.0d0
+          0.0d0 1.0d0 )
 # Observation error covariance matrix
 R_init=( 0.1d0 )
 # Kalman gain matrix
@@ -55,7 +58,8 @@ gfortran -fbounds-check -o ${prg} kinddef.f90 oscillation.f90
     x_sinit = ${x_sinit},  v_sinit = ${v_sinit},
   /
   &initial_que
-    Pf_init = ${Pf_init[0]}, ${Pf_init[1]}, ${Pf_init[2]}, ${Pf_init[3]}, 
+    Pf_init = ${Pf_init[0]}, ${Pf_init[1]}, ${Pf_init[2]}, ${Pf_init[3]},
+    B_init  = ${B_init[0]}, ${B_init[1]}, ${B_init[2]}, ${B_init[3]},
     R_init  = ${R_init[0]}, Kg_init = ${Kg_init[0]}, H_init = ${H_init[0]}, ${H_init[1]}
   /
   &output
