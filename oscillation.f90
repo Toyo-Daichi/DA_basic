@@ -4,11 +4,9 @@
 
 program oscillation
   
-  !use kinddef
+  use kinddef
   
   implicit none
-
-  integer, parameter :: r_size=4
 
   ! --- setting Parameters
   integer :: nt_asm       ! Period of data assimilation
@@ -48,7 +46,7 @@ program oscillation
   ! --- Output control
   character(7),allocatable :: obs_chr(:)
   integer, parameter       :: output_interval = 20
-  logical                  :: opt_beach
+  !logical                  :: opt_beach = .false.
   character(256)           :: linebuf
   character(256)           :: output_file
 
@@ -77,26 +75,37 @@ program oscillation
   
   namelist /set_parm/ nt_asm, nt_prd, obs_interval
   namelist /da_setting/ da_method
-  namelist /EnKF/ mems
+  namelist /ensemble_size/ mems
   namelist /initial_osc/ x_tinit, v_tinit, x_sinit, v_sinit
   namelist /initial_que/ Pf_init, R_init, Kg_init, H_init
-  namelist /output/ output_file, opt_beach
+  namelist /output/ output_file ! opt_beach
  
   read(5, nml=set_parm)
   read(5, nml=da_setting)
   if ( trim(da_method) == 'EnKF' ) then
-    read(5, nml=EnKF)
+    read(5, nml=ensemble_size)
   end if 
   read(5, nml=initial_osc)
   read(5, nml=initial_que)
-  read(5, nml=output)
-
-  allocate(x_true(nt_asm+nt_prd), v_true(nt_asm+nt_prd))
-  allocate(x_sim(nt_asm+nt_prd), v_sim(nt_asm+nt_prd))
-  allocate(x_da_m(nt_asm, mems), v_da_m(nt_asm, mems))
+  read(5, nml=output, iostat = ierr)
+  ! name list io check
+  if (ierr < 0 ) then
+    write(6,*) '   Msg : Main[ .sh /  opt_namelist ] '
+    write(6,*) '   Not found namelist.        '
+    write(6,*) '   Use default values.        '
+  else if (ierr > 0) then
+    write(6,*) '   Msg : Main[ .sh /  opt_namelist ] '
+    write(6,*) '   *** Warning : Not appropriate names in namelist !! Check !!'
+    write(6,*) '   Stop : oscillation.f90              '
+    stop
+  end if
+  
+  allocate(x_true(0:nt_asm+nt_prd), v_true(0:nt_asm+nt_prd))
+  allocate(x_sim(0:nt_asm+nt_prd), v_sim(0:nt_asm+nt_prd))
+  allocate(x_da_m(0:nt_asm, mems), v_da_m(0:nt_asm, mems))
   allocate(x_prtb(mems), v_prtb(mems))
-  allocate(x_da(nt_asm+nt_prd), v_da(nt_asm+nt_prd))
-  allocate(x_obs(nt_asm/obs_interval))
+  allocate(x_da(0:nt_asm+nt_prd), v_da(0:nt_asm+nt_prd))
+  allocate(x_obs(0:nt_asm/obs_interval))
   allocate(obs_chr(0:nt_asm+nt_prd))
 
   !----------------------------------------------------------------------
@@ -301,7 +310,7 @@ program oscillation
     end if
   end do
 
-  open (1, file='./output/oscillation_KF.csv', status='replace')
+  open (1, file=trim(output_file), status='replace')
     write(1,*) 'timestep, x_true, x_sim, x_da, v_true, v_sim, v_da, obs_data'
     do it = 0, nt_asm+nt_prd
       if (mod(it, output_interval) == 0) then
