@@ -84,7 +84,9 @@ program oscillation
  
   read(5, nml=set_parm)
   read(5, nml=da_setting)
-  if ( trim(da_method) == 'EnKF' ) then; read(5, nml=EnKF)
+  if ( trim(da_method) == 'EnKF' ) then
+    read(5, nml=EnKF)
+  end if 
   read(5, nml=initial_osc)
   read(5, nml=initial_que)
   read(5, nml=output)
@@ -242,7 +244,6 @@ program oscillation
       x_da(it)=sum(x_da_m(it,1:mems))/mems
       v_da(it)=sum(v_da_m(it,1:mems))/mems
     end do
-  end if
   end if
   
   ! --- Sec5. Prediction after Data assimilation
