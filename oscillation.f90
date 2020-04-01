@@ -133,8 +133,11 @@ program oscillation
   x_true(0) = x_tinit; v_true(0) = v_tinit
   x_sim(0)  = x_sinit; v_sim(0)  = v_sinit
   
-  Pf(1,1) = Pf_init(1); Pf(1,2)=Pf_init(2); Pf(2,1)=Pf_init(3); Pf(2,2)=Pf_init(4)
-  B(1,1)  = B_init(1); B(1,2)=B_init(2); B(2,1)=B_init(3); B(2,2)=B_init(4)
+  Pf(1,1) = Pf_init(1); Pf(1,2)=Pf_init(2)
+  Pf(2,1) = Pf_init(3); Pf(2,2)=Pf_init(4)
+  B(1,1)  = B_init(1);  B(1,2)=B_init(2)
+  B(2,1)  = B_init(3);  B(2,2)=B_init(4)
+  
   Pa = Pf
   
   R(1,1) = R_init
