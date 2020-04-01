@@ -1,0 +1,19 @@
+# ****  Parameters for Lorenz model calculation  ****
+'# (1) Sigma (Prandtl number) '
+10.0d0
+'# (2) Gamma (Rayleigh number): critical value = 24.7368 '
+25.0d0
+'# (3) b (wave length) '
+2.666666666666666667d0
+'# (4) dt (Time step increment) '
+2.0d-3
+'# (5) nt (Number of time steps) '
+50000
+'# (6) nft (Time-step interval writing results) '
+5
+'# (7) X(0) (initial value of X) '
+10.0d0
+'# (8) Y(0) (initial value of Y) '
+15.0d0
+'# (9) Z(0) (initial value of Z) '
+30.0d0
