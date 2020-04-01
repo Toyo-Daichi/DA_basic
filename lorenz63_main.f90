@@ -4,6 +4,7 @@
 program lorenz63
 
   use kinddef
+  use lorenz63_prm
 
   implicit none
 
@@ -12,48 +13,47 @@ program lorenz63
   integer :: nt_prd       ! Period of prediction
   integer :: obs_interval ! Interval of observation
 
-  real(r_size), parameter  :: mass = 1.0d0
-  real(r_size), parameter  :: k    = 0.5d0
-  real(r_size), parameter  :: dump = 0.3d0  ! Damping coefficinet
   real(r_size), parameter  :: dt   = 1.0d-2 ! Time step
-  real(r_size), parameter  :: pi   = 3.14159265358979d0
 
   character(8) :: da_method
   
   ! --- Physical variable
-  real(r_size), allocatable :: x_true(:), v_true(:)
-  real(r_size), allocatable :: x_sim(:), v_sim(:)
+  real(r_size), allocatable :: x_true(:), y_true(:), z_true(:)
+  real(r_size), allocatable :: x_sim(:), y_sim(:), z_sim(:)
   
-  real(r_size), allocatable :: x_da_m(:, :), v_da_m(:, :)
-  real(r_size), allocatable :: x_prtb(:), v_prtb(:)
-
-  real(r_size), allocatable :: x_da(:), v_da(:) ! if EnKF: ensemble mean
+  real(r_size), allocatable :: x_da(:), y_da(:), z_da(:)
   real(r_size), allocatable :: x_obs(:)
+
+  real(r_size), allocatable :: x_da_m(:, :), y_da_m(:, :), z_da_m(:, :)
+  real(r_size), allocatable :: x_prtb(:), y_prtb(:), z_prtb(:)
+
   
-  ! --- Matrix(element 1:x, 2:v)
+  ! --- Matrix(element 1:x, 2:y, 3:z)
   ! +++ default setting
-  ! Pf = (  Pxx: 1.0  Pxv: 0.0
-  !         Pyx: 0.0  Pyy: 1.0  )
+  ! Pf = (  Pxx: 1.0  Pxy: 0.0 Pxz: 0.0
+  !         Pyx: 0.0  Pyy: 1.0 Pyz: 0.0 
+  !         Pzx: 0.0  Pzy: 0.0 Pzz: 1.0 )
   
-  real(r_size) :: M(2,2)   ! state transient matrix
-  real(r_size) :: Pf(2,2)  ! Forecast error convariance matrix (in KF, EnKF)
-  real(r_size) :: Pa(2,2)  ! Analysis error convariance matrix
-  real(r_size) :: R(1,1)   ! Observation error convariance matrix
-  real(r_size) :: Kg(2,1)  ! Kalman gain
-  real(r_size) :: H(1,2)   ! Observation operator
+  real(r_size) :: M(3,3)   ! state transient matrix
+  real(r_size) :: Pf(3,3)  ! Forecast error convariance matrix (in KF, EnKF)
+  real(r_size) :: Pa(3,3)  ! Analysis error convariance matrix
+  !real(r_size) :: R(1,1)   ! Observation error convariance matrix
+  !real(r_size) :: Kg(2,1)  ! Kalman gain
+  !eal(r_size) :: H(1,2)   ! Observation operator
   
   !  >> -----------------------------------------------------------------
   ! +++ 4Dvar_Ajoint model : Cost function and ajoint variable
-  real(r_size) :: B(2,2)   ! Background error convariance matrix
+  real(r_size) :: B(3,3)   ! Background error convariance matrix
   real(r_size) :: J        ! Cost function
   real(r_size) :: Jold     ! Cost function in a previous iteration
   real(r_size) :: x_b, v_b ! First guess of initial value
 
-  real(r_size), allocatable :: adx(:), adv(:)
-  real(r_size), allocatable :: x_save(:), v_save(:)
-  real(r_size), allocatable :: x_tmp(:), v_tmp(:)
+  real(r_size), allocatable :: adx(:), ady(:), adz(:)
+  real(r_size), allocatable :: x_save(:), y_save(:), z_save(:)
+  real(r_size), allocatable :: x_tmp(:), y_tmp(:), z_tmp(:)
   real(r_size), parameter   :: alpx = 0.02         ! Coefficient for minization
-  real(r_size), parameter   :: alpv = 0.02
+  real(r_size), parameter   :: alpy = 0.02
+  real(r_size), parameter   :: alpz = 0.02
   integer, parameter        :: iter_max = 500      ! maxmum number of iteration
   real(r_size), parameter   :: cond_iter = 1.0d-4  ! condition for iteration end ***(Jold - J)/Jold
 
@@ -81,17 +81,18 @@ program lorenz63
   !----------------------------------------------------------------------
   ! +++ open namelist, allocation
   !----------------------------------------------------------------------
-  real(r_size) :: x_tinit, v_tinit
-  real(r_size) :: x_sinit, v_sinit
-  real(r_size) :: Pf_init(4), B_init(4)
-  real(r_size) :: R_init
-  real(r_size) :: Kg_init(2)
-  real(r_size) :: H_init(2)
+  real(r_size) :: x_tinit, y_tinit, z_tinit
+  real(r_size) :: x_sinit, y_sinit, z_sinit
+  real(r_size) :: Pf_init(9), B_init(9)
+  !real(r_size) :: R_init
+  !real(r_size) :: Kg_init(2)
+  !real(r_size) :: H_init(2)
   
   namelist /set_parm/ nt_asm, nt_prd, obs_interval
   namelist /da_setting/ da_method
   namelist /ensemble_size/ mems
-  namelist /initial_osc/ x_tinit, v_tinit, x_sinit, v_sinit
+  namelist /initial_osc/ x_tinit, y_tinit, z_tinit,
+                         x_sinit, y_sinit, z_sinit
   namelist /initial_que/ Pf_init, B_init, R_init, Kg_init, H_init
   namelist /output/ output_file ! opt_beach
  
@@ -115,34 +116,34 @@ program lorenz63
     stop
   end if
 
-  allocate(x_true(0:nt_asm+nt_prd), v_true(0:nt_asm+nt_prd))
-  allocate(x_sim(0:nt_asm+nt_prd), v_sim(0:nt_asm+nt_prd))
-  allocate(x_da_m(0:nt_asm, mems), v_da_m(0:nt_asm, mems))
-  allocate(x_prtb(mems), v_prtb(mems))
-  allocate(x_da(0:nt_asm+nt_prd), v_da(0:nt_asm+nt_prd))
-  allocate(x_tmp(0:nt_asm), v_tmp(0:nt_asm))
-  allocate(adx(0:nt_asm), adv(0:nt_asm))
-  allocate(x_save(0:nt_asm), v_save(0:nt_asm))
+  allocate(x_true(0:nt_asm+nt_prd), y_true(0:nt_asm+nt_prd), z_true(0:nt_asm+nt_prd))
+  allocate(x_sim(0:nt_asm+nt_prd), y_sim(0:nt_asm+nt_prd), z_sim(0:nt_asm+nt_prd))
+  allocate(x_da(0:nt_asm+nt_prd), y_da(0:nt_asm+nt_prd), z_da(0:nt_asm+nt_prd))
+
+  allocate(x_da_m(0:nt_asm, mems), y_da_m(0:nt_asm, mems), z_da_m(0:nt_asm, mems))
+  allocate(x_tmp(0:nt_asm), y_tmp(0:nt_asm), z_tmp(0:nt_asm))
+  allocate(x_prtb(mems), y_prtb(mems), z_prtb(mems))
+  allocate(adx(0:nt_asm), ady(0:nt_asm), adz(0:nt_asm))
+  allocate(x_save(0:nt_asm), y_save(0:nt_asm), z_save(0:nt_asm))
   allocate(x_obs(0:nt_asm/obs_interval))
   allocate(obs_chr(0:nt_asm+nt_prd))
 
   !----------------------------------------------------------------------
   ! +++ initial setting
   
-  x_true(0) = x_tinit; v_true(0) = v_tinit
-  x_sim(0)  = x_sinit; v_sim(0)  = v_sinit
+  x_true(0) = x_tinit; y_true(0) = y_tinit; z_true(0) = z_tinit
+  x_sim(0)  = x_sinit; y_sim(0)  = y_sinit; z_sim(0)  = z_sinit
   
-  Pf(1,1) = Pf_init(1); Pf(1,2)=Pf_init(2)
-  Pf(2,1) = Pf_init(3); Pf(2,2)=Pf_init(4)
-  B(1,1)  = B_init(1);  B(1,2)=B_init(2)
-  B(2,1)  = B_init(3);  B(2,2)=B_init(4)
+  Pf(1,1) = Pf_init(1); Pf(1,2)=Pf_init(2); Pf(1,3)=Pf_init(3)
+  Pf(2,1) = Pf_init(4); Pf(2,2)=Pf_init(5); Pf(2,3)=Pf_init(6)
+  Pf(3,1) = Pf_init(7); Pf(3,2)=Pf_init(8); Pf(2,3)=Pf_init(9)
   
-  Pa = Pf
+  !Pa = Pf
   
-  R(1,1) = R_init
+  !R(1,1) = R_init
   
-  Kg(1:2,1:1) = Kg_init(1)
-  H(1,1) = H_init(1); H(1,2) = H_init(2)
+  !Kg(1:2,1:1) = Kg_init(1)
+  !H(1,1) = H_init(1); H(1,2) = H_init(2)
   
   ! --- Initialization of random number generator
   call random_seed()
