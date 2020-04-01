@@ -19,7 +19,7 @@ program oscillation
   real(r_size), parameter  :: dt   = 1.0d-2 ! Time step
   real(r_size), parameter  :: pi   = 3.14159265358979d0
 
-  character(5) :: da_method
+  character(8) :: da_method
   
   ! --- Physical variable
   real(r_size), allocatable :: x_true(:), v_true(:)
@@ -134,6 +134,7 @@ program oscillation
   x_sim(0)  = x_sinit; v_sim(0)  = v_sinit
   
   Pf(1,1) = Pf_init(1); Pf(1,2)=Pf_init(2); Pf(2,1)=Pf_init(3); Pf(2,2)=Pf_init(4)
+  B(1,1)  = B_init(1); B(1,2)=B_init(2); B(2,1)=B_init(3); B(2,2)=B_init(4)
   Pa = Pf
   
   R(1,1) = R_init
@@ -299,7 +300,7 @@ program oscillation
           ! Calculate misfit and chanfge ajoint variable
           adx(it) = adx(it) + (x_tmp(it) - x_obs(it/obs_interval))/R(1,1)
         end if
-        adx(it-1) = adx(it) + -k*dt / mass * adv(it)
+        adx(it-1) = adx(it) -k*dt / mass*adv(it)
         adv(it-1) = dt * adx(it) + (1.0d0 - dump*dt / mass) * adv(it)
       end do
 
@@ -308,7 +309,6 @@ program oscillation
       &     + 0.5d0 * (v_tmp(0) - v_b)**2/ B(2,2)
       adx(0) = adx(0) + (x_tmp(0) -x_b) / B(1,1)
       adv(0) = adv(0) + (v_tmp(0) -v_b) / B(1,1)
-
       ! Section 4-5: Check the end of iteration
       if ((iter > 1) .and. (Jold < J)) then
         x_da(0:nt_asm) = x_tmp(0:nt_asm)
@@ -319,7 +319,7 @@ program oscillation
         write(6,*) 'Replace DA results with those in previous iteration and exit DA.'
         write(6,'(A,1X,i3,1X,A,3(F9.3,1X))') &
         & 'iteration =', iter, '; ajoint x,v =', adx(0), adv(0)
-        write(6,'(10X,A,F9.3,1X,A,1X,3(F7.3,2X))') &
+        write(6,'(2X,A,F9.3,1X,A,1X,3(F7.3,2X))') &
         & 'J =', J, '; x(0),v(0) =>', x_da(0), v_da(0)
         write(6,*)
         exit
@@ -332,7 +332,7 @@ program oscillation
         write(6,*) 'Differences between J and Jold become small => exit DA.'
         write(6,'(A,1X,i3,1X,A,3(F9.3,1X))') &
         & 'iteration =', iter, '; ajoint x,v =', adx(0), adv(0)
-        write(6,'(10X,A,F9.3,1X,A,1X,3(F7.3,2X))') &
+        write(6,'(2X,A,F9.3,1X,A,1X,3(F7.3,2X))') &
         & 'J =', J, '; x(0),v(0) =>', x_da(0), v_da(0)
         write(6,*)
         exit
@@ -345,7 +345,7 @@ program oscillation
         write(6,*) 'Maximum number of iteration reached'
         write(6,'(A,1X,i3,1X,A,3(F9.3,1X))') &
         & 'iteration =', iter, '; ajoint x,v =', adx(0), adv(0)
-        write(6,'(10X,A,F9.3,1X,A,1X,3(F7.3,2X))') &
+        write(6,'(2X,A,F9.3,1X,A,1X,3(F7.3,2X))') &
         & 'J =', J, '; x(0),v(0) =>', x_da(0), v_da(0)
         write(6,*)
         exit
@@ -359,7 +359,7 @@ program oscillation
       v_tmp(0) = v_tmp(0) - alpv*adv(0)
 
       ! OUTPUT
-      write(6,'(A,1X,i3,A,1X,2(F7.3,2X,A),F9.3)') &
+      write(6,'(A,1X,i3,1X,A,1X,2F9.3,1X,A,1X,F9.3,1X,A,1X,3(F7.3,2X))') &
       & 'iteration =  ',   iter,                  &
       & '; x(0), v(0) = ', x_tmp(0), v_tmp(0),    &
       & '; J = ', J,                              &
@@ -387,7 +387,7 @@ program oscillation
   end do
   
   write(6,*) '  -------- Identical Twin Experiment --------  '
-  write(6,*) '  -------- Method: Kalman Fileter    --------  '
+  write(6,*) '  ***  Method: ', da_method
   write(6,*)
   write(6,'(A,F7.2,A,F7.2)') 'Assimilation Period: t= ', 0.0, '-', dt*nt_asm
   write(6,'(A,F7.2,A,F7.2)') 'Prediction   Period: t= ', 0.0, '-', dt*(nt_asm+nt_prd)
