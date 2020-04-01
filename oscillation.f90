@@ -3,9 +3,9 @@
 ! (ref: http://www.itonwp.sci.u-ryukyu.ac.jp/itokosk.html) 
 
 program oscillation
-  
+
   use kinddef
-  
+
   implicit none
 
   ! --- setting Parameters
@@ -35,15 +35,27 @@ program oscillation
   ! +++ default setting
   ! Pf = (  Pxx: 1.0  Pxv: 0.0
   !         Pyx: 0.0  Pyy: 1.0  )
-
+  
   real(r_size) :: M(2,2)   ! state transient matrix
   real(r_size) :: Pf(2,2)  ! Forecast error convariance matrix (in KF, EnKF)
-  real(r_size) :: B(2,2)   ! Background error convariance matrix (in 4DVar Ajoint)
   real(r_size) :: Pa(2,2)  ! Analysis error convariance matrix
   real(r_size) :: R(1,1)   ! Observation error convariance matrix
   real(r_size) :: Kg(2,1)  ! Kalman gain
   real(r_size) :: H(1,2)   ! Observation operator
   
+  !  >> -----------------------------------------------------------------
+  ! +++ 4Dvar_Ajoint model : Cost function and ajoint variable
+  real(r_size) :: B(2,2)   ! Background error convariance matrix
+  real(r_size) :: J        ! Cost function
+  real(r_size) :: Jold     ! Cost function in a previous iteration
+
+  real(r_size), allocatable :: adx(:), adv(:)
+  real(r_size), allocatable :: x_save(:), v_save(:)
+  real(r_size), parameter   :: alpx = 0.02         ! Coefficient for minization
+  real(r_size), parameter   :: alpv = 0.02
+  integer, parameter        :: iter_max = 500      ! maxmum number of iteration
+  real(r_size), parameter   :: cond_iter = 1.0d-4  ! condition for iteration end ***(Jold - J)/Jold
+
   ! --- Output control
   character(7),allocatable :: obs_chr(:)
   integer, parameter       :: output_interval = 20
@@ -56,6 +68,7 @@ program oscillation
   integer :: mems, imem
   integer :: ierr
   integer :: iflag
+  integer :: iter
   real(r_size) :: x_innov
   real(r_size) :: Ptmp(2,2)
   real(r_size) :: noise1, noise2, Gnoise ! Gaussian noise
@@ -81,31 +94,33 @@ program oscillation
   namelist /initial_que/ Pf_init, B_init, R_init, Kg_init, H_init
   namelist /output/ output_file ! opt_beach
  
-  read(5, nml=set_parm)
-  read(5, nml=da_setting)
+  read(5, nml=set_parm, iostat = ierr)
+  read(5, nml=da_setting, iostat = ierr)
   if ( trim(da_method) == 'EnKF' ) then
-    read(5, nml=ensemble_size)
+    read(5, nml=ensemble_size, iostat = ierr)
   end if 
-  read(5, nml=initial_osc)
-  read(5, nml=initial_que)
+  read(5, nml=initial_osc, iostat = ierr)
+  read(5, nml=initial_que, iostat = ierr)
   read(5, nml=output, iostat = ierr)
   ! name list io check
   if (ierr < 0 ) then
-    write(6,*) '   Msg : Main[ .sh /  opt_namelist ] '
+    write(6,*) '   Msg : Main[ .sh /  @namelist ] '
     write(6,*) '   Not found namelist.        '
     write(6,*) '   Use default values.        '
   else if (ierr > 0) then
-    write(6,*) '   Msg : Main[ .sh /  opt_namelist ] '
+    write(6,*) '   Msg : Main[ .sh /  @namelist ] '
     write(6,*) '   *** Warning : Not appropriate names in namelist !! Check !!'
     write(6,*) '   Stop : oscillation.f90              '
     stop
   end if
-  
+
   allocate(x_true(0:nt_asm+nt_prd), v_true(0:nt_asm+nt_prd))
   allocate(x_sim(0:nt_asm+nt_prd), v_sim(0:nt_asm+nt_prd))
   allocate(x_da_m(0:nt_asm, mems), v_da_m(0:nt_asm, mems))
   allocate(x_prtb(mems), v_prtb(mems))
   allocate(x_da(0:nt_asm+nt_prd), v_da(0:nt_asm+nt_prd))
+  allocate(adx(0:nt_asm), adv(0:nt_asm))
+  allocate(x_save(0:nt_asm), v_save(0:nt_asm))
   allocate(x_obs(0:nt_asm/obs_interval))
   allocate(obs_chr(0:nt_asm+nt_prd))
 
@@ -256,7 +271,98 @@ program oscillation
     end do
 
   else if ( da_method == 'Ajoint' ) then
-    ! not yet
+    x_tmp(0) = x_sim(0)
+    v_tmp(0) = v_sim(0)
+    x_b = x_tmp(0) ! set First guess value
+    v_b = v_tmp(0)
+
+    do iter = 1, iter_max
+      ! Section 4-1: initiallization for ajoint model run
+      J = 0.0d0
+      adx(0:nt_asm) = 0.0d0
+      adv(0:nt_asm) = 0.0d0
+      ! Section 4-2: Forward model run
+      do it = 1, nt_asm
+        x_tmp(it) = x_tmp(it-1) + dt*v_tmp(it-1)
+        v_tmp(it) = -(k * dt / mass) * x_tmp(it-1) + (1.0d0 - dump * dt / mass ) * v_tmp(it-1)
+        if (mod(it, obs_interval) == 0) then
+          ! Calculate Cost function
+          J = J + 0.5 * (x_obs(it / obs_interval) - x_tmp(it))**2 / R(1, 1)
+        end if
+      end do
+      ! Section 4-3: ajoint model run
+      do it = nt_asm, 1, -1
+        if (mod(it, obs_interval) ==0) then
+          ! Calculate misfit and chanfge ajoint variable
+          adx(it) = adx(it) + (x_tmp(it) - x_obs(it/obs_interval))/R(1,1)
+        end if
+        adx(it-1) = adx(it) + -k*dt / mass * adv(it)
+        adv(it-1) = dt * adx(it) + (1.0d0 - dump*dt / mass) * adv(it)
+      end do
+
+      ! Section 4-4: Consider background covariance
+      J = J + 0.5d0 * (x_tmp(0) - x_b)**2/ B(1,1) &
+      &     + 0.5d0 * (v_tmp(0) - v_b)**2/ B(2,2)
+      adx(0) = adx(0) + (x_tmp(0) -x_b) / B(1,1)
+      adv(0) = adv(0) + (v_tmp(0) -v_b) / B(1,1)
+
+      ! Section 4-5: Check the end of iteration
+      if ((iter > 1) .and. (Jold < J)) then
+        x_da(0:nt_asm) = x_tmp(0:nt_asm)
+        v_da(0:nt_asm) = v_tmp(0:nt_asm)
+
+        write(6,*)
+        write(6,*) 'Cost function increases from the previous iteration.'
+        write(6,*) 'Replace DA results with those in previous iteration and exit DA.'
+        write(6,'(A,1X,i3,1X,A,3(F9.3,1X))') &
+        & 'iteration =', iter, '; ajoint x,v =', adx(0), adv(0)
+        write(6,'(10X,A,F9.3,1X,A,1X,3(F7.3,2X))') &
+        & 'J =', J, '; x(0),v(0) =>', x_da(0), v_da(0)
+        write(6,*)
+        exit
+      
+      else if ((iter > 1) .and. (cond_iter > (Jold-J)/ Jold)) then
+        x_da(0:nt_asm) = x_tmp(0:nt_asm)
+        v_da(0:nt_asm) = v_tmp(0:nt_asm)
+
+        write(6,*)
+        write(6,*) 'Differences between J and Jold become small => exit DA.'
+        write(6,'(A,1X,i3,1X,A,3(F9.3,1X))') &
+        & 'iteration =', iter, '; ajoint x,v =', adx(0), adv(0)
+        write(6,'(10X,A,F9.3,1X,A,1X,3(F7.3,2X))') &
+        & 'J =', J, '; x(0),v(0) =>', x_da(0), v_da(0)
+        write(6,*)
+        exit
+      
+      else if (iter == iter_max) then
+        x_da(0:nt_asm) = x_tmp(0:nt_asm)
+        v_da(0:nt_asm) = v_tmp(0:nt_asm)
+
+        write(6,*)
+        write(6,*) 'Maximum number of iteration reached'
+        write(6,'(A,1X,i3,1X,A,3(F9.3,1X))') &
+        & 'iteration =', iter, '; ajoint x,v =', adx(0), adv(0)
+        write(6,'(10X,A,F9.3,1X,A,1X,3(F7.3,2X))') &
+        & 'J =', J, '; x(0),v(0) =>', x_da(0), v_da(0)
+        write(6,*)
+        exit
+      end if
+
+      ! Section 4-6: save values
+      Jold = J
+
+      ! Section 4-7: Update of x and v
+      x_tmp(0) = x_tmp(0) - alpx*adx(0)
+      v_tmp(0) = v_tmp(0) - alpv*adv(0)
+
+      ! OUTPUT
+      write(6,'(A,1X,i3,A,1X,2(F7.3,2X,A),F9.3)') &
+      & 'iteration =  ',   iter,                  &
+      & '; x(0), v(0) = ', x_tmp(0), v_tmp(0),    &
+      & '; J = ', J,                              &
+      & '; ajoint x,v = ', adx(0), adv(0)
+
+    end do
   end if
   
   ! --- Sec5. Prediction after Data assimilation
