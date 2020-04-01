@@ -11,7 +11,7 @@ rm -rf *.cnf *.mod ${prg}
 nt_asm=400 
 nt_prd=400
 obs_interval=40
-DA_METHOD='EnKF' #or 'EnKF' or 'Ajoint'
+DA_METHOD='Ajoint' #or 'EnKF' or 'Ajoint'
 mem=5000
 
 # +++ initial value

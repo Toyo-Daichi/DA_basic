@@ -48,9 +48,11 @@ program oscillation
   real(r_size) :: B(2,2)   ! Background error convariance matrix
   real(r_size) :: J        ! Cost function
   real(r_size) :: Jold     ! Cost function in a previous iteration
+  real(r_size) :: x_b, v_b ! First guess of initial value
 
   real(r_size), allocatable :: adx(:), adv(:)
   real(r_size), allocatable :: x_save(:), v_save(:)
+  real(r_size), allocatable :: x_tmp(:), v_tmp(:)
   real(r_size), parameter   :: alpx = 0.02         ! Coefficient for minization
   real(r_size), parameter   :: alpv = 0.02
   integer, parameter        :: iter_max = 500      ! maxmum number of iteration
@@ -119,6 +121,7 @@ program oscillation
   allocate(x_da_m(0:nt_asm, mems), v_da_m(0:nt_asm, mems))
   allocate(x_prtb(mems), v_prtb(mems))
   allocate(x_da(0:nt_asm+nt_prd), v_da(0:nt_asm+nt_prd))
+  allocate(x_tmp(0:nt_asm), v_tmp(0:nt_asm))
   allocate(adx(0:nt_asm), adv(0:nt_asm))
   allocate(x_save(0:nt_asm), v_save(0:nt_asm))
   allocate(x_obs(0:nt_asm/obs_interval))
