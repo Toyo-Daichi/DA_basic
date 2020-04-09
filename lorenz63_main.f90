@@ -14,6 +14,7 @@ program lorenz63
   integer :: obs_interval ! Interval of observation
 
   real(r_size), parameter  :: dt   = 1.0d-2 ! Time step
+  real(r_size), parameter  :: pi   = 3.14159265358979d0
 
   character(8) :: da_method
   
@@ -22,12 +23,12 @@ program lorenz63
   real(r_size), allocatable :: x_sim(:), y_sim(:), z_sim(:)
   
   real(r_size), allocatable :: x_da(:), y_da(:), z_da(:)
-  real(r_size), allocatable :: x_obs(:)
+  real(r_size), allocatable :: x_obs(:), y_obs(:)
 
   real(r_size), allocatable :: x_da_m(:, :), y_da_m(:, :), z_da_m(:, :)
-  real(r_size), allocatable :: x_prtb(:), y_prtb(:), z_prtb(:)
 
   ! --- For calculation, Runge-Kutta method
+  real(r_size) :: x_cal(3), y_cal(3), z_cal(3)
   real(r_size) :: x_k(4), y_k(4), z_k(4)
 
   ! --- Matrix(element 1:x, 2:y, 3:z)
@@ -43,26 +44,10 @@ program lorenz63
   real(r_size) :: Kg(3,2)  ! Kalman gain
   real(r_size) :: H(2,3)   ! Observation operator
   
-  !  >> -----------------------------------------------------------------
-  ! +++ 4Dvar_Ajoint model : Cost function and ajoint variable
-  real(r_size) :: B(3,3)   ! Background error convariance matrix
-  real(r_size) :: J        ! Cost function
-  real(r_size) :: Jold     ! Cost function in a previous iteration
-  real(r_size) :: x_b, v_b ! First guess of initial value
-
-  real(r_size), allocatable :: adx(:), ady(:), adz(:)
-  real(r_size), allocatable :: x_save(:), y_save(:), z_save(:)
-  real(r_size), allocatable :: x_tmp(:), y_tmp(:), z_tmp(:)
-  real(r_size), parameter   :: alpx = 0.02         ! Coefficient for minization
-  real(r_size), parameter   :: alpy = 0.02
-  real(r_size), parameter   :: alpz = 0.02
-  integer, parameter        :: iter_max = 500      ! maxmum number of iteration
-  real(r_size), parameter   :: cond_iter = 1.0d-4  ! condition for iteration end ***(Jold - J)/Jold
-
   ! --- Output control
   character(7),allocatable :: obs_chr(:)
-  integer, parameter       :: output_interval = 20
-  !logical                  :: opt_beach = .false.
+  integer                  :: output_interval = 40
+  !logical                 :: opt_beach = .false.
   character(256)           :: linebuf
   character(256)           :: output_file
 
@@ -73,7 +58,6 @@ program lorenz63
   integer :: iflag
   integer :: iter
   real(r_size) :: x_innov
-  real(r_size) :: Ptmp(3,3)
   real(r_size) :: noise1, noise2, Gnoise ! Gaussian noise
 
   !======================================================================
@@ -93,8 +77,7 @@ program lorenz63
   namelist /set_parm/ nt_asm, nt_prd, obs_interval
   namelist /da_setting/ da_method
   namelist /ensemble_size/ mems
-  namelist /initial_osc/ x_tinit, y_tinit, z_tinit,
-                         x_sinit, y_sinit, z_sinit
+  namelist /initial_score/ x_tinit, y_tinit, z_tinit, x_sinit, y_sinit, z_sinit
   namelist /initial_matrix/ Pf_init, B_init, R_init, Kg_init, H_init
   namelist /output/ output_file ! opt_beach
  
@@ -103,8 +86,9 @@ program lorenz63
   if ( trim(da_method) == 'EnKF' ) then
     read(5, nml=ensemble_size, iostat = ierr)
   end if 
-  read(5, nml=initial_osc, iostat = ierr)
-  read(5, nml=initial_que, iostat = ierr)
+  read(5, nml=initial_score, iostat = ierr)
+  write(6,*)  x_tinit, y_tinit, z_tinit, x_sinit, y_sinit, z_sinit
+  read(5, nml=initial_matrix, iostat = ierr)
   read(5, nml=output, iostat = ierr)
   ! name list io check
   if (ierr < 0 ) then
@@ -122,12 +106,7 @@ program lorenz63
   allocate(x_sim(0:nt_asm+nt_prd), y_sim(0:nt_asm+nt_prd), z_sim(0:nt_asm+nt_prd))
   allocate(x_da(0:nt_asm+nt_prd), y_da(0:nt_asm+nt_prd), z_da(0:nt_asm+nt_prd))
 
-  allocate(x_da_m(0:nt_asm, mems), y_da_m(0:nt_asm, mems), z_da_m(0:nt_asm, mems))
-  allocate(x_tmp(0:nt_asm), y_tmp(0:nt_asm), z_tmp(0:nt_asm))
-  allocate(x_prtb(mems), y_prtb(mems), z_prtb(mems))
-  allocate(adx(0:nt_asm), ady(0:nt_asm), adz(0:nt_asm))
-  allocate(x_save(0:nt_asm), y_save(0:nt_asm), z_save(0:nt_asm))
-  allocate(x_obs(0:nt_asm/obs_interval))
+  allocate(x_obs(0:nt_asm/obs_interval), y_obs(0:nt_asm/obs_interval))
   allocate(obs_chr(0:nt_asm+nt_prd))
 
   !----------------------------------------------------------------------
@@ -158,43 +137,46 @@ program lorenz63
   ! --- Sec2. True field and observations(Runge-Kutta method)
   do it = 1, nt_asm+nt_prd
     ! forward time step
-
+    write(6,*) it, x_true(it), y_true(it), z_true(it)
+    
     call cal_Lorenz(                           &
-      x_true(it-1), y_true(it-1), z_true(it-1),   & ! IN
-      x_k(1), y_k(1), z_k(1)                   & ! OUT
+    x_true(it-1), y_true(it-1), z_true(it-1),  & ! IN
+    x_k(1), y_k(1), z_k(1)                     & ! OUT
     )
-
+    
     x_cal(1) = x_true(it-1) + 0.5*x_k(1)*dt
     y_cal(1) = y_true(it-1) + 0.5*y_k(1)*dt
     z_cal(1) = z_true(it-1) + 0.5*z_k(1)*dt
-
+    
     call cal_Lorenz(                           &
     x_cal(1), y_cal(1), z_cal(1),              & ! IN
     x_k(2), y_k(2), z_k(2)                     & ! OUT
     )
-
+    
     x_cal(2) = x_true(it-1) + 0.5*x_k(2)*dt 
     y_cal(2) = y_true(it-1) + 0.5*y_k(2)*dt 
     z_cal(2) = z_true(it-1) + 0.5*z_k(2)*dt
-
+    
     call cal_Lorenz(                           &
     x_cal(2), y_cal(2), z_cal(2),              & ! IN
     x_k(3), y_k(3), z_k(3)                     & ! OUT
     )
-
+    
     x_cal(3) = x_true(it-1) + x_k(3)*dt
     y_cal(3) = y_true(it-1) + y_k(3)*dt
     y_cal(3) = z_true(it-1) + z_k(3)*dt
-
+    
     call cal_Lorenz(                           &
     x_cal(3), y_cal(3), z_cal(3),              & ! IN
     x_k(4), y_k(4), z_k(4)                     & ! OUT
     )
-
-    x_true(it) = x_true(it-1) + dt / 6.0d0 * ( x_k(1) + 2*x_k(2) + 2*x_k(3) + x_k(4))
-    y_true(it) = y_true(it-1) + dt / 6.0d0 * ( y_k(1) + 2*y_k(2) + 2*y_k(3) + y_k(4))
-    z_true(it) = z_true(it-1) + dt / 6.0d0 * ( z_k(1) + 2*z_k(2) + 2*z_k(3) + z_k(4))
-
+    
+    x_true(it) = x_true(it-1) + dt * (x_k(1) + 2*x_k(2) + 2*x_k(3) + x_k(4)) / 6.0d0
+    y_true(it) = y_true(it-1) + dt * (y_k(1) + 2*y_k(2) + 2*y_k(3) + y_k(4)) / 6.0d0
+    z_true(it) = z_true(it-1) + dt * (z_k(1) + 2*z_k(2) + 2*z_k(3) + z_k(4)) / 6.0d0
+    
+    write(6,*) it, x_true(it), y_true(it), z_true(it)
+    
     ! making observations
     if ((mod(it, obs_interval) == 0) .and. (it <= nt_asm)) then
       ! Generate Gaussian Noise (Gnoise) from uniform random number
@@ -204,71 +186,30 @@ program lorenz63
       Gnoise = sqrt(R(1,1))*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
       ! Generate observation by adding Gaussian noise to true value
       x_obs(it/obs_interval) = x_true(it) + Gnoise
+
+      call random_number(noise1)
+      call random_number(noise2)
+      Gnoise = sqrt(R(2,2))*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
+      y_obs(it/obs_interval) = y_true(it) + Gnoise
+      
     end if
   end do
   
-  
-  ! --- Sec5. Prediction after Data assimilation
-  do it = nt_asm+1, nt_asm + nt_prd
-    x_da(it) = x_da(it-1) + dt*v_da(it-1)
-    v_da(it) = -(k * dt / mass) * x_da(it-1) + (1.0d0 - dump * dt / mass ) * v_da(it-1)
-  end do
 
-  !----------------------------------------------------------------------
-  ! +++ OUTPUT Main
-  !----------------------------------------------------------------------
-  ! Identical Twin Experiment
-  
   obs_chr(0:nt_asm+nt_prd) = 'None'
   do it = 1, nt_asm
     if (mod(it, obs_interval) == 0) then
       write(obs_chr(it), '(F7.3)') x_obs(it/obs_interval)
     end if
   end do
-  
-  write(6,*) '  -------- Identical Twin Experiment --------  '
-  write(6,*) '  ***  Method: ', da_method
-  write(6,*)
-  write(6,'(A,F7.2,A,F7.2)') 'Assimilation Period: t= ', 0.0, '-', dt*nt_asm
-  write(6,'(A,F7.2,A,F7.2)') 'Prediction   Period: t= ', 0.0, '-', dt*(nt_asm+nt_prd)
-  write(6,*)
-  
-  write(6,*) '  >>> Assimilation Period: x '
-  write(6,*) ' [Time]   [True]   [No assim] [Assim] [Observation] '
-  do it = 0, nt_asm
-    if (mod(it, output_interval) == 0) then
-      write(6, '(F7.2, 3F10.3, 4X, A)') dt*it, x_true(it), x_sim(it), x_da(it), obs_chr(it)
-    end if
-  end do
-
-  write(6,*) '  >>> Prediction Period: x '
-  do it = nt_asm+1, nt_asm+nt_prd
-    if (mod(it, output_interval) == 0) then
-      write(6, '(F7.2, 3F10.3)') dt*it, x_true(it), x_sim(it), x_da(it)
-    end if
-  end do
-
-  write(6,*) '  >>> Assimilation Period: v '
-  write(6,*) ' [Time]   [True]   [No assim] [Assim] '
-  do it = 0, nt_asm
-    if (mod(it, output_interval) == 0) then
-      write(6, '(F7.2, 3F10.3)') dt*it, x_true(it), x_sim(it), x_da(it)
-    end if
-  end do
-
-  write(6,*) '  >>> Prediction Period: v '
-  do it = nt_asm+1, nt_asm+nt_prd
-    if (mod(it, output_interval) == 0) then
-      write(6, '(F7.2, 3F10.3)') dt*it, v_true(it), v_sim(it), v_da(it)
-    end if
-  end do
 
   open (1, file=trim(output_file), status='replace')
-    write(1,*) 'timestep, x_true, x_sim, x_da, v_true, v_sim, v_da, obs_data'
+    write(1,*) 'timestep, x_true, y_true, z_true, x_obs, y_obs'
+    write(6,*) 'timestep, x_true, y_true, z_true, x_obs, y_obs'
     do it = 0, nt_asm+nt_prd
       if (mod(it, output_interval) == 0) then
-        write(linebuf, *) dt*it, ',', x_true(it), ',', x_sim(it), ',', x_da(it), ',', &
-                          v_true(it), ',', v_sim(it), ',', v_da(it), ',', obs_chr(it)
+        write(linebuf, *) dt*it, ',', x_true(it), ',', y_true(it), ',', z_true(it), ',', x_obs(it), ',', y_obs(it)
+        write(6, *) dt*it, ',', x_true(it), ',', y_true(it), ',', z_true(it), ',', x_obs(it), ',', y_obs(it)
         call del_spaces(linebuf)
         write (1, '(a)') trim(linebuf)
       end if

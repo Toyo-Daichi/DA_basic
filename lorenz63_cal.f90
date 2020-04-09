@@ -7,6 +7,7 @@ subroutine cal_Lorenz( &
     r_x, r_y, r_z      & ! OUT: Lorenz63 score  
   )
   
+  use kinddef
   use lorenz63_prm
   
   implicit none
