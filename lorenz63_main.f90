@@ -27,7 +27,9 @@ program lorenz63
   real(r_size), allocatable :: x_da_m(:, :), y_da_m(:, :), z_da_m(:, :)
   real(r_size), allocatable :: x_prtb(:), y_prtb(:), z_prtb(:)
 
-  
+  ! --- For calculation
+  real(r_size) :: x_cal(3), y_cal(3), z_cal(3)
+
   ! --- Matrix(element 1:x, 2:y, 3:z)
   ! +++ default setting
   ! Pf = (  Pxx: 1.0  Pxy: 0.0 Pxz: 0.0
@@ -37,9 +39,9 @@ program lorenz63
   real(r_size) :: M(3,3)   ! state transient matrix
   real(r_size) :: Pf(3,3)  ! Forecast error convariance matrix (in KF, EnKF)
   real(r_size) :: Pa(3,3)  ! Analysis error convariance matrix
-  !real(r_size) :: R(1,1)   ! Observation error convariance matrix
-  !real(r_size) :: Kg(2,1)  ! Kalman gain
-  !eal(r_size) :: H(1,2)   ! Observation operator
+  real(r_size) :: R(2,2)   ! Observation error convariance matrix
+  real(r_size) :: Kg(3,2)  ! Kalman gain
+  real(r_size) :: H(2,3)   ! Observation operator
   
   !  >> -----------------------------------------------------------------
   ! +++ 4Dvar_Ajoint model : Cost function and ajoint variable
@@ -71,7 +73,7 @@ program lorenz63
   integer :: iflag
   integer :: iter
   real(r_size) :: x_innov
-  real(r_size) :: Ptmp(2,2)
+  real(r_size) :: Ptmp(3,3)
   real(r_size) :: noise1, noise2, Gnoise ! Gaussian noise
 
   !======================================================================
@@ -84,9 +86,9 @@ program lorenz63
   real(r_size) :: x_tinit, y_tinit, z_tinit
   real(r_size) :: x_sinit, y_sinit, z_sinit
   real(r_size) :: Pf_init(9), B_init(9)
-  !real(r_size) :: R_init
-  !real(r_size) :: Kg_init(2)
-  !real(r_size) :: H_init(2)
+  real(r_size) :: R_init(4)
+  real(r_size) :: Kg_init(6)
+  real(r_size) :: H_init(6)
   
   namelist /set_parm/ nt_asm, nt_prd, obs_interval
   namelist /da_setting/ da_method
@@ -138,9 +140,9 @@ program lorenz63
   Pf(2,1) = Pf_init(4); Pf(2,2)=Pf_init(5); Pf(2,3)=Pf_init(6)
   Pf(3,1) = Pf_init(7); Pf(3,2)=Pf_init(8); Pf(2,3)=Pf_init(9)
   
-  !Pa = Pf
+  Pa = Pf
   
-  !R(1,1) = R_init
+  R(1,1) = R_init(1); 
   
   !Kg(1:2,1:1) = Kg_init(1)
   !H(1,1) = H_init(1); H(1,2) = H_init(2)
@@ -148,11 +150,23 @@ program lorenz63
   ! --- Initialization of random number generator
   call random_seed()
   
-  ! --- Sec2. True field and observations
+  ! --- Sec2. True field and observations(Runge-Kutta method)
   do it = 1, nt_asm+nt_prd
     ! forward time step
-    x_true(it) = x_true(it-1) + dt * v_true(it-1)
-    v_true(it) = -(k * dt / mass) * x_true(it-1) + (1.0d0 - dump * dt / mass ) * v_true(it-1)
+    x_cal = 0
+    y_cal = 0
+    z_cal = 0
+
+    call cal_Lorenz(                           &
+      x_cal(it-1), y_cal(it-1), z_cal(it-1),   & ! IN
+      x_cal(it), y_cal(it), z_cal(it)          & ! OUT
+    )
+
+
+
+
+
+
     ! making observations
     if ((mod(it, obs_interval) == 0) .and. (it <= nt_asm)) then
       ! Generate Gaussian Noise (Gnoise) from uniform random number

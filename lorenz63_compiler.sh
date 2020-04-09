@@ -2,7 +2,7 @@
 # attached by lorenz63.f90
 
 # set -ex
-prg=maintools
+prg=lorenz_maintools
 rm -rf *.cnf *.mod ${prg}
 
 #----------------------------------------------------------------------
@@ -15,11 +15,28 @@ DA_METHOD='KF' #or 'EnKF' or 'Ajoint'
 mem=5000
 
 # +++ initial value
-x_tinit=5.0d0; y_tinit=0.0d0; z=
-x_sinit=4.0d0; v_sinit=1.0d0
+x_tinit=5.0d0; y_tinit=0.0d0; z_tinit=0.0d0
+x_sinit=4.0d0; y_sinit=1.0d0; z_sinit=0.0d0
 
 # +++ initial matrix
-# not yeted
+# Forecast error covariance matrix
+# Background error covariance matrix (= same matrix in this case)
+Pf_init=( 1.0d0 0.0d0 0.0d0
+          0.0d0 1.0d0 0.0d0
+          0.0d0 0.0d0 1.0d0 )
+
+# Observation error covariance matrix
+R_init=( 0.1d0 0.0d0 
+         0.0d0 0.2d0 )
+
+# Kalman gain matrix
+K_init=( 0.0d0 0.0d0 
+         0.0d0 0.0d0
+         0.0d0 0.0d0 )
+
+# Observation　operator
+H_init=( 1.0d0 0.0d0 0.0d0 
+         0.0d0 1.0d0 0.0d0 )
 
 # +++ output info
 boolen='true' # write putput
@@ -27,7 +44,7 @@ outputname='lorenz63_'${DA_METHOD}'.csv'
 outputfile='./output/'${outputname}
 
 #----------------------------------------------------------------------
-# +++ Compiler & Run exp.
+# +++ Run exp.
 #----------------------------------------------------------------------
 gfortran -fbounds-check -o ${prg} kinddef.f90 lorenz63.f90
 
