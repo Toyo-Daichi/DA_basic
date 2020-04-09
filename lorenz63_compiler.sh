@@ -15,8 +15,8 @@ DA_METHOD='KF' #or 'EnKF' or 'Ajoint'
 mem=5000
 
 # +++ initial value
-x_tinit=5.0d0; y_tinit=0.0d0; z_tinit=0.0d0
-x_sinit=4.0d0; y_sinit=1.0d0; z_sinit=0.0d0
+x_tinit=10.0d0; y_tinit=15.0d0; z_tinit=30.0d0
+x_sinit=10.001; y_sinit=15.001; z_sinit=30.001
 
 # +++ initial matrix
 # Forecast error covariance matrix
@@ -46,7 +46,6 @@ outputfile='./output/'${outputname}
 #----------------------------------------------------------------------
 # +++ Run exp.
 #----------------------------------------------------------------------
-gfortran -fbounds-check -o ${prg} kinddef.f90 lorenz63.f90
 
 ./${prg} > ./log.${prg} << EOF
   &set_parm
