@@ -63,14 +63,25 @@ gfortran -fbounds-check -o ${prg} kinddef.f90 lorenz63.f90
     x_tinit = ${x_tinit},  v_tinit = ${v_tinit},
     x_sinit = ${x_sinit},  v_sinit = ${v_sinit},
   /
-  &initial_que
-    Pf_init = ${Pf_init[0]}, ${Pf_init[1]}, 
-              ${Pf_init[2]}, ${Pf_init[3]},
-    B_init  = ${B_init[0]}, ${B_init[1]},
-              ${B_init[2]}, ${B_init[3]},
-    R_init  = ${R_init[0]}, 
-    Kg_init = ${Kg_init[0]}, 
-    H_init = ${H_init[0]}, ${H_init[1]}
+  &initial_matrix
+    Pf_init = ${Pf_init[0]}, ${Pf_init[1]}, ${Pf_init[2]},
+              ${Pf_init[3]}, ${Pf_init[4]}, ${Pf_init[5]},
+              ${Pf_init[6]}, ${Pf_init[7]}, ${Pf_init[8]},
+
+    B_init  = ${Pf_init[0]}, ${Pf_init[1]}, ${Pf_init[2]},
+              ${Pf_init[3]}, ${Pf_init[4]}, ${Pf_init[5]},
+              ${Pf_init[6]}, ${Pf_init[7]}, ${Pf_init[8]},
+ 
+    R_init  = ${R_init[0]}, ${R_init[1]},
+              ${R_init[2]}, ${R_init[3]},
+
+    Kg_init = ${Kg_init[0]}, ${Kg_init[1]},
+              ${Kg_init[2]}, ${Kg_init[3]},
+              ${Kg_init[4]}, ${Kg_init[5]},
+
+    H_init = ${H_init[0]}, ${H_init[1]},
+             ${H_init[2]}, ${H_init[3]},
+             ${H_init[4]}, ${H_init[5]},
   /
   &output
     output_file  = '${outputfile}',

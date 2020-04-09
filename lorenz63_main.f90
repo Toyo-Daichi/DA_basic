@@ -95,7 +95,7 @@ program lorenz63
   namelist /ensemble_size/ mems
   namelist /initial_osc/ x_tinit, y_tinit, z_tinit,
                          x_sinit, y_sinit, z_sinit
-  namelist /initial_que/ Pf_init, B_init, R_init, Kg_init, H_init
+  namelist /initial_matrix/ Pf_init, B_init, R_init, Kg_init, H_init
   namelist /output/ output_file ! opt_beach
  
   read(5, nml=set_parm, iostat = ierr)
@@ -142,10 +142,15 @@ program lorenz63
   
   Pa = Pf
   
-  R(1,1) = R_init(1); 
+  R(1,1) = R_init(1); R(1,2) = R_init(2)
+  R(2,1) = R_init(3); R(2,2) = R_init(4)
   
-  !Kg(1:2,1:1) = Kg_init(1)
-  !H(1,1) = H_init(1); H(1,2) = H_init(2)
+  Kg(1,1) = Kg_init(1); Kg(1,2) = Kg_init(2)
+  Kg(2,1) = Kg_init(1); Kg(2,2) = Kg_init(2)
+  Kg(3,1) = Kg_init(1); Kg(3,2) = Kg_init(2)
+
+  H(1,1) = H_init(1); H(1,2) = H_init(2); H(1,3) = H_init(3)
+  H(2,1) = H_init(4); H(2,2) = H_init(5); H(2,3) = H_init(6)
   
   ! --- Initialization of random number generator
   call random_seed()
@@ -179,6 +184,7 @@ program lorenz63
     end if
   end do
   
+
   ! --- Sec3. Simulation run without DA
   do it = 1, nt_asm + nt_prd
     x_sim(it) = x_sim(it-1) + dt * v_sim(it-1)  
