@@ -27,8 +27,8 @@ program lorenz63
   real(r_size), allocatable :: x_da_m(:, :), y_da_m(:, :), z_da_m(:, :)
   real(r_size), allocatable :: x_prtb(:), y_prtb(:), z_prtb(:)
 
-  ! --- For calculation
-  real(r_size) :: x_cal(3), y_cal(3), z_cal(3)
+  ! --- For calculation, Runge-Kutta method
+  real(r_size) :: x_k(4), y_k(4), z_k(4)
 
   ! --- Matrix(element 1:x, 2:y, 3:z)
   ! +++ default setting
@@ -158,19 +158,42 @@ program lorenz63
   ! --- Sec2. True field and observations(Runge-Kutta method)
   do it = 1, nt_asm+nt_prd
     ! forward time step
-    x_cal = 0
-    y_cal = 0
-    z_cal = 0
 
     call cal_Lorenz(                           &
-      x_cal(it-1), y_cal(it-1), z_cal(it-1),   & ! IN
-      x_cal(it), y_cal(it), z_cal(it)          & ! OUT
+      x_true(it-1), y_true(it-1), z_true(it-1),   & ! IN
+      x_k(1), y_k(1), z_k(1)                   & ! OUT
     )
 
+    x_cal(1) = x_true(it-1) + 0.5*x_k(1)*dt
+    y_cal(1) = y_true(it-1) + 0.5*y_k(1)*dt
+    z_cal(1) = z_true(it-1) + 0.5*z_k(1)*dt
 
+    call cal_Lorenz(                           &
+    x_cal(1), y_cal(1), z_cal(1),              & ! IN
+    x_k(2), y_k(2), z_k(2)                     & ! OUT
+    )
 
+    x_cal(2) = x_true(it-1) + 0.5*x_k(2)*dt 
+    y_cal(2) = y_true(it-1) + 0.5*y_k(2)*dt 
+    z_cal(2) = z_true(it-1) + 0.5*z_k(2)*dt
 
+    call cal_Lorenz(                           &
+    x_cal(2), y_cal(2), z_cal(2),              & ! IN
+    x_k(3), y_k(3), z_k(3)                     & ! OUT
+    )
 
+    x_cal(3) = x_true(it-1) + x_k(3)*dt
+    y_cal(3) = y_true(it-1) + y_k(3)*dt
+    y_cal(3) = z_true(it-1) + z_k(3)*dt
+
+    call cal_Lorenz(                           &
+    x_cal(3), y_cal(3), z_cal(3),              & ! IN
+    x_k(4), y_k(4), z_k(4)                     & ! OUT
+    )
+
+    x_true(it) = x_true(it-1) + dt / 6.0d0 * ( x_k(1) + 2*x_k(2) + 2*x_k(3) + x_k(4))
+    y_true(it) = y_true(it-1) + dt / 6.0d0 * ( y_k(1) + 2*y_k(2) + 2*y_k(3) + y_k(4))
+    z_true(it) = z_true(it-1) + dt / 6.0d0 * ( z_k(1) + 2*z_k(2) + 2*z_k(3) + z_k(4))
 
     ! making observations
     if ((mod(it, obs_interval) == 0) .and. (it <= nt_asm)) then
@@ -184,212 +207,6 @@ program lorenz63
     end if
   end do
   
-
-  ! --- Sec3. Simulation run without DA
-  do it = 1, nt_asm + nt_prd
-    x_sim(it) = x_sim(it-1) + dt * v_sim(it-1)  
-    v_sim(it) = -(k * dt / mass) * x_sim(it-1) + (1.0d0 - dump * dt / mass ) * v_sim(it-1)
-  end do
-
-  ! --- Sec4. Data assimilation
-  if ( da_method == 'KF' ) then
-    x_da(0) = x_sim(0) 
-    v_da(0) = v_sim(0)
-  
-    do it = 1, nt_asm
-      ! 4.1: Time integration
-      x_da(it) = x_da(it-1) + dt*v_da(it-1)
-      v_da(it) = -(k * dt / mass) * x_da(it-1) + (1.0d0 - dump * dt / mass ) * v_da(it-1)
-      ! 4.2: Kalman filter
-      ! >> 4.2.1 State Transient Matix
-      M(1,1) = 1.0d0
-      M(1,2) = dt
-      M(2,1) = -k * dt / mass
-      M(2,2) = 1.0d0 - dump * dt / mass
-      ! >> 4.2.2 Lyapunov equation: Obtain Pf
-      Ptmp = transpose(M)
-      Ptmp = matmul(Pf, Ptmp)
-      Pf   = matmul(M, Ptmp)
-      
-      if (mod(it, obs_interval) == 0) then
-        ! >> 4.2.3 Kalman gain: Weighting of model result and obs.
-        ! (Note) Observation only in x ----> component 1(x) only 
-        !        In this case, Inverse matrix ----> scalar matrix
-        write(6,*) 'Pf(1,1) / (R(1,1) + Pf(1,1))'
-        write(6,*) '=', Pf(1,1), '/', R(1,1) , '+', Pf(1,1)
-        write(6,*) 'Kg(1,1) = ', Kg(1,1)
-        Kg(1,1) = Pf(1,1) / (R(1,1) + Pf(1,1))
-        write(6,*) 'Pf(2,1) / (R(1,1) + Pf(1,1))'
-        write(6,*) '=', Pf(2,1), '/', R(1,1) , '+', Pf(1,1)
-        write(6,*) 'Kg(2,1) = ', Kg(1,1)
-        Kg(2,1) = Pf(2,1) / (R(1,1) + Pf(1,1)) 
-        ! >> 4.2.4 calculate innovation and correction
-        x_innov  = x_obs(it / obs_interval) - x_da(it)
-        x_da(it) = x_da(it) + Kg(1,1) * x_innov  
-        v_da(it) = v_da(it) + Kg(2,1) * x_innov
-        ! >> 4.2.5 analysis error covariance matrix
-        Pa = Pf - matmul(matmul(Kg, H), Pf)
-        Pf = Pa
-        write(6,'(A, F8.2, A, 5F10.3)') 'time = ', dt*it, ', Pa =,', Pa
-      end if
-    end do
-    
-  else if ( da_method == 'EnKF' ) then
-    ! making ensemble intial score
-    do imem = 1, mems
-      ! Generate Gaussian Noise (Gnoise) from uniform random number
-      ! based on Box-Muller method
-      call random_number(noise1)
-      call random_number(noise2)
-      Gnoise = sqrt(Pa(1,1))*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
-      x_da_m(0,imem) = x_sim(0) + Gnoise ! perturbation
-
-      call random_number(noise1)
-      call random_number(noise2)
-      Gnoise = sqrt(Pa(2,1))*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
-      v_da_m(0,imem) = v_sim(0) + Gnoise ! perturbation
-    end do
-
-    x_da(0) = sum(x_da_m(0,1:mems))/mems
-    v_da(0) = sum(v_da_m(0,1:mems))/mems
-
-    do it = 1, nt_asm
-      ! 4.1: Time integration
-      do imem = 1, mems
-        x_da_m(it, imem) = x_da_m(it-1, imem) + dt*v_da_m(it-1, imem)
-        v_da_m(it, imem) = -(k * dt / mass) * x_da_m(it-1, imem) + (1.0d0 - dump * dt / mass ) * v_da_m(it-1, imem)
-      end do
-
-      if(mod(it,obs_interval) == 0) then
-        x_da(it) = sum(x_da_m(it,1:mems))/mems
-        v_da(it) = sum(v_da_m(it,1:mems))/mems
-        Pf = 0.0d0
-        do imem = 1, mems
-          x_prtb(imem) = x_da_m(it, imem) - x_da(it)
-          v_prtb(imem) = v_da_m(it, imem) - v_da(it)
-          Pf(1,1) = Pf(1,1) + x_prtb(imem)**2/(mems-1)
-          Pf(1,2) = Pf(1,2) + x_prtb(imem)*v_prtb(imem)/(mems-1)
-          Pf(2,1) = Pf(2,1) + v_prtb(imem)*x_prtb(imem)/(mems-1)
-          Pf(2,2) = Pf(2,2) + v_prtb(imem)**2/(mems-1)
-        end do
-        ! Section 4-2-2: Kalman gain: Weighting of model result and obs.
-        ! (Note) Obsevation only in x --> component 1(x) only
-        !        In this case, inverse matrix --> scalar inverse
-        Kg(1,1) = Pf(1,1)/(R(1,1)+Pf(1,1))
-        Kg(2,1) = Pf(2,1)/(R(1,1)+Pf(1,1))
-        ! Section 4-2-3: calculate innovation and correction
-        do imem=1, mems
-          ! Generate Gaussian Noise (gnoise) from uniform random number 
-          call random_number(noise1)
-          call random_number(noise2)
-          Gnoise = sqrt(R(1,1))*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
-          
-          x_innov = x_obs(it/obs_interval)+Gnoise-x_da_m(it,imem)
-          x_da_m(it,imem) = x_da_m(it,imem)+Kg(1,1)*x_innov
-          v_da_m(it,imem) = v_da_m(it,imem)+Kg(2,1)*x_innov
-        end do
-        ! Section 4-2-4: analysis error covariance matrix
-        Pa=Pf-matmul(matmul(Kg,H),Pf)
-        Pf=Pa
-        write(*,'(A,F8.2,A,5F10.3)') "time=",dt*it, ", Pa=", Pa
-      end if
-      x_da(it)=sum(x_da_m(it,1:mems))/mems
-      v_da(it)=sum(v_da_m(it,1:mems))/mems
-    end do
-
-  else if ( da_method == 'Ajoint' ) then
-    x_tmp(0) = x_sim(0)
-    v_tmp(0) = v_sim(0)
-    x_b = x_tmp(0) ! set First guess value
-    v_b = v_tmp(0)
-
-    do iter = 1, iter_max
-      ! Section 4-1: initiallization for ajoint model run
-      J = 0.0d0
-      adx(0:nt_asm) = 0.0d0
-      adv(0:nt_asm) = 0.0d0
-      ! Section 4-2: Forward model run
-      do it = 1, nt_asm
-        x_tmp(it) = x_tmp(it-1) + dt*v_tmp(it-1)
-        v_tmp(it) = -(k * dt / mass) * x_tmp(it-1) + (1.0d0 - dump * dt / mass ) * v_tmp(it-1)
-        if (mod(it, obs_interval) == 0) then
-          ! Calculate Cost function
-          J = J + 0.5 * (x_obs(it / obs_interval) - x_tmp(it))**2 / R(1, 1)
-        end if
-      end do
-      ! Section 4-3: ajoint model run
-      do it = nt_asm, 1, -1
-        if (mod(it, obs_interval) ==0) then
-          ! Calculate misfit and chanfge ajoint variable
-          adx(it) = adx(it) + (x_tmp(it) - x_obs(it/obs_interval))/R(1,1)
-        end if
-        adx(it-1) = adx(it) -k*dt / mass*adv(it)
-        adv(it-1) = dt * adx(it) + (1.0d0 - dump*dt / mass) * adv(it)
-      end do
-
-      ! Section 4-4: Consider background covariance
-      J = J + 0.5d0 * (x_tmp(0) - x_b)**2/ B(1,1) &
-      &     + 0.5d0 * (v_tmp(0) - v_b)**2/ B(2,2)
-      adx(0) = adx(0) + (x_tmp(0) -x_b) / B(1,1)
-      adv(0) = adv(0) + (v_tmp(0) -v_b) / B(1,1)
-      ! Section 4-5: Check the end of iteration
-      if ((iter > 1) .and. (Jold < J)) then
-        x_da(0:nt_asm) = x_tmp(0:nt_asm)
-        v_da(0:nt_asm) = v_tmp(0:nt_asm)
-
-        write(6,*)
-        write(6,*) 'Cost function increases from the previous iteration.'
-        write(6,*) 'Replace DA results with those in previous iteration and exit DA.'
-        write(6,'(A,1X,i3,1X,A,3(F9.3,1X))') &
-        & 'iteration =', iter, '; ajoint x,v =', adx(0), adv(0)
-        write(6,'(2X,A,F9.3,1X,A,1X,3(F7.3,2X))') &
-        & 'J =', J, '; x(0),v(0) =>', x_da(0), v_da(0)
-        write(6,*)
-        exit
-      
-      else if ((iter > 1) .and. (cond_iter > (Jold-J)/ Jold)) then
-        x_da(0:nt_asm) = x_tmp(0:nt_asm)
-        v_da(0:nt_asm) = v_tmp(0:nt_asm)
-
-        write(6,*)
-        write(6,*) 'Differences between J and Jold become small => exit DA.'
-        write(6,'(A,1X,i3,1X,A,3(F9.3,1X))') &
-        & 'iteration =', iter, '; ajoint x,v =', adx(0), adv(0)
-        write(6,'(2X,A,F9.3,1X,A,1X,3(F7.3,2X))') &
-        & 'J =', J, '; x(0),v(0) =>', x_da(0), v_da(0)
-        write(6,*)
-        exit
-      
-      else if (iter == iter_max) then
-        x_da(0:nt_asm) = x_tmp(0:nt_asm)
-        v_da(0:nt_asm) = v_tmp(0:nt_asm)
-
-        write(6,*)
-        write(6,*) 'Maximum number of iteration reached'
-        write(6,'(A,1X,i3,1X,A,3(F9.3,1X))') &
-        & 'iteration =', iter, '; ajoint x,v =', adx(0), adv(0)
-        write(6,'(2X,A,F9.3,1X,A,1X,3(F7.3,2X))') &
-        & 'J =', J, '; x(0),v(0) =>', x_da(0), v_da(0)
-        write(6,*)
-        exit
-      end if
-
-      ! Section 4-6: save values
-      Jold = J
-
-      ! Section 4-7: Update of x and v
-      x_tmp(0) = x_tmp(0) - alpx*adx(0)
-      v_tmp(0) = v_tmp(0) - alpv*adv(0)
-
-      ! OUTPUT
-      write(6,'(A,1X,i3,1X,A,1X,2F9.3,1X,A,1X,F9.3,1X,A,1X,3(F7.3,2X))') &
-      & 'iteration =  ',   iter,                  &
-      & '; x(0), v(0) = ', x_tmp(0), v_tmp(0),    &
-      & '; J = ', J,                              &
-      & '; ajoint x,v = ', adx(0), adv(0)
-
-    end do
-  end if
   
   ! --- Sec5. Prediction after Data assimilation
   do it = nt_asm+1, nt_asm + nt_prd
