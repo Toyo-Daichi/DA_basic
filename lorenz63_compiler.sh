@@ -27,7 +27,7 @@ Pf_init=( 1.0d0 0.0d0 0.0d0
 
 # Observation error covariance matrix
 R_init=( 0.1d0 0.0d0 
-         0.0d0 0.2d0 )
+         0.0d0 0.1d0 )
 
 # Kalman gain matrix
 K_init=( 0.0d0 0.0d0 
@@ -74,7 +74,7 @@ gfortran -fbounds-check kinddef.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_m
               ${Pf_init[6]}, ${Pf_init[7]}, ${Pf_init[8]}
  
     R_init  = ${R_init[0]}, ${R_init[1]},
-              ${R_init[2]}, ${R_init[3]},
+              ${R_init[2]}, ${R_init[3]}
 
     Kg_init = ${Kg_init[0]}, ${Kg_init[1]},
               ${Kg_init[2]}, ${Kg_init[3]},

@@ -13,8 +13,8 @@ program lorenz63
   integer :: nt_prd       ! Period of prediction
   integer :: obs_interval ! Interval of observation
 
-  real(r_size), parameter  :: dt   = 1.0d-2 ! Time step
-  real(r_size), parameter  :: pi   = 3.14159265358979d0
+  real(r_size), parameter  :: dt = 1.0d-2 ! Time step
+  real(r_size), parameter  :: pi = 3.14159265358979d0
 
   character(8) :: da_method
   
@@ -45,7 +45,7 @@ program lorenz63
   real(r_size) :: H(2,3)   ! Observation operator
   
   ! --- Output control
-  character(7),allocatable :: obs_chr(:)
+  character(7),allocatable :: obs_chr(:, :)
   integer                  :: output_interval = 40
   !logical                 :: opt_beach = .false.
   character(256)           :: linebuf
@@ -87,7 +87,6 @@ program lorenz63
     read(5, nml=ensemble_size, iostat = ierr)
   end if 
   read(5, nml=initial_score, iostat = ierr)
-  write(6,*)  x_tinit, y_tinit, z_tinit, x_sinit, y_sinit, z_sinit
   read(5, nml=initial_matrix, iostat = ierr)
   read(5, nml=output, iostat = ierr)
   ! name list io check
@@ -98,7 +97,7 @@ program lorenz63
   else if (ierr > 0) then
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
     write(6,*) '   *** Warning : Not appropriate names in namelist !! Check !!'
-    write(6,*) '   Stop : oscillation.f90              '
+    write(6,*) '   Stop : lorenz63_main.f90              '
     stop
   end if
 
@@ -107,7 +106,7 @@ program lorenz63
   allocate(x_da(0:nt_asm+nt_prd), y_da(0:nt_asm+nt_prd), z_da(0:nt_asm+nt_prd))
 
   allocate(x_obs(0:nt_asm/obs_interval), y_obs(0:nt_asm/obs_interval))
-  allocate(obs_chr(0:nt_asm+nt_prd))
+  allocate(obs_chr(2, 0:nt_asm+nt_prd))
 
   !----------------------------------------------------------------------
   ! +++ initial setting
@@ -137,7 +136,6 @@ program lorenz63
   ! --- Sec2. True field and observations(Runge-Kutta method)
   do it = 1, nt_asm+nt_prd
     ! forward time step
-    write(6,*) it, x_true(it), y_true(it), z_true(it)
     
     call cal_Lorenz(                           &
     x_true(it-1), y_true(it-1), z_true(it-1),  & ! IN
@@ -175,8 +173,6 @@ program lorenz63
     y_true(it) = y_true(it-1) + dt * (y_k(1) + 2*y_k(2) + 2*y_k(3) + y_k(4)) / 6.0d0
     z_true(it) = z_true(it-1) + dt * (z_k(1) + 2*z_k(2) + 2*z_k(3) + z_k(4)) / 6.0d0
     
-    write(6,*) it, x_true(it), y_true(it), z_true(it)
-    
     ! making observations
     if ((mod(it, obs_interval) == 0) .and. (it <= nt_asm)) then
       ! Generate Gaussian Noise (Gnoise) from uniform random number
@@ -196,20 +192,20 @@ program lorenz63
   end do
   
 
-  obs_chr(0:nt_asm+nt_prd) = 'None'
+  obs_chr(:, 0:nt_asm+nt_prd) = 'None'
   do it = 1, nt_asm
     if (mod(it, obs_interval) == 0) then
-      write(obs_chr(it), '(F7.3)') x_obs(it/obs_interval)
+      write(6,*) x_obs(it/obs_interval), y_obs(it/obs_interval)
+      write(obs_chr(1, it), '(F7.2)')  x_obs(it/obs_interval)
+      write(obs_chr(2, it), '(F7.2)')  y_obs(it/obs_interval)
     end if
   end do
 
   open (1, file=trim(output_file), status='replace')
     write(1,*) 'timestep, x_true, y_true, z_true, x_obs, y_obs'
-    write(6,*) 'timestep, x_true, y_true, z_true, x_obs, y_obs'
     do it = 0, nt_asm+nt_prd
       if (mod(it, output_interval) == 0) then
-        write(linebuf, *) dt*it, ',', x_true(it), ',', y_true(it), ',', z_true(it), ',', x_obs(it), ',', y_obs(it)
-        write(6, *) dt*it, ',', x_true(it), ',', y_true(it), ',', z_true(it), ',', x_obs(it), ',', y_obs(it)
+        write(linebuf, *) dt*it, ',', x_true(it), ',', y_true(it), ',', z_true(it), ',', obs_chr(1, it), ',', obs_chr(2, it)
         call del_spaces(linebuf)
         write (1, '(a)') trim(linebuf)
       end if
