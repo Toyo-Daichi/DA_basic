@@ -3,6 +3,7 @@
 
 # set -ex
 prg=lorenz_maintools
+today=$(date "+%Y%m%d%H%M")
 rm -rf *.mod ${prg}
 
 #----------------------------------------------------------------------
@@ -49,7 +50,7 @@ outputfile='./output/'${outputname}
 
 gfortran -fbounds-check kinddef.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_main.f90 -o ${prg}
 
-./${prg} > ./log.${prg} << EOF
+./${prg} > ./log/${today}_${prg}_${DA_METHOD}.log << EOF
   &set_parm
     nt_asm = ${nt_asm}, nt_prd = ${nt_prd},
     obs_interval = ${obs_interval}
