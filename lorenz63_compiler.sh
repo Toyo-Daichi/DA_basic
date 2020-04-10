@@ -13,6 +13,7 @@ nt_asm=5000
 nt_prd=5000
 obs_interval=20
 DA_METHOD='KF' #or 'EnKF' or 'Ajoint'
+intg_method='Euler' #'Runge-Kutta'
 mem=5000
 
 # +++ initial value
@@ -57,6 +58,9 @@ gfortran -fbounds-check kinddef.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_m
   /
   &da_setting
     da_method = '${DA_METHOD}'
+  /
+  &intg_setting
+    intg_method = '${intg_method}'
   /
   &ensemble_size
     mems = ${mem}

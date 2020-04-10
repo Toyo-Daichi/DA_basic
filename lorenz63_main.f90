@@ -16,7 +16,8 @@ program lorenz63
   real(r_size), parameter  :: dt = 1.0d-2 ! Time step
   real(r_size), parameter  :: pi = 3.14159265358979d0
 
-  character(8) :: da_method
+  character(8)  :: da_method
+  character(12) :: intg_method
   
   ! --- Physical variable
   real(r_size), allocatable :: x_true(:), y_true(:), z_true(:)
@@ -76,6 +77,7 @@ program lorenz63
   
   namelist /set_parm/ nt_asm, nt_prd, obs_interval
   namelist /da_setting/ da_method
+  namelist /intg_setting/ intg_method
   namelist /ensemble_size/ mems
   namelist /initial_score/ x_tinit, y_tinit, z_tinit, x_sinit, y_sinit, z_sinit
   namelist /initial_matrix/ Pf_init, B_init, R_init, Kg_init, H_init
@@ -83,12 +85,7 @@ program lorenz63
  
   read(5, nml=set_parm, iostat = ierr)
   read(5, nml=da_setting, iostat = ierr)
-  if ( trim(da_method) == 'EnKF' ) then
-    read(5, nml=ensemble_size, iostat = ierr)
-  end if 
-  read(5, nml=initial_score, iostat = ierr)
-  read(5, nml=initial_matrix, iostat = ierr)
-  read(5, nml=output, iostat = ierr)
+  read(5, nml=intg_setting, iostat = ierr)
   ! name list io check
   if (ierr < 0 ) then
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
@@ -100,6 +97,16 @@ program lorenz63
     write(6,*) '   Stop : lorenz63_main.f90              '
     stop
   end if
+  if ( trim(da_method) == 'EnKF' ) then
+    read(5, nml=ensemble_size, iostat = ierr)
+  end if 
+  read(5, nml=initial_score, iostat = ierr)
+  read(5, nml=initial_matrix, iostat = ierr)
+  read(5, nml=output, iostat = ierr)
+
+  ! +++ display namelist
+  write(6,*) 'Data assimlation method :: ', da_method
+  write(6,*) 'Integral method         :: ', intg_method
 
   allocate(x_true(0:nt_asm+nt_prd), y_true(0:nt_asm+nt_prd), z_true(0:nt_asm+nt_prd))
   allocate(x_sim(0:nt_asm+nt_prd), y_sim(0:nt_asm+nt_prd), z_sim(0:nt_asm+nt_prd))
@@ -133,54 +140,59 @@ program lorenz63
   ! --- Initialization of random number generator
   call random_seed()
   
-  ! --- Sec2. True field and observations(Runge-Kutta method)
+  ! --- Sec2. True field and observations
   do it = 1, nt_asm+nt_prd
     ! forward time step
 
-    x_k(1)   = 0.0d0; y_k(1)   = 0.0d0; z_k(1) = 0.0d0
-    x_cal(1) = 0.0d0; y_cal(1) = 0.0d0; z_cal(1) = 0.0d0
-    
     call cal_Lorenz(                           &
     x_true(it-1), y_true(it-1), z_true(it-1),  & ! IN
     x_k(1), y_k(1), z_k(1)                     & ! OUT
     )
 
-    !(Euler method)
-    x_true(it) = x_true(it-1) + dt * x_k(1)
-    y_true(it) = y_true(it-1) + dt * y_k(1)
-    z_true(it) = z_true(it-1) + dt * z_k(1)
+    !------------------------------------------------------- 
+    ! +++ Euler method
+    if ( trim(intg_method) == 'Euler' ) then
+      x_true(it) = x_true(it-1) + dt * x_k(1)
+      y_true(it) = y_true(it-1) + dt * y_k(1)
+      z_true(it) = z_true(it-1) + dt * z_k(1)
+      
+    !------------------------------------------------------- 
+    ! +++ Runge-Kutta method
+    else if ( trim(intg_method) == 'Runge-Kutta' ) then 
     
-     ! x_cal(1) = x_true(it-1) + 0.5*x_k(1)*dt
-     ! y_cal(1) = y_true(it-1) + 0.5*y_k(1)*dt
-     ! z_cal(1) = z_true(it-1) + 0.5*z_k(1)*dt
-     
-     ! call cal_Lorenz(                           &
-     ! x_cal(1), y_cal(1), z_cal(1),              & ! IN
-     ! x_k(2), y_k(2), z_k(2)                     & ! OUT
-     ! )
-     ! 
-     ! x_cal(2) = x_true(it-1) + 0.5*x_k(2)*dt 
-     ! y_cal(2) = y_true(it-1) + 0.5*y_k(2)*dt 
-     ! z_cal(2) = z_true(it-1) + 0.5*z_k(2)*dt
-     ! 
-     ! call cal_Lorenz(                           &
-     ! x_cal(2), y_cal(2), z_cal(2),              & ! IN
-     ! x_k(3), y_k(3), z_k(3)                     & ! OUT
-     ! )
-     ! 
-     ! x_cal(3) = x_true(it-1) + x_k(3)*dt
-     ! y_cal(3) = y_true(it-1) + y_k(3)*dt
-     ! y_cal(3) = z_true(it-1) + z_k(3)*dt
-     ! 
-     ! call cal_Lorenz(                           &
-     ! x_cal(3), y_cal(3), z_cal(3),              & ! IN
-     ! x_k(4), y_k(4), z_k(4)                     & ! OUT
-     ! )
-     
-     ! x_true(it) = x_true(it-1) + dt * (x_k(1) + 2*x_k(2) + 2*x_k(3) + x_k(4)) / 6.0d0
-     ! y_true(it) = y_true(it-1) + dt * (y_k(1) + 2*y_k(2) + 2*y_k(3) + y_k(4)) / 6.0d0
-     ! z_true(it) = z_true(it-1) + dt * (z_k(1) + 2*z_k(2) + 2*z_k(3) + z_k(4)) / 6.0d0
+      ! x_cal(1) = x_true(it-1) + 0.5*x_k(1)*dt
+      ! y_cal(1) = y_true(it-1) + 0.5*y_k(1)*dt
+      ! z_cal(1) = z_true(it-1) + 0.5*z_k(1)*dt
     
+      ! call cal_Lorenz(                           &
+      ! x_cal(1), y_cal(1), z_cal(1),              & ! IN
+      !  x_k(2), y_k(2), z_k(2)                    & ! OUT
+      ! )
+    
+      ! x_cal(2) = x_true(it-1) + 0.5*x_k(2)*dt 
+      ! y_cal(2) = y_true(it-1) + 0.5*y_k(2)*dt 
+      ! z_cal(2) = z_true(it-1) + 0.5*z_k(2)*dt
+ 
+      ! call cal_Lorenz(                           &
+      ! x_cal(2), y_cal(2), z_cal(2),              & ! IN
+      ! x_k(3), y_k(3), z_k(3)                     & ! OUT
+      ! )
+    
+      ! x_cal(3) = x_true(it-1) + x_k(3)*dt
+      ! y_cal(3) = y_true(it-1) + y_k(3)*dt
+      ! y_cal(3) = z_true(it-1) + z_k(3)*dt
+     
+      ! call cal_Lorenz(                           &
+      ! x_cal(3), y_cal(3), z_cal(3),              & ! IN
+      ! x_k(4), y_k(4), z_k(4)                     & ! OUT
+      ! )
+     
+      ! x_true(it) = x_true(it-1) + dt * (x_k(1) + 2*x_k(2) + 2*x_k(3) + x_k(4)) / 6.0d0
+      ! y_true(it) = y_true(it-1) + dt * (y_k(1) + 2*y_k(2) + 2*y_k(3) + y_k(4)) / 6.0d0
+      ! z_true(it) = z_true(it-1) + dt * (z_k(1) + 2*z_k(2) + 2*z_k(3) + z_k(4)) / 6.0d0
+    
+    end if
+
     ! making observations
     if ((mod(it, obs_interval) == 0) .and. (it <= nt_asm)) then
       ! Generate Gaussian Noise (Gnoise) from uniform random number
