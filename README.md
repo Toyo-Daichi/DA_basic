@@ -1,6 +1,24 @@
-# コンパイル情報
+# 基本情報
+### コンパイル環境
 ```
+gcc version 9.3.0 (Homebrew GCC 9.3.0)
+
+#基本のコンパイルコマンド
 gfortran -fbounds-check ${prg}
+```
+### 減衰振動関連コード
+```
+kinddef.f90
+oscillation.f90
+oscillation_compiler.sh	
+```
+
+### Lorenz (1963) モデル関連コード
+```
+kinddef.f90
+lorenz63_prm.f90
+lorenz63_cal.f90
+lorenz63_compiler.sh
 ```
 
 # 作成情報
