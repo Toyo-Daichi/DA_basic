@@ -15,8 +15,9 @@ subroutine cal_Lorenz( &
   real(r_size), intent(out) :: r_x, r_y, r_z
 
   r_x = -sig*x + sig*y
-  r_y = gamm*x - y -x*z
+  r_y = gamm*x -y -x*z
   r_z = x*y - b*z
 
+  write(6,*) r_x, r_y, r_z
   return
 end subroutine cal_Lorenz
