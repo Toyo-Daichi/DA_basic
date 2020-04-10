@@ -9,15 +9,15 @@ rm -rf *.mod ${prg}
 #----------------------------------------------------------------------
 # +++ Set intial setting
 #----------------------------------------------------------------------
-nt_asm=400 
-nt_prd=400
+nt_asm=5000
+nt_prd=5000
 obs_interval=20
 DA_METHOD='KF' #or 'EnKF' or 'Ajoint'
 mem=5000
 
 # +++ initial value
-x_tinit=10.0d0; y_tinit=15.0d0; z_tinit=30.0d0
-x_sinit=10.0d0; y_sinit=15.0d0; z_sinit=30.0d0
+x_tinit=0.0d0; y_tinit=10.0d0; z_tinit=20.0d0
+x_sinit=0.0d0; y_sinit=10.0d0; z_sinit=20.0d0
 
 # +++ initial matrix
 # Forecast error covariance matrix
