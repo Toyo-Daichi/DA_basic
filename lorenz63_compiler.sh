@@ -12,8 +12,8 @@ rm -rf *.mod ${prg}
 nt_asm=5000
 nt_prd=5000
 obs_interval=20
-DA_METHOD='KF' #or 'EnKF' or 'Ajoint'
-intg_method='Euler' #'Runge-Kutta'
+DA_METHOD='KF' #'KF' or 'EnKF' or 'Ajoint'
+intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
 mem=5000
 
 # +++ initial value

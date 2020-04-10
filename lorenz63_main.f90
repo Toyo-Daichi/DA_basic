@@ -160,36 +160,36 @@ program lorenz63
     ! +++ Runge-Kutta method
     else if ( trim(intg_method) == 'Runge-Kutta' ) then 
     
-      ! x_cal(1) = x_true(it-1) + 0.5*x_k(1)*dt
-      ! y_cal(1) = y_true(it-1) + 0.5*y_k(1)*dt
-      ! z_cal(1) = z_true(it-1) + 0.5*z_k(1)*dt
+      x_cal(1) = x_true(it-1) + 0.5*x_k(1)*dt
+      y_cal(1) = y_true(it-1) + 0.5*y_k(1)*dt
+      z_cal(1) = z_true(it-1) + 0.5*z_k(1)*dt
     
-      ! call cal_Lorenz(                           &
-      ! x_cal(1), y_cal(1), z_cal(1),              & ! IN
-      !  x_k(2), y_k(2), z_k(2)                    & ! OUT
-      ! )
+      call cal_Lorenz(                           &
+       x_cal(1), y_cal(1), z_cal(1),              & ! IN
+        x_k(2), y_k(2), z_k(2)                    & ! OUT
+      )
     
-      ! x_cal(2) = x_true(it-1) + 0.5*x_k(2)*dt 
-      ! y_cal(2) = y_true(it-1) + 0.5*y_k(2)*dt 
-      ! z_cal(2) = z_true(it-1) + 0.5*z_k(2)*dt
+      x_cal(2) = x_true(it-1) + 0.5*x_k(2)*dt 
+      y_cal(2) = y_true(it-1) + 0.5*y_k(2)*dt 
+      z_cal(2) = z_true(it-1) + 0.5*z_k(2)*dt
  
-      ! call cal_Lorenz(                           &
-      ! x_cal(2), y_cal(2), z_cal(2),              & ! IN
-      ! x_k(3), y_k(3), z_k(3)                     & ! OUT
-      ! )
+      call cal_Lorenz(                           &
+        x_cal(2), y_cal(2), z_cal(2),            & ! IN
+        x_k(3), y_k(3), z_k(3)                   & ! OUT
+      )
     
-      ! x_cal(3) = x_true(it-1) + x_k(3)*dt
-      ! y_cal(3) = y_true(it-1) + y_k(3)*dt
-      ! y_cal(3) = z_true(it-1) + z_k(3)*dt
+      x_cal(3) = x_true(it-1) + x_k(3)*dt
+      y_cal(3) = y_true(it-1) + y_k(3)*dt
+      z_cal(3) = z_true(it-1) + z_k(3)*dt
      
-      ! call cal_Lorenz(                           &
-      ! x_cal(3), y_cal(3), z_cal(3),              & ! IN
-      ! x_k(4), y_k(4), z_k(4)                     & ! OUT
-      ! )
+      call cal_Lorenz(                           &
+       x_cal(3), y_cal(3), z_cal(3),              & ! IN
+       x_k(4), y_k(4), z_k(4)                     & ! OUT
+      )
      
-      ! x_true(it) = x_true(it-1) + dt * (x_k(1) + 2*x_k(2) + 2*x_k(3) + x_k(4)) / 6.0d0
-      ! y_true(it) = y_true(it-1) + dt * (y_k(1) + 2*y_k(2) + 2*y_k(3) + y_k(4)) / 6.0d0
-      ! z_true(it) = z_true(it-1) + dt * (z_k(1) + 2*z_k(2) + 2*z_k(3) + z_k(4)) / 6.0d0
+      x_true(it) = x_true(it-1) + dt * (x_k(1) + 2*x_k(2) + 2*x_k(3) + x_k(4)) / 6.0d0
+      y_true(it) = y_true(it-1) + dt * (y_k(1) + 2*y_k(2) + 2*y_k(3) + y_k(4)) / 6.0d0
+      z_true(it) = z_true(it-1) + dt * (z_k(1) + 2*z_k(2) + 2*z_k(3) + z_k(4)) / 6.0d0
     
     end if
 
