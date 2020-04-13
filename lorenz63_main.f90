@@ -28,15 +28,15 @@ program lorenz63
 
   real(r_size), allocatable :: x_da_m(:, :), y_da_m(:, :), z_da_m(:, :)
 
- 
+
   ! --- Matrix(element 1:x, 2:y, 3:z)
   ! +++ default setting
   ! Pf = (  Pxx: 1.0  Pxy: 0.0 Pxz: 0.0
   !         Pyx: 0.0  Pyy: 1.0 Pyz: 0.0 
   !         Pzx: 0.0  Pzy: 0.0 Pzz: 1.0 )
 
-  real(r_size) :: X(Nx)
-  real(r_size) :: Y(Nobs)
+  real(r_size) :: X(Nx,1)
+  real(r_size) :: Y(Nobs,1)
   
   real(r_size) :: M(Nx,Nx)     ! state transient matrix
   real(r_size) :: Pf(Nx,Nx)    ! Forecast error convariance matrix (in KF, EnKF)
@@ -64,10 +64,14 @@ program lorenz63
   ! --- matrix calculation
   real(r_size) :: Ptmp(Nx,Nx)
   ! for inverse
-  integer      :: ipiv(1:Nx)
-  real(r_size) :: Obs_diff(Nobs,Nobs)
-  real(r_size) :: For_inv_1(Nobs,Nobs)
-  real(r_size) :: For_inv_2(Nx,Nobs)
+  integer      :: ipiv(1:Nx), lwork
+  real(r_size) :: lwork0
+  real(r_size) :: ch2_Obs(Nobs,1)
+  real(r_size) :: Obs_diff(Nobs,1)
+  real(r_size) :: For_inv_1(Nx,Nobs)
+  real(r_size) :: For_inv_2(Nobs,Nobs)
+
+  real(r_size), allocatable :: work_on(:)
 
   !======================================================================
   ! Data assimilation
@@ -258,28 +262,40 @@ program lorenz63
       M(2,1) = dt*(gamm - z_da(it-1)); M(2,2) = 1.0d0 - dt;     M(2,3) = -dt*x_da(it-1)
       M(3,1) = dt*y_da(it-1);          M(3,2) = dt*x_da(it-1);  M(3,3) = 1.0d0 - dt*b
       
-      Pf = matmul(M, matmul(Pf, transpose(M))
+      Ptmp = transpose(M)
+      Ptmp = matmul(Pf, Ptmp)
+      Pf   = matmul(M, Ptmp)
       
       if (mod(it, obs_interval) == 0) then
         ! >> 4.2.3 Kalman gain: Weighting of model result and obs.
         ! (Note) Observation in x,y ----> component 2 (x,y)
-        For_inv_1 = matmul(Pf, transfer(H))
+        ! calculate inverse matrix @For_inv_2
+        ! *** ref:
+        ! http://www.rcs.arch.t.u-tokyo.ac.jp/kusuhara/tips/linux/fortran.html
+
+        For_inv_1 = matmul(Pf, transpose(H))
         For_inv_2 = R + matmul(H, For_inv_1)
         
         call dgetrf(Nx,Nx,For_inv_2,Nx,ipiv,ierr)
-        call dgetri(Nx,For_inv_2,Nx,ipiv,work,lwork,ierr)
+        
+        call dgetri(Nx,For_inv_2,Nx,ipiv,lwork0,-1,ierr)
+        lwork = int(lwork0)
+        allocate(work_on(1:lwork))
+
+        call dgetri(Nx,For_inv_2,Nx,ipiv,work_on,lwork,ierr)
+        deallocate(work_on)
         
         Kg = matmul(For_inv_1, For_inv_2)
-        
-        x_innov = x_obs(it / obs_interval) - x_da(it)
         
         !------------------------------------------------------- 
         ! >> 4.2.4 calculate innovation and correlation
         ! +++ Kalman Filter Main equation
-        X(1) = x_da(it);  X(2) = y_da(it); X(3) = z_da(it)
-        Y(1) = x_obs(it); Y(2) = y_obs(it)
+        X(1,1) = x_da(it);  X(2,1) = y_da(it); X(3,1) = z_da(it)
+        Y(1,1) = x_obs(it); Y(2,1) = y_obs(it)
 
-        Obs_diff = Y - matmul(H, X)
+        ch2_Obs = matmul(H, X)
+
+        Obs_diff = Y - ch2_Obs
         X = X + matmul(Kg, Obs_diff)
         
         ! >> 4.2.5 analysis error covariance matrix
