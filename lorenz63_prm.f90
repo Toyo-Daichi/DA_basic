@@ -1,9 +1,6 @@
 !
 ! Lorenz (1963) model
 !
-!  dx/dt = -sig*(x+y)
-!  dy/dt = -x*z+gamm*x-y
-!  dz/dt = x*y-b*z
 
 module lorenz63_prm
   

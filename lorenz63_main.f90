@@ -232,6 +232,7 @@ program lorenz63
     z_da(0) = z_sim(0)
 
     do it = 1, nt_asm
+      write(6,*) 'time step: ', it
       ! 4.1: Time integration
       call cal_Lorenz(                           &
         x_da(it-1), y_da(it-1), z_da(it-1),      & ! IN
