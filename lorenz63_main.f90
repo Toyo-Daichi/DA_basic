@@ -28,10 +28,7 @@ program lorenz63
 
   real(r_size), allocatable :: x_da_m(:, :), y_da_m(:, :), z_da_m(:, :)
 
-  ! --- For calculation, Runge-Kutta method
-  real(r_size) :: x_cal(3), y_cal(3), z_cal(3)
-  real(r_size) :: x_k(4), y_k(4), z_k(4)
-
+ 
   ! --- Matrix(element 1:x, 2:y, 3:z)
   ! +++ default setting
   ! Pf = (  Pxx: 1.0  Pxy: 0.0 Pxz: 0.0
@@ -82,10 +79,16 @@ program lorenz63
   namelist /initial_score/ x_tinit, y_tinit, z_tinit, x_sinit, y_sinit, z_sinit
   namelist /initial_matrix/ Pf_init, B_init, R_init, Kg_init, H_init
   namelist /output/ output_file ! opt_beach
- 
+
   read(5, nml=set_parm, iostat = ierr)
   read(5, nml=da_setting, iostat = ierr)
   read(5, nml=intg_setting, iostat = ierr)
+  if ( trim(da_method) == 'EnKF' ) then
+    read(5, nml=ensemble_size, iostat = ierr)
+  end if 
+  read(5, nml=initial_score, iostat = ierr)
+  read(5, nml=initial_matrix, iostat = ierr)
+  read(5, nml=output, iostat = ierr)
   ! name list io check
   if (ierr < 0 ) then
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
@@ -97,12 +100,6 @@ program lorenz63
     write(6,*) '   Stop : lorenz63_main.f90              '
     stop
   end if
-  if ( trim(da_method) == 'EnKF' ) then
-    read(5, nml=ensemble_size, iostat = ierr)
-  end if 
-  read(5, nml=initial_score, iostat = ierr)
-  read(5, nml=initial_matrix, iostat = ierr)
-  read(5, nml=output, iostat = ierr)
 
   ! +++ display namelist
   write(6,*) 'Data assimlation method :: ', da_method
@@ -143,12 +140,12 @@ program lorenz63
   ! --- Sec2. True field and observations
   do it = 1, nt_asm+nt_prd
     ! forward time step
-
+    
     call cal_Lorenz(                           &
     x_true(it-1), y_true(it-1), z_true(it-1),  & ! IN
     x_k(1), y_k(1), z_k(1)                     & ! OUT
     )
-
+    
     !------------------------------------------------------- 
     ! +++ Euler method
     if ( trim(intg_method) == 'Euler' ) then
@@ -156,43 +153,17 @@ program lorenz63
       y_true(it) = y_true(it-1) + dt * y_k(1)
       z_true(it) = z_true(it-1) + dt * z_k(1)
       
-    !------------------------------------------------------- 
-    ! +++ Runge-Kutta method
+      !------------------------------------------------------- 
+      ! +++ Runge-Kutta method
     else if ( trim(intg_method) == 'Runge-Kutta' ) then 
-    
-      x_cal(1) = x_true(it-1) + 0.5*x_k(1)*dt
-      y_cal(1) = y_true(it-1) + 0.5*y_k(1)*dt
-      z_cal(1) = z_true(it-1) + 0.5*z_k(1)*dt
-    
-      call cal_Lorenz(                           &
-       x_cal(1), y_cal(1), z_cal(1),              & ! IN
-        x_k(2), y_k(2), z_k(2)                    & ! OUT
+      
+      call Lorenz63_Runge_Kutta(                  &
+        x_true(it-1), y_true(it-1), z_true(it-1), & ! IN
+        x_true(it), y_true(it), z_true(it)        & ! OUT
       )
-    
-      x_cal(2) = x_true(it-1) + 0.5*x_k(2)*dt 
-      y_cal(2) = y_true(it-1) + 0.5*y_k(2)*dt 
-      z_cal(2) = z_true(it-1) + 0.5*z_k(2)*dt
- 
-      call cal_Lorenz(                           &
-        x_cal(2), y_cal(2), z_cal(2),            & ! IN
-        x_k(3), y_k(3), z_k(3)                   & ! OUT
-      )
-    
-      x_cal(3) = x_true(it-1) + x_k(3)*dt
-      y_cal(3) = y_true(it-1) + y_k(3)*dt
-      z_cal(3) = z_true(it-1) + z_k(3)*dt
-     
-      call cal_Lorenz(                           &
-       x_cal(3), y_cal(3), z_cal(3),              & ! IN
-       x_k(4), y_k(4), z_k(4)                     & ! OUT
-      )
-     
-      x_true(it) = x_true(it-1) + dt * (x_k(1) + 2*x_k(2) + 2*x_k(3) + x_k(4)) / 6.0d0
-      y_true(it) = y_true(it-1) + dt * (y_k(1) + 2*y_k(2) + 2*y_k(3) + y_k(4)) / 6.0d0
-      z_true(it) = z_true(it-1) + dt * (z_k(1) + 2*z_k(2) + 2*z_k(3) + z_k(4)) / 6.0d0
-    
+      
     end if
-
+    
     ! making observations
     if ((mod(it, obs_interval) == 0) .and. (it <= nt_asm)) then
       ! Generate Gaussian Noise (Gnoise) from uniform random number
@@ -202,7 +173,7 @@ program lorenz63
       Gnoise = sqrt(R(1,1))*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
       ! Generate observation by adding Gaussian noise to true value
       x_obs(it/obs_interval) = x_true(it) + Gnoise
-
+      
       call random_number(noise1)
       call random_number(noise2)
       Gnoise = sqrt(R(2,2))*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
@@ -211,7 +182,42 @@ program lorenz63
     end if
   end do
   
+  ! --- Sec3. Simulation run without DA
+  do it = 1, nt_asm+nt_prd
+    ! forward time step
+    
+    call cal_Lorenz(                           &
+    x_sim(it-1), y_sim(it-1), z_sim(it-1),     & ! IN
+    x_k(1), y_k(1), z_k(1)                     & ! OUT
+    )
+    
+    !------------------------------------------------------- 
+    ! +++ Euler method
+    if ( trim(intg_method) == 'Euler' ) then
+      x_sim(it) = x_sim(it-1) + dt * x_k(1)
+      y_sim(it) = y_sim(it-1) + dt * y_k(1)
+      z_sim(it) = z_sim(it-1) + dt * z_k(1)
+      
+      !------------------------------------------------------- 
+      ! +++ Runge-Kutta method
+    else if ( trim(intg_method) == 'Runge-Kutta' ) then 
+      
+      call Lorenz63_Runge_Kutta(               &
+        x_sim(it-1), y_sim(it-1), z_sim(it-1), & ! IN
+        x_sim(it), y_sim(it), z_sim(it)        & ! OUT
+      )
+      
+    end if
+  end do
 
+  ! --- Sec4. Data assimilation
+  !if ( da_method == 'KF' ) then
+  !  x_da(0) = x_sim(0)
+  !  y_da(0) = y_sim(0)
+  !  z_da(0) = z_sim(0)
+
+  !  do it = 1, nt_asm
+  
   obs_chr(:, 0:nt_asm+nt_prd) = 'None'
   do it = 1, nt_asm
     if (mod(it, obs_interval) == 0) then
@@ -234,7 +240,52 @@ program lorenz63
 
   contains
 
+  subroutine Lorenz63_Runge_Kutta(  &
+    x_in, y_in, z_in,               & ! IN : previous step score 
+    x_out, y_out, z_out             & ! OUT: Runge-Kutta method score 
+  )
+    
+    use lorenz63_prm
+
+    real(r_size), intent(in)    :: x_in, y_in, z_in
+    real(r_size), intent(out)   :: x_out, y_out, z_out
+
+    x_cal(1) = x_in + 0.5*x_k(1)*dt
+    y_cal(1) = y_in + 0.5*y_k(1)*dt
+    z_cal(1) = z_in + 0.5*z_k(1)*dt
+      
+    call cal_Lorenz(                         &
+      x_cal(1), y_cal(1), z_cal(1),          & ! IN
+      x_k(2), y_k(2), z_k(2)                 & ! OUT
+    )
+    
+    x_cal(2) = x_in + 0.5*x_k(2)*dt 
+    y_cal(2) = y_in + 0.5*y_k(2)*dt 
+    z_cal(2) = z_in + 0.5*z_k(2)*dt
+    
+    call cal_Lorenz(                         &
+    x_cal(2), y_cal(2), z_cal(2),            & ! IN
+    x_k(3), y_k(3), z_k(3)                   & ! OUT
+    )
+    
+    x_cal(3) = x_in + x_k(3)*dt
+    y_cal(3) = y_in + y_k(3)*dt
+    z_cal(3) = z_in + z_k(3)*dt
+    
+    call cal_Lorenz(                         &
+    x_cal(3), y_cal(3), z_cal(3),            & ! IN
+    x_k(4), y_k(4), z_k(4)                   & ! OUT
+    )
+    
+    x_out = x_in + dt * (x_k(1) + 2*x_k(2) + 2*x_k(3) + x_k(4)) / 6.0d0
+    y_out = y_in + dt * (y_k(1) + 2*y_k(2) + 2*y_k(3) + y_k(4)) / 6.0d0
+    z_out = z_in + dt * (z_k(1) + 2*z_k(2) + 2*z_k(3) + z_k(4)) / 6.0d0
+
+    return
+  end subroutine Lorenz63_Runge_Kutta
+
   subroutine del_spaces(space)
+    implicit none
     character(*), intent(inout) :: space
     character(len=len(space))   :: tmp
     integer ::  i, j

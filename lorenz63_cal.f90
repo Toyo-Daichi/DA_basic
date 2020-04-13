@@ -5,7 +5,7 @@
 subroutine cal_Lorenz( &
     x, y, z,           & ! IN : previous step score 
     r_x, r_y, r_z      & ! OUT: Lorenz63 score  
-  )
+)
   
   use kinddef
   use lorenz63_prm
