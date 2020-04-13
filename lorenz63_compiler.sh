@@ -9,8 +9,8 @@ rm -rf *.mod ${prg}
 #----------------------------------------------------------------------
 # +++ Set intial setting
 #----------------------------------------------------------------------
-nt_asm=5000
-nt_prd=5000
+nt_asm=2500
+nt_prd=7500
 obs_interval=20
 DA_METHOD='KF' #'KF' or 'EnKF' or 'Ajoint'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'

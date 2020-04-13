@@ -49,8 +49,8 @@ program lorenz63
   character(7),allocatable :: obs_chr(:, :)
   integer, parameter       :: output_interval = 5
   !logical                 :: opt_beach = .false.
-  character(256)           :: linebuf
   character(256)           :: output_file
+  character(1096)           :: linebuf
 
   ! --- Working variable
   integer :: it
@@ -194,6 +194,7 @@ program lorenz63
       Gnoise = sqrt(R(2,2))*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
       y_obs(it/obs_interval) = y_true(it) + Gnoise
       
+      write(6,*) 'time_step, x_obs, y_obs', it, x_obs(it/obs_interval), y_obs(it/obs_interval)
     end if
   end do
   
@@ -232,21 +233,21 @@ program lorenz63
     z_da(0) = z_sim(0)
 
     do it = 1, nt_asm
-      write(6,*) 'time step: ', it
+      write(6,*) 'Data assim. time step: ', it
       ! 4.1: Time integration
       call cal_Lorenz(                           &
-        x_da(it-1), y_da(it-1), z_da(it-1),      & ! IN
-        x_k(1), y_k(1), z_k(1)                   & ! OUT
+      x_da(it-1), y_da(it-1), z_da(it-1),      & ! IN
+      x_k(1), y_k(1), z_k(1)                   & ! OUT
       )
-    
+      
       !------------------------------------------------------- 
       ! +++ Euler method
       if ( trim(intg_method) == 'Euler' ) then
         x_da(it) = x_da(it-1) + dt * x_k(1)
         y_da(it) = y_da(it-1) + dt * y_k(1)
         z_da(it) = z_da(it-1) + dt * z_k(1)
-      
-      !------------------------------------------------------- 
+        
+        !------------------------------------------------------- 
         ! +++ Runge-Kutta method
       else if ( trim(intg_method) == 'Runge-Kutta' ) then 
         
@@ -273,7 +274,7 @@ program lorenz63
         ! calculate inverse matrix @For_inv_2
         ! *** ref:
         ! http://www.rcs.arch.t.u-tokyo.ac.jp/kusuhara/tips/linux/fortran.html
-
+        
         For_inv_1 = matmul(Pf, transpose(H))
         For_inv_2 = R + matmul(H, For_inv_1)
         
@@ -282,7 +283,7 @@ program lorenz63
         call dgetri(Nx,For_inv_2,Nx,ipiv,lwork0,-1,ierr)
         lwork = int(lwork0)
         allocate(work_on(1:lwork))
-
+        
         call dgetri(Nx,For_inv_2,Nx,ipiv,work_on,lwork,ierr)
         deallocate(work_on)
         
@@ -292,10 +293,10 @@ program lorenz63
         ! >> 4.2.4 calculate innovation and correlation
         ! +++ Kalman Filter Main equation
         X(1,1) = x_da(it);  X(2,1) = y_da(it); X(3,1) = z_da(it)
-        Y(1,1) = x_obs(it); Y(2,1) = y_obs(it)
-
+        Y(1,1) = x_obs(it/obs_interval); Y(2,1) = y_obs(it/obs_interval)
+        
         ch2_Obs = matmul(H, X)
-
+        
         Obs_diff = Y - ch2_Obs
         X = X + matmul(Kg, Obs_diff)
         
@@ -305,12 +306,40 @@ program lorenz63
       end if
     end do
   end if
+  
+  ! --- Sec5. Prediction after Data assimilation
+  do it = nt_asm+1, nt_asm+nt_prd
+    write(6,*) 'Data assim. time step: ', it
+    ! forward time step
+    
+    call cal_Lorenz(                           &
+    x_da(it-1), y_da(it-1), z_da(it-1),     & ! IN
+    x_k(1), y_k(1), z_k(1)                     & ! OUT
+    )
+    
+    !------------------------------------------------------- 
+    ! +++ Euler method
+    if ( trim(intg_method) == 'Euler' ) then
+      x_da(it) = x_da(it-1) + dt * x_k(1)
+      y_da(it) = y_da(it-1) + dt * y_k(1)
+      z_da(it) = z_da(it-1) + dt * z_k(1)
+      
+      !------------------------------------------------------- 
+      ! +++ Runge-Kutta method
+    else if ( trim(intg_method) == 'Runge-Kutta' ) then 
+      
+      call Lorenz63_Runge_Kutta(               &
+        x_da(it-1), y_da(it-1), z_da(it-1), & ! IN
+        x_da(it), y_da(it), z_da(it)        & ! OUT
+      )
+      
+    end if
+  end do
 
 
   obs_chr(:, 0:nt_asm+nt_prd) = 'None'
   do it = 1, nt_asm
     if (mod(it, obs_interval) == 0) then
-      write(6,*) x_obs(it/obs_interval), y_obs(it/obs_interval)
       write(obs_chr(1, it), '(F7.2)')  x_obs(it/obs_interval)
       write(obs_chr(2, it), '(F7.2)')  y_obs(it/obs_interval)
     end if
@@ -320,13 +349,12 @@ program lorenz63
     write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_da, y_da, z_da, x_obs, y_obs'
     do it = 0, nt_asm+nt_prd
       if (mod(it, output_interval) == 0) then
-        write(linebuf, *) dt*it, ',',                        &
-          x_true(it), ',', y_true(it), ',', z_true(it), ',', &
-          x_sim(it), ',', y_sim(it), ',', z_sim(it), ',',    &
-          x_da(it), ',', y_da(it), ',', z_da(it), ',',       &
-          obs_chr(1, it), ',', obs_chr(2, it)
+        write(linebuf, *) dt*it, ',', x_true(it), ',', y_true(it), ',', z_true(it), ',', &
+                                      x_sim(it), ',', y_sim(it), ',', z_sim(it), ',',    &
+                                      x_da(it), ',', y_da(it), ',', z_da(it), ',',       &
+                                      obs_chr(1, it), ',', obs_chr(2, it)
         call del_spaces(linebuf)
-        write (1, '(a)') trim(linebuf)
+        write(1, '(a)') trim(linebuf)
       end if
     end do
   close(1)
