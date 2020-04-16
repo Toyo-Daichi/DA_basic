@@ -35,7 +35,7 @@ program lorenz63
   !         Pyx: 0.0  Pyy: 1.0 Pyz: 0.0 
   !         Pzx: 0.0  Pzy: 0.0 Pzz: 1.0 )
 
-  real(r_size) :: X(Nx,1)
+  real(r_size) :: Xa(Nx,1)
   real(r_size) :: Y(Nobs,1)
   
   real(r_size) :: M(Nx,Nx)     ! state transient matrix
@@ -70,8 +70,13 @@ program lorenz63
   real(r_size) :: Obs_diff(Nobs,1)
   real(r_size) :: For_inv_1(Nx,Nobs)
   real(r_size) :: For_inv_2(Nobs,Nobs)
-
+  
   real(r_size), allocatable :: work_on(:)
+  
+  ! --- Inverse matrix formula for 2x2
+  real(r_size) :: eye_matrix(Nobs,Nobs)
+  real(r_size) :: inv_matrix(Nobs,Nobs)
+  real(r_size) :: inv_prm
 
   !======================================================================
   ! Data assimilation
@@ -135,7 +140,7 @@ program lorenz63
   
   Pf(1,1) = Pf_init(1); Pf(1,2) = Pf_init(2); Pf(1,3) = Pf_init(3)
   Pf(2,1) = Pf_init(4); Pf(2,2) = Pf_init(5); Pf(2,3) = Pf_init(6)
-  Pf(3,1) = Pf_init(7); Pf(3,2) = Pf_init(8); Pf(2,3) = Pf_init(9)
+  Pf(3,1) = Pf_init(7); Pf(3,2) = Pf_init(8); Pf(3,3) = Pf_init(9)
   
   Pa = Pf
   
@@ -143,8 +148,8 @@ program lorenz63
   R(2,1) = R_init(3); R(2,2) = R_init(4)
   
   Kg(1,1) = Kg_init(1); Kg(1,2) = Kg_init(2)
-  Kg(2,1) = Kg_init(1); Kg(2,2) = Kg_init(2)
-  Kg(3,1) = Kg_init(1); Kg(3,2) = Kg_init(2)
+  Kg(2,1) = Kg_init(3); Kg(2,2) = Kg_init(4)
+  Kg(3,1) = Kg_init(5); Kg(3,2) = Kg_init(6)
 
   H(1,1) = H_init(1); H(1,2) = H_init(2); H(1,3) = H_init(3)
   H(2,1) = H_init(4); H(2,2) = H_init(5); H(2,3) = H_init(6)
@@ -221,19 +226,23 @@ program lorenz63
       call Lorenz63_Runge_Kutta(               &
         x_sim(it-1), y_sim(it-1), z_sim(it-1), & ! IN
         x_sim(it), y_sim(it), z_sim(it)        & ! OUT
-      )
+        )
+        
+      end if
+    end do
+    
+    ! --- Sec4. Data assimilation
+    if ( da_method == 'KF' ) then
+      x_da(0) = x_sim(0)
+      y_da(0) = y_sim(0)
+      z_da(0) = z_sim(0)
+
       
-    end if
-  end do
-
-  ! --- Sec4. Data assimilation
-  if ( da_method == 'KF' ) then
-    x_da(0) = x_sim(0)
-    y_da(0) = y_sim(0)
-    z_da(0) = z_sim(0)
-
-    do it = 1, nt_asm
-      write(6,*) 'Data assim. time step: ', it
+      do it = 1, nt_asm
+        write(6,*) 'Data assim. time step: ', it
+        write(6,*) Pf(1,1), Pf(1,2), Pf(1,3)
+        write(6,*) Pf(2,1), Pf(2,2), Pf(2,3)
+        write(6,*) Pf(3,1), Pf(3,2), Pf(3,3)
       ! 4.1: Time integration
       call cal_Lorenz(                           &
       x_da(it-1), y_da(it-1), z_da(it-1),      & ! IN
@@ -264,11 +273,11 @@ program lorenz63
       M(2,1) = dt*(gamm - z_da(it-1)); M(2,2) = 1.0d0 - dt;     M(2,3) = -dt*x_da(it-1)
       M(3,1) = dt*y_da(it-1);          M(3,2) = dt*x_da(it-1);  M(3,3) = 1.0d0 - dt*b
       
-      Ptmp = transpose(M)
-      Ptmp = matmul(Pf, Ptmp)
-      Pf   = matmul(M, Ptmp)
       
       if (mod(it, obs_interval) == 0) then
+        Ptmp = transpose(M)
+        Ptmp = matmul(Pf, Ptmp)
+        Pf   = matmul(M, Ptmp)
         ! >> 4.2.3 Kalman gain: Weighting of model result and obs.
         ! (Note) Observation in x,y ----> component 2 (x,y)
         ! calculate inverse matrix @For_inv_2
@@ -278,28 +287,40 @@ program lorenz63
         For_inv_1 = matmul(Pf, transpose(H))
         For_inv_2 = R + matmul(H, For_inv_1)
         
-        call dgetrf(Nx,Nx,For_inv_2,Nx,ipiv,ierr)
-        
-        call dgetri(Nx,For_inv_2,Nx,ipiv,lwork0,-1,ierr)
-        lwork = int(lwork0)
-        allocate(work_on(1:lwork))
-        
-        call dgetri(Nx,For_inv_2,Nx,ipiv,work_on,lwork,ierr)
-        deallocate(work_on)
-        
-        Kg = matmul(For_inv_1, For_inv_2)
-        
+        inv_prm = 1.0d0 / ( For_inv_2(1,1)*For_inv_2(2,2) - For_inv_2(1,2)*For_inv_2(2,1) )
+
+        inv_matrix(1,1) = inv_prm*For_inv_2(2,2);  inv_matrix(1,2) = -inv_prm*For_inv_2(1,2)
+        inv_matrix(2,1) = -inv_prm*For_inv_2(2,1); inv_matrix(1,2) = inv_prm*For_inv_2(1,1)
+
+        eye_matrix = matmul(For_inv_2, inv_matrix)
+        write(6,*) 'unit matrix'
+        write(6,*) eye_matrix(1,1), eye_matrix(1,2)
+        write(6,*) eye_matrix(2,1), eye_matrix(2,2)
+
+        Kg = matmul(For_inv_1, inv_matrix)
+
+        !call dgetrf(Nx,Nx,For_inv_2,Nx,ipiv,ierr)
+        !
+        !call dgetri(Nx,For_inv_2,Nx,ipiv,lwork0,-1,ierr)
+        !lwork = int(lwork0)
+        !allocate(work_on(1:lwork))
+        !
+        !call dgetri(Nx,For_inv_2,Nx,ipiv,work_on,lwork,ierr)
+        !deallocate(work_on)
+        !Kg = matmul(For_inv_1, For_inv_2)
+
         !------------------------------------------------------- 
         ! >> 4.2.4 calculate innovation and correlation
         ! +++ Kalman Filter Main equation
-        X(1,1) = x_da(it);  X(2,1) = y_da(it); X(3,1) = z_da(it)
+        Xa(1,1) = x_da(it);  Xa(2,1) = y_da(it); Xa(3,1) = z_da(it)
         Y(1,1) = x_obs(it/obs_interval); Y(2,1) = y_obs(it/obs_interval)
         
-        ch2_Obs = matmul(H, X)
+        ch2_Obs = matmul(H, Xa)
         
         Obs_diff = Y - ch2_Obs
-        X = X + matmul(Kg, Obs_diff)
+        Xa = Xa + matmul(Kg, Obs_diff)
         
+        x_da(it) = Xa(1,1); y_da(it) = Xa(2,1); z_da(it) = Xa(3,1)
         ! >> 4.2.5 analysis error covariance matrix
         Pa = Pf - matmul(matmul(Kg, H), Pf)
         Pf = Pa
@@ -313,7 +334,7 @@ program lorenz63
     ! forward time step
     
     call cal_Lorenz(                           &
-    x_da(it-1), y_da(it-1), z_da(it-1),     & ! IN
+    x_da(it-1), y_da(it-1), z_da(it-1),        & ! IN
     x_k(1), y_k(1), z_k(1)                     & ! OUT
     )
     
@@ -329,8 +350,8 @@ program lorenz63
     else if ( trim(intg_method) == 'Runge-Kutta' ) then 
       
       call Lorenz63_Runge_Kutta(               &
-        x_da(it-1), y_da(it-1), z_da(it-1), & ! IN
-        x_da(it), y_da(it), z_da(it)        & ! OUT
+        x_da(it-1), y_da(it-1), z_da(it-1),    & ! IN
+        x_da(it), y_da(it), z_da(it)           & ! OUT
       )
       
     end if

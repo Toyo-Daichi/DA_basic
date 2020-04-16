@@ -18,7 +18,7 @@ mem=5000
 
 # +++ initial value
 x_tinit=0.0d0; y_tinit=10.0d0; z_tinit=20.0d0
-x_sinit=0.0d0; y_sinit=10.0d0; z_sinit=20.0d0
+x_sinit=0.1d0; y_sinit=10.1d0; z_sinit=20.1d0
 
 # +++ initial matrix
 # Forecast error covariance matrix
@@ -28,8 +28,8 @@ Pf_init=( 1.0d0 0.0d0 0.0d0
           0.0d0 0.0d0 1.0d0 )
 
 # Observation error covariance matrix
-R_init=(  0.1d0 0.0d0 
-          0.0d0 0.1d0 )
+R_init=(  0.00d0  0.00d0 
+          0.00d0  0.00d0 )
 
 # Kalman gain matrix
 K_init=(  0.0d0 0.0d0 
