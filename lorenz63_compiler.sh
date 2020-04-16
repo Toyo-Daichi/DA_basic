@@ -28,8 +28,8 @@ Pf_init=( 1.0d0 0.0d0 0.0d0
           0.0d0 0.0d0 1.0d0 )
 
 # Observation error covariance matrix
-R_init=(  0.00d0  0.00d0 
-          0.00d0  0.00d0 )
+R_init=(  0.01d0  0.00d0 
+          0.00d0  0.01d0 )
 
 # Kalman gain matrix
 K_init=(  0.0d0 0.0d0 
