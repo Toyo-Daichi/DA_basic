@@ -18,7 +18,7 @@ mem=5000
 
 # +++ initial value
 x_tinit=0.0d0; y_tinit=10.0d0; z_tinit=20.0d0
-x_sinit=0.1d0; y_sinit=10.1d0; z_sinit=20.1d0
+x_sinit=1.0d0; y_sinit=11.0d0; z_sinit=19.5d0
 
 # +++ initial matrix
 # Forecast error covariance matrix
