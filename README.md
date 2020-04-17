@@ -34,6 +34,7 @@ gfortran -fbounds-check lorenz_*.f90 -o ${prg} -I/usr/local/include -llapack -lb
 - タグの作成日
 
 1. assimilation_tool_ver1.0(減衰振動のデータ同化手法の実装)　2020年4月1日
+2. assimilation_tool_ver2.0(Lorenz63モデルとKFの実装)　2020年4月17日
 
 ### 参考サイト
 - http://www.itonwp.sci.u-ryukyu.ac.jp/itokosk.html
