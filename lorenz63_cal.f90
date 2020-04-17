@@ -1,11 +1,14 @@
 !
 ! Lorenz (1963) equation
 !
+!  dx/dt = -sig*(x+y)
+!  dy/dt = -x*z+gamm*x-y
+!  dz/dt = x*y-b*z
 
 subroutine cal_Lorenz( &
     x, y, z,           & ! IN : previous step score 
     r_x, r_y, r_z      & ! OUT: Lorenz63 score  
-  )
+)
   
   use kinddef
   use lorenz63_prm
@@ -18,6 +21,5 @@ subroutine cal_Lorenz( &
   r_y = gamm*x -y -x*z
   r_z = x*y - b*z
 
-  write(6,*) r_x, r_y, r_z
   return
 end subroutine cal_Lorenz

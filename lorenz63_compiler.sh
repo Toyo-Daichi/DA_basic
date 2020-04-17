@@ -9,8 +9,8 @@ rm -rf *.mod ${prg}
 #----------------------------------------------------------------------
 # +++ Set intial setting
 #----------------------------------------------------------------------
-nt_asm=5000
-nt_prd=5000
+nt_asm=2500
+nt_prd=7500
 obs_interval=20
 DA_METHOD='KF' #'KF' or 'EnKF' or 'Ajoint'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
@@ -18,7 +18,7 @@ mem=5000
 
 # +++ initial value
 x_tinit=0.0d0; y_tinit=10.0d0; z_tinit=20.0d0
-x_sinit=0.0d0; y_sinit=10.0d0; z_sinit=20.0d0
+x_sinit=1.0d0; y_sinit=11.0d0; z_sinit=19.5d0
 
 # +++ initial matrix
 # Forecast error covariance matrix
@@ -28,17 +28,17 @@ Pf_init=( 1.0d0 0.0d0 0.0d0
           0.0d0 0.0d0 1.0d0 )
 
 # Observation error covariance matrix
-R_init=( 0.1d0 0.0d0 
-         0.0d0 0.1d0 )
+R_init=(  0.01d0  0.00d0 
+          0.00d0  0.01d0 )
 
 # Kalman gain matrix
-K_init=( 0.0d0 0.0d0 
-         0.0d0 0.0d0
-         0.0d0 0.0d0 )
+K_init=(  0.0d0 0.0d0 
+          0.0d0 0.0d0
+          0.0d0 0.0d0 )
 
 # Observation　operator
-H_init=( 1.0d0 0.0d0 0.0d0 
-         0.0d0 1.0d0 0.0d0 )
+H_init=(  1.0d0 0.0d0 0.0d0 
+          0.0d0 1.0d0 0.0d0 )
 
 # +++ output info
 boolen='true' # write putput
@@ -49,7 +49,7 @@ outputfile='./output/'${outputname}
 # +++ Run exp.
 #----------------------------------------------------------------------
 
-gfortran -fbounds-check kinddef.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_main.f90 -o ${prg}
+gfortran -fbounds-check kinddef.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_main.f90 -o ${prg} -I/usr/local/include -llapack -lblas
 
 ./${prg} > ./log/${today}_${prg}_${DA_METHOD}.log << EOF
   &set_parm
@@ -77,7 +77,7 @@ gfortran -fbounds-check kinddef.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_m
     B_init  = ${Pf_init[0]}, ${Pf_init[1]}, ${Pf_init[2]},
               ${Pf_init[3]}, ${Pf_init[4]}, ${Pf_init[5]},
               ${Pf_init[6]}, ${Pf_init[7]}, ${Pf_init[8]}
- 
+
     R_init  = ${R_init[0]}, ${R_init[1]},
               ${R_init[2]}, ${R_init[3]}
 
@@ -85,9 +85,9 @@ gfortran -fbounds-check kinddef.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_m
               ${Kg_init[2]}, ${Kg_init[3]},
               ${Kg_init[4]}, ${Kg_init[5]}
 
-    H_init = ${H_init[0]}, ${H_init[1]},
-             ${H_init[2]}, ${H_init[3]},
-             ${H_init[4]}, ${H_init[5]}
+    H_init =  ${H_init[0]}, ${H_init[1]},
+              ${H_init[2]}, ${H_init[3]},
+              ${H_init[4]}, ${H_init[5]}
   /
   &output
     output_file  = '${outputfile}',
