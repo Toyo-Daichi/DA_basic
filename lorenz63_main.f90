@@ -70,10 +70,12 @@ program lorenz63
   real(r_size) :: Obs_diff(Nobs,1)
   real(r_size) :: For_inv_1(Nx,Nobs)
   real(r_size) :: For_inv_2(Nobs,Nobs)
+  real(r_size) :: For_inv_3(Nobs,Nobs)
   
   real(r_size), allocatable :: work_on(:)
   
   ! --- Inverse matrix formula for 2x2
+  real(r_size) :: aa,bb,cc,dd
   real(r_size) :: eye_matrix(Nobs,Nobs)
   real(r_size) :: inv_matrix(Nobs,Nobs)
   real(r_size) :: inv_prm
@@ -273,7 +275,6 @@ program lorenz63
       M(2,1) = dt*(gamm - z_da(it-1)); M(2,2) = 1.0d0 - dt;     M(2,3) = -dt*x_da(it-1)
       M(3,1) = dt*y_da(it-1);          M(3,2) = dt*x_da(it-1);  M(3,3) = 1.0d0 - dt*b
       
-      
       if (mod(it, obs_interval) == 0) then
         Ptmp = transpose(M)
         Ptmp = matmul(Pf, Ptmp)
@@ -285,13 +286,25 @@ program lorenz63
         ! http://www.rcs.arch.t.u-tokyo.ac.jp/kusuhara/tips/linux/fortran.html
         
         For_inv_1 = matmul(Pf, transpose(H))
-        For_inv_2 = R + matmul(H, For_inv_1)
+        For_inv_3 = matmul(H, For_inv_1)
+        write(6,*) 'Check'
+        write(6,*) For_inv_3(1,1), For_inv_3(1,2), For_inv_3(2,1), For_inv_3(2,2)
+
+        For_inv_2 = R + For_inv_3
+        write(6,*) For_inv_2(1,1), For_inv_2(1,2), For_inv_2(2,1), For_inv_2(2,2)
         
         inv_prm = 1.0d0 / ( For_inv_2(1,1)*For_inv_2(2,2) - For_inv_2(1,2)*For_inv_2(2,1) )
+        write(6,*) inv_prm
 
-        inv_matrix(1,1) = inv_prm*For_inv_2(2,2);  inv_matrix(1,2) = -inv_prm*For_inv_2(1,2)
-        inv_matrix(2,1) = -inv_prm*For_inv_2(2,1); inv_matrix(1,2) = inv_prm*For_inv_2(1,1)
+        inv_matrix(1,1) =  inv_prm*For_inv_2(2,2); inv_matrix(1,2) = -inv_prm*For_inv_2(1,2)
+        inv_matrix(2,1) = -inv_prm*For_inv_2(2,1); inv_matrix(2,2) =  inv_prm*For_inv_2(1,1)
 
+        write(6,*) -1.224*0.112
+        write(6,*) -inv_prm*For_inv_2(2,1)
+        write(6,*) -inv_prm*For_inv_2(1,2)
+        write(6,*)'check on'
+        write(6,*) For_inv_2
+        write(6,*) inv_matrix
         eye_matrix = matmul(For_inv_2, inv_matrix)
         write(6,*) 'unit matrix'
         write(6,*) eye_matrix(1,1), eye_matrix(1,2)
