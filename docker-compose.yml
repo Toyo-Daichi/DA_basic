@@ -1,0 +1,10 @@
+## docker-compose.yaml
+version: '3'
+services:
+
+  fortran:
+    build: .
+    container_name: fortran
+    volumes:
+      - .:/home/fortran"
+      ty: true
