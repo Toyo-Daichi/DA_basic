@@ -50,7 +50,7 @@ program lorenz63
   integer, parameter       :: output_interval = 5
   !logical                 :: opt_beach = .false.
   character(256)           :: output_file
-  character(1096)           :: linebuf
+  character(1096)          :: linebuf
 
   ! --- Working variable
   integer :: it
@@ -68,17 +68,15 @@ program lorenz63
   real(r_size) :: lwork0
   real(r_size) :: ch2_Obs(Nobs,1)
   real(r_size) :: Obs_diff(Nobs,1)
-  real(r_size) :: For_inv_1(Nx,Nobs)
-  real(r_size) :: For_inv_2(Nobs,Nobs)
-  real(r_size) :: For_inv_3(Nobs,Nobs)
   
   real(r_size), allocatable :: work_on(:)
   
   ! --- Inverse matrix formula for 2x2
-  real(r_size) :: aa,bb,cc,dd
-  real(r_size) :: eye_matrix(Nobs,Nobs)
   real(r_size) :: inv_matrix(Nobs,Nobs)
-  real(r_size) :: inv_prm
+  real(r_size) :: inv_tmpmatrix(Nobs,Nobs)
+  real(r_size) :: inv_nummatrix(Nobs,Nobs)
+  real(r_size) :: Pf_HT(Nx,Nobs)
+  real(r_size) :: eye_matrix(Nobs,Nobs)
 
   !======================================================================
   ! Data assimilation
@@ -246,7 +244,7 @@ program lorenz63
         write(6,*) Pf(2,1), Pf(2,2), Pf(2,3)
         write(6,*) Pf(3,1), Pf(3,2), Pf(3,3)
       ! 4.1: Time integration
-      call cal_Lorenz(                           &
+      call cal_Lorenz(                         &
       x_da(it-1), y_da(it-1), z_da(it-1),      & ! IN
       x_k(1), y_k(1), z_k(1)                   & ! OUT
       )
@@ -263,8 +261,8 @@ program lorenz63
       else if ( trim(intg_method) == 'Runge-Kutta' ) then 
         
         call Lorenz63_Runge_Kutta(             &
-        x_da(it-1), y_da(it-1), z_da(it-1),  & ! IN
-        x_da(it), y_da(it), z_da(it)         & ! OUT
+        x_da(it-1), y_da(it-1), z_da(it-1),    & ! IN
+        x_da(it), y_da(it), z_da(it)           & ! OUT
         )
       end if
       
@@ -281,46 +279,33 @@ program lorenz63
         Pf   = matmul(M, Ptmp)
         ! >> 4.2.3 Kalman gain: Weighting of model result and obs.
         ! (Note) Observation in x,y ----> component 2 (x,y)
-        ! calculate inverse matrix @For_inv_2
+        ! calculate inverse matrix @inv_tmpmatrix
         ! *** ref:
         ! http://www.rcs.arch.t.u-tokyo.ac.jp/kusuhara/tips/linux/fortran.html
         
-        For_inv_1 = matmul(Pf, transpose(H))
-        For_inv_3 = matmul(H, For_inv_1)
-        write(6,*) 'Check'
-        write(6,*) For_inv_3(1,1), For_inv_3(1,2), For_inv_3(2,1), For_inv_3(2,2)
-
-        For_inv_2 = R + For_inv_3
-        write(6,*) For_inv_2(1,1), For_inv_2(1,2), For_inv_2(2,1), For_inv_2(2,2)
+        Pf_HT = matmul(Pf, transpose(H))
+        inv_nummatrix = matmul(H, Pf_HT)
+        inv_tmpmatrix = R + inv_nummatrix
         
-        inv_prm = 1.0d0 / ( For_inv_2(1,1)*For_inv_2(2,2) - For_inv_2(1,2)*For_inv_2(2,1) )
-        write(6,*) inv_prm
-
-        inv_matrix(1,1) =  inv_prm*For_inv_2(2,2); inv_matrix(1,2) = -inv_prm*For_inv_2(1,2)
-        inv_matrix(2,1) = -inv_prm*For_inv_2(2,1); inv_matrix(2,2) =  inv_prm*For_inv_2(1,1)
-
-        write(6,*) -1.224*0.112
-        write(6,*) -inv_prm*For_inv_2(2,1)
-        write(6,*) -inv_prm*For_inv_2(1,2)
-        write(6,*)'check on'
-        write(6,*) For_inv_2
-        write(6,*) inv_matrix
-        eye_matrix = matmul(For_inv_2, inv_matrix)
-        write(6,*) 'unit matrix'
-        write(6,*) eye_matrix(1,1), eye_matrix(1,2)
-        write(6,*) eye_matrix(2,1), eye_matrix(2,2)
-
-        Kg = matmul(For_inv_1, inv_matrix)
-
-        !call dgetrf(Nx,Nx,For_inv_2,Nx,ipiv,ierr)
-        !
-        !call dgetri(Nx,For_inv_2,Nx,ipiv,lwork0,-1,ierr)
+        ! +++ inverse matrix calculate for 2x2 on formula
+        call inverse_matrix_for2x2(       &
+        inv_tmpmatrix, inv_matrix         &
+        )
+        
+        eye_matrix = matmul(inv_tmpmatrix, inv_matrix)
+        write(6,*) '#confirm eye matrix calculate ... '
+        write(6,*) eye_matrix
+        Kg = matmul(Pf_HT, inv_matrix)
+        
+        ! +++ inverse matrix calculate for 2x2 on LAPACK
+        !call dgetrf(Nx,Nx,inv_tmpmatrix,Nx,ipiv,ierr)
+        !call dgetri(Nx,inv_tmpmatrix,Nx,ipiv,lwork0,-1,ierr)
         !lwork = int(lwork0)
         !allocate(work_on(1:lwork))
         !
-        !call dgetri(Nx,For_inv_2,Nx,ipiv,work_on,lwork,ierr)
+        !call dgetri(Nx,inv_tmpmatrix,Nx,ipiv,work_on,lwork,ierr)
         !deallocate(work_on)
-        !Kg = matmul(For_inv_1, For_inv_2)
+        !Kg = matmul(Pf_HT, inv_tmpmatrix)
 
         !------------------------------------------------------- 
         ! >> 4.2.4 calculate innovation and correlation
@@ -329,11 +314,10 @@ program lorenz63
         Y(1,1) = x_obs(it/obs_interval); Y(2,1) = y_obs(it/obs_interval)
         
         ch2_Obs = matmul(H, Xa)
-        
         Obs_diff = Y - ch2_Obs
         Xa = Xa + matmul(Kg, Obs_diff)
-        
         x_da(it) = Xa(1,1); y_da(it) = Xa(2,1); z_da(it) = Xa(3,1)
+        
         ! >> 4.2.5 analysis error covariance matrix
         Pa = Pf - matmul(matmul(Kg, H), Pf)
         Pf = Pa
@@ -396,7 +380,7 @@ program lorenz63
   contains
 
   subroutine Lorenz63_Runge_Kutta(  &
-    x_in, y_in, z_in,               & ! IN : previous step score 
+    x_in, y_in, z_in,               & ! IN: previous step score 
     x_out, y_out, z_out             & ! OUT: Runge-Kutta method score 
   )
     
@@ -438,6 +422,23 @@ program lorenz63
 
     return
   end subroutine Lorenz63_Runge_Kutta
+
+  subroutine inverse_matrix_for2x2(         &
+    matrix                                  & ! IN:  input matrix
+    inv_matrix                              & ! OUT: inverse matrix
+  )
+  
+    real(8)               :: inv_prm
+    real(8), intent(in)   :: matrix(2,2) 
+    real(8), intent(out)  :: inv_matrix(2,2)
+
+    write(6,*) '#calculate on 2x2 inverse formula'
+    inv_prm = 1.0d0 / ( matrix(1,1)*matrix(2,2) - matrix(1,2)*matrix(2,1) )
+    inv_matrix(1,1) =  inv_prm*matrix(2,2); inv_matrix(1,2) = -inv_prm*matrix(1,2)
+    inv_matrix(2,1) = -inv_prm*matrix(2,1); inv_matrix(2,2) =  inv_prm*matrix(1,1)
+
+    return
+  end subroutine
 
   subroutine del_spaces(space)
     implicit none
