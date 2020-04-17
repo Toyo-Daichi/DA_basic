@@ -424,13 +424,13 @@ program lorenz63
   end subroutine Lorenz63_Runge_Kutta
 
   subroutine inverse_matrix_for2x2(         &
-    matrix                                  & ! IN:  input matrix
+    matrix,                                 & ! IN:  input matrix
     inv_matrix                              & ! OUT: inverse matrix
   )
   
-    real(8)               :: inv_prm
-    real(8), intent(in)   :: matrix(2,2) 
-    real(8), intent(out)  :: inv_matrix(2,2)
+    real(r_size)               :: inv_prm
+    real(r_size), intent(in)   :: matrix(2,2) 
+    real(r_size), intent(out)  :: inv_matrix(2,2)
 
     write(6,*) '#calculate on 2x2 inverse formula'
     inv_prm = 1.0d0 / ( matrix(1,1)*matrix(2,2) - matrix(1,2)*matrix(2,1) )
