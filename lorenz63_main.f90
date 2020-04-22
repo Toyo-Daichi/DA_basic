@@ -189,17 +189,12 @@ program lorenz63
     
     ! making observations
     if ((mod(it, obs_interval) == 0) .and. (it <= nt_asm)) then
-      ! Generate Gaussian Noise (Gnoise) from uniform random number
-      ! based on Box-Muller method
-      call random_number(noise1)
-      call random_number(noise2)
-      Gnoise = sqrt(R(1,1))*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
+
+      call gaussian_noise(sqrt(R(1,1), Gnoise))
       ! Generate observation by adding Gaussian noise to true value
       x_obs(it/obs_interval) = x_true(it) + Gnoise
       
-      call random_number(noise1)
-      call random_number(noise2)
-      Gnoise = sqrt(R(2,2))*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
+      call gaussian_noise(sqrt(R(2,2), Gnoise))
       y_obs(it/obs_interval) = y_true(it) + Gnoise
       
       write(6,*) 'time_step, x_obs, y_obs', it, x_obs(it/obs_interval), y_obs(it/obs_interval)
@@ -388,17 +383,18 @@ program lorenz63
   )
     
     use lorenz63_prm
-
+    implicit none
+    
     real(r_size), intent(in)    :: x_in, y_in, z_in
     real(r_size), intent(out)   :: x_out, y_out, z_out
-
+    
     x_cal(1) = x_in + 0.5*x_k(1)*dt
     y_cal(1) = y_in + 0.5*y_k(1)*dt
     z_cal(1) = z_in + 0.5*z_k(1)*dt
-      
+    
     call cal_Lorenz(                         &
-      x_cal(1), y_cal(1), z_cal(1),          & ! IN
-      x_k(2), y_k(2), z_k(2)                 & ! OUT
+    x_cal(1), y_cal(1), z_cal(1),          & ! IN
+    x_k(2), y_k(2), z_k(2)                 & ! OUT
     )
     
     x_cal(2) = x_in + 0.5*x_k(2)*dt 
@@ -422,15 +418,16 @@ program lorenz63
     x_out = x_in + dt * (x_k(1) + 2*x_k(2) + 2*x_k(3) + x_k(4)) / 6.0d0
     y_out = y_in + dt * (y_k(1) + 2*y_k(2) + 2*y_k(3) + y_k(4)) / 6.0d0
     z_out = z_in + dt * (z_k(1) + 2*z_k(2) + 2*z_k(3) + z_k(4)) / 6.0d0
-
+    
     return
   end subroutine Lorenz63_Runge_Kutta
-
+  
   subroutine inverse_matrix_for2x2(         &
     matrix,                                 & ! IN:  input matrix
     inv_matrix                              & ! OUT: inverse matrix
-  )
-  
+    )
+    
+    implicit none
     real(r_size)               :: inv_prm
     real(r_size), intent(in)   :: matrix(2,2) 
     real(r_size), intent(out)  :: inv_matrix(2,2)
@@ -442,6 +439,30 @@ program lorenz63
 
     return
   end subroutine
+
+  subroutine gaussian_noise(    &
+    size_gnoise,                & ! IN: One case is observation error diag.
+    gnoise                      & ! OUT
+    )
+    ! Generate Gaussian Noise (Gnoise) from uniform random number
+    ! based on Box-Muller method
+
+    implicit none
+    real(kind=r_size),intent(in)  :: size_gnoise
+    real(kind=r_size),intent(out) :: gnoise
+  
+    ! constant
+    real(kind=r_dble),parameter :: pi=3.14159265358979
+  
+    ! working variable
+    real(kind=r_dble) :: noise1,noise2
+  
+    call random_number(noise1)
+    call random_number(noise2)
+    gnoise=size_gnoise*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
+  
+  end subroutine gaussian_noise
+  
 
   subroutine del_spaces(space)
     implicit none
