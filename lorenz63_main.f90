@@ -27,6 +27,7 @@ program lorenz63
   real(r_size), allocatable :: x_obs(:), y_obs(:)
 
   real(r_size), allocatable :: x_da_m(:, :), y_da_m(:, :), z_da_m(:, :)
+  real(r_size), allocatable :: x_prtb(:), y_prtb(:), z_prtb(:)
 
 
   ! --- Matrix(element 1:x, 2:y, 3:z)
@@ -128,6 +129,8 @@ program lorenz63
   allocate(x_true(0:nt_asm+nt_prd), y_true(0:nt_asm+nt_prd), z_true(0:nt_asm+nt_prd))
   allocate(x_sim(0:nt_asm+nt_prd), y_sim(0:nt_asm+nt_prd), z_sim(0:nt_asm+nt_prd))
   allocate(x_da(0:nt_asm+nt_prd), y_da(0:nt_asm+nt_prd), z_da(0:nt_asm+nt_prd))
+  allocate(x_da_m(0:nt_asm, mems), y_da_m(0:nt_asm, mems), z_da_m(0:nt_asm, mems))
+  allocate(x_prtb(mems), y_prtb(mems), z_prtb(mems))
 
   allocate(x_obs(0:nt_asm/obs_interval), y_obs(0:nt_asm/obs_interval))
   allocate(obs_chr(2, 0:nt_asm+nt_prd))
