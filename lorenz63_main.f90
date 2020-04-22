@@ -190,11 +190,11 @@ program lorenz63
     ! making observations
     if ((mod(it, obs_interval) == 0) .and. (it <= nt_asm)) then
 
-      call gaussian_noise(sqrt(R(1,1), Gnoise))
+      call gaussian_noise(sqrt(R(1,1)), Gnoise)
       ! Generate observation by adding Gaussian noise to true value
       x_obs(it/obs_interval) = x_true(it) + Gnoise
       
-      call gaussian_noise(sqrt(R(2,2), Gnoise))
+      call gaussian_noise(sqrt(R(2,2)), Gnoise)
       y_obs(it/obs_interval) = y_true(it) + Gnoise
       
       write(6,*) 'time_step, x_obs, y_obs', it, x_obs(it/obs_interval), y_obs(it/obs_interval)
