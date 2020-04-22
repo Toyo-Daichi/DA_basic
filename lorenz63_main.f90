@@ -14,7 +14,6 @@ program lorenz63
   integer :: obs_interval ! Interval of observation
 
   real(r_size), parameter  :: dt = 1.0d-2 ! Time step
-  real(r_size), parameter  :: pi = 3.14159265358979d0
 
   character(8)  :: da_method
   character(12) :: intg_method
@@ -59,8 +58,8 @@ program lorenz63
   integer :: ierr
   integer :: iflag
   integer :: iter
-  real(r_size) :: x_innov
-  real(r_size) :: noise1, noise2, Gnoise ! Gaussian noise
+  real(r_size) :: x_innov, y_innov
+  real(r_size) :: Gnoise ! Gaussian noise
   
   ! --- matrix calculation
   real(r_size) :: Ptmp(Nx,Nx)
@@ -234,94 +233,187 @@ program lorenz63
       x_da(0) = x_sim(0)
       y_da(0) = y_sim(0)
       z_da(0) = z_sim(0)
-
       
       do it = 1, nt_asm
         write(6,*) 'Data assim. time step: ', it
         write(6,*) Pf(1,1), Pf(1,2), Pf(1,3)
         write(6,*) Pf(2,1), Pf(2,2), Pf(2,3)
         write(6,*) Pf(3,1), Pf(3,2), Pf(3,3)
-      ! 4.1: Time integration
-      call cal_Lorenz(                         &
-      x_da(it-1), y_da(it-1), z_da(it-1),      & ! IN
-      x_k(1), y_k(1), z_k(1)                   & ! OUT
-      )
-      
-      !------------------------------------------------------- 
-      ! +++ Euler method
-      if ( trim(intg_method) == 'Euler' ) then
-        x_da(it) = x_da(it-1) + dt * x_k(1)
-        y_da(it) = y_da(it-1) + dt * y_k(1)
-        z_da(it) = z_da(it-1) + dt * z_k(1)
+        
+        ! 4.1: Time integration
+        call cal_Lorenz(                         &
+        x_da(it-1), y_da(it-1), z_da(it-1),      & ! IN
+        x_k(1), y_k(1), z_k(1)                   & ! OUT
+        )
         
         !------------------------------------------------------- 
-        ! +++ Runge-Kutta method
-      else if ( trim(intg_method) == 'Runge-Kutta' ) then 
-        
-        call Lorenz63_Runge_Kutta(             &
-        x_da(it-1), y_da(it-1), z_da(it-1),    & ! IN
-        x_da(it), y_da(it), z_da(it)           & ! OUT
-        )
-      end if
-      
-      ! 4.2: Kalman fileter
-      !------------------------------------------------------- 
-      ! +++ 4.2.1 State Transient Matrix
-      M(1,1) = 1 - dt*sig;             M(1,2) = dt*sig;         M(1,3) = 0.0d0
-      M(2,1) = dt*(gamm - z_da(it-1)); M(2,2) = 1.0d0 - dt;     M(2,3) = -dt*x_da(it-1)
-      M(3,1) = dt*y_da(it-1);          M(3,2) = dt*x_da(it-1);  M(3,3) = 1.0d0 - dt*b
-      
-      if (mod(it, obs_interval) == 0) then
-        Ptmp = transpose(M)
-        Ptmp = matmul(Pf, Ptmp)
-        Pf   = matmul(M, Ptmp)
-        ! >> 4.2.3 Kalman gain: Weighting of model result and obs.
-        ! (Note) Observation in x,y ----> component 2 (x,y)
-        ! calculate inverse matrix @inv_tmpmatrix
-        ! *** ref:
-        ! http://www.rcs.arch.t.u-tokyo.ac.jp/kusuhara/tips/linux/fortran.html
-        
-        Pf_HT = matmul(Pf, transpose(H))
-        inv_nummatrix = matmul(H, Pf_HT)
-        inv_tmpmatrix = R + inv_nummatrix
-        
-        ! +++ inverse matrix calculate for 2x2 on formula
-        call inverse_matrix_for2x2(       &
-        inv_tmpmatrix, inv_matrix         &
-        )
-        
-        eye_matrix = matmul(inv_tmpmatrix, inv_matrix)
-        write(6,*) '#confirm eye matrix calculate ... '
-        write(6,*) eye_matrix
-        Kg = matmul(Pf_HT, inv_matrix)
-        
-        ! +++ inverse matrix calculate for 2x2 on LAPACK
-        !call dgetrf(Nx,Nx,inv_tmpmatrix,Nx,ipiv,ierr)
-        !call dgetri(Nx,inv_tmpmatrix,Nx,ipiv,lwork0,-1,ierr)
-        !lwork = int(lwork0)
-        !allocate(work_on(1:lwork))
-        !
-        !call dgetri(Nx,inv_tmpmatrix,Nx,ipiv,work_on,lwork,ierr)
-        !deallocate(work_on)
-        !Kg = matmul(Pf_HT, inv_tmpmatrix)
+        ! +++ Euler method
+        if ( trim(intg_method) == 'Euler' ) then
+          x_da(it) = x_da(it-1) + dt * x_k(1)
+          y_da(it) = y_da(it-1) + dt * y_k(1)
+          z_da(it) = z_da(it-1) + dt * z_k(1)
 
+          !------------------------------------------------------- 
+          ! +++ Runge-Kutta method
+        else if ( trim(intg_method) == 'Runge-Kutta' ) then 
+
+          call Lorenz63_Runge_Kutta(             &
+          x_da(it-1), y_da(it-1), z_da(it-1),    & ! IN
+          x_da(it), y_da(it), z_da(it)           & ! OUT
+          )
+        end if
+
+        ! 4.2: Kalman fileter
         !------------------------------------------------------- 
-        ! >> 4.2.4 calculate innovation and correlation
-        ! +++ Kalman Filter Main equation
-        Xa(1,1) = x_da(it);  Xa(2,1) = y_da(it); Xa(3,1) = z_da(it)
-        Y(1,1) = x_obs(it/obs_interval); Y(2,1) = y_obs(it/obs_interval)
+        ! +++ 4.2.1 State Transient Matrix
+        M(1,1) = 1 - dt*sig;             M(1,2) = dt*sig;         M(1,3) = 0.0d0
+        M(2,1) = dt*(gamm - z_da(it-1)); M(2,2) = 1.0d0 - dt;     M(2,3) = -dt*x_da(it-1)
+        M(3,1) = dt*y_da(it-1);          M(3,2) = dt*x_da(it-1);  M(3,3) = 1.0d0 - dt*b
+
+        if (mod(it, obs_interval) == 0) then
+          Ptmp = transpose(M)
+          Ptmp = matmul(Pf, Ptmp)
+          Pf   = matmul(M, Ptmp)
+          ! >> 4.2.3 Kalman gain: Weighting of model result and obs.
+          ! (Note) Observation in x,y ----> component 2 (x,y)
+          ! calculate inverse matrix @inv_tmpmatrix
+          ! *** ref:
+          ! http://www.rcs.arch.t.u-tokyo.ac.jp/kusuhara/tips/linux/fortran.html
+
+          Pf_HT = matmul(Pf, transpose(H))
+          inv_nummatrix = matmul(H, Pf_HT)
+          inv_tmpmatrix = R + inv_nummatrix
+
+          ! +++ inverse matrix calculate for 2x2 on formula
+          call inverse_matrix_for2x2(       &
+          inv_tmpmatrix, inv_matrix         &
+          )
+
+          eye_matrix = matmul(inv_tmpmatrix, inv_matrix)
+          write(6,*) '#confirm eye matrix calculate ... '
+          write(6,*) eye_matrix
+          Kg = matmul(Pf_HT, inv_matrix)
+
+          ! +++ inverse matrix calculate for 2x2 on LAPACK
+          !call dgetrf(Nx,Nx,inv_tmpmatrix,Nx,ipiv,ierr)
+          !call dgetri(Nx,inv_tmpmatrix,Nx,ipiv,lwork0,-1,ierr)
+          !lwork = int(lwork0)
+          !allocate(work_on(1:lwork))
+          !
+          !call dgetri(Nx,inv_tmpmatrix,Nx,ipiv,work_on,lwork,ierr)
+          !deallocate(work_on)
+          !Kg = matmul(Pf_HT, inv_tmpmatrix)
+
+          !------------------------------------------------------- 
+          ! >> 4.2.4 calculate innovation and correlation
+          ! +++ Kalman Filter Main equation
+          Xa(1,1) = x_da(it);  Xa(2,1) = y_da(it); Xa(3,1) = z_da(it)
+          Y(1,1) = x_obs(it/obs_interval); Y(2,1) = y_obs(it/obs_interval)
+
+          ch2_Obs = matmul(H, Xa)
+          Obs_diff = Y - ch2_Obs
+          Xa = Xa + matmul(Kg, Obs_diff)
+          x_da(it) = Xa(1,1); y_da(it) = Xa(2,1); z_da(it) = Xa(3,1)
+
+          ! >> 4.2.5 analysis error covariance matrix
+          Pa = Pf - matmul(matmul(Kg, H), Pf)
+          Pf = Pa
+        end if
+      end do
+    
+    else if ( da_method == 'EnKF' ) then
+      ! +++ initial setting
+      do imem = 1, mems
+        call gaussian_noise(sqrt(Pa(1,1)), Gnoise)
+        x_da_m(0, imem) = x_sim(0) + Gnoise
+        call gaussian_noise(sqrt(Pa(2,2)), Gnoise)
+        y_da_m(0, imem) = y_sim(0) + Gnoise
+        call gaussian_noise(sqrt(Pa(3,3)), Gnoise)
+        z_da_m(0, imem) = z_sim(0) + Gnoise
+      end do
+      
+      x_da(0) = sum(x_da_m(0, 1:mems))/mems 
+      y_da(0) = sum(x_da_m(0, 1:mems))/mems 
+      z_da(0) = sum(x_da_m(0, 1:mems))/mems
+
+      do it = 1, nt_asm
+        ! 4.1: Time integration
+        do imem = 1, mems
+          ! 4.1: Time integration
+          call cal_Lorenz(                                              &
+          x_da_m(imem, it-1), y_da_m(imem, it-1), z_da_m(imem, it-1),   & ! IN
+          x_k(1), y_k(1), z_k(1)                                        & ! OUT
+          )
         
-        ch2_Obs = matmul(H, Xa)
-        Obs_diff = Y - ch2_Obs
-        Xa = Xa + matmul(Kg, Obs_diff)
-        x_da(it) = Xa(1,1); y_da(it) = Xa(2,1); z_da(it) = Xa(3,1)
-        
-        ! >> 4.2.5 analysis error covariance matrix
-        Pa = Pf - matmul(matmul(Kg, H), Pf)
-        Pf = Pa
-      end if
-    end do
-  end if
+          !------------------------------------------------------- 
+          ! +++ Euler method
+          if ( trim(intg_method) == 'Euler' ) then
+            x_da_m(imem, it) = x_da_m(imem, it-1) + dt * x_k(1)
+            y_da_m(imem, it) = y_da_m(imem, it-1) + dt * y_k(1)
+            z_da_m(imem, it) = z_da_m(imem, it-1) + dt * z_k(1)
+
+          !------------------------------------------------------- 
+          ! +++ Runge-Kutta method
+          else if ( trim(intg_method) == 'Runge-Kutta' ) then 
+
+            call Lorenz63_Runge_Kutta(                                     &
+            x_da_m(imem, it-1), y_da_m(imem, it-1), z_da_m(imem, it-1),    & ! IN
+            x_da_m(imem, it), y_da_m(imem, it), z_da_m(imem, it)           & ! OUT
+            )
+          end if
+        end do
+
+        if(mod(it, obs_interval) == 0) then
+          x_da(it) = sum(x_da_m(it, 1:mems))/mems
+          y_da(it) = sum(y_da_m(it, 1:mems))/mems
+          z_da(it) = sum(z_da_m(it, 1:mems))/mems
+          Pf = 0.0d0
+          do imem = 1, mems
+            x_prtb(imem) = x_da_m(it, imem) - x_da(it)
+            y_prtb(imem) = y_da_m(it, imem) - x_da(it)
+            z_prtb(imem) = z_da_m(it, imem) - x_da(it)
+
+            ! dispersion
+            Pf(1,1) = Pf(1,1) + x_prtb(imem)**2/(mems-1)
+            Pf(2,2) = Pf(2,2) + y_prtb(imem)**2/(mems-1)
+            Pf(3,3) = Pf(3,3) + z_prtb(imem)**2/(mems-1)
+          
+            !　Covariance(x,y; x,z; y,z)
+            Pf(1,2) = Pf(1,2) + x_prtb(imem)*y_prtb(imem)/(mems-1)
+            Pf(2,1) = Pf(1,2)
+            Pf(1,3) = Pf(1,3) + x_prtb(imem)*z_prtb(imem)/(mems-1)
+            Pf(3,1) = Pf(1,3)
+            Pf(2,3) = Pf(2,3) + y_prtb(imem)*z_prtb(imem)/(mems-1)
+            Pf(3,2) = Pf(1,3)
+          end do
+
+          Pf_HT = matmul(Pf, transpose(H))
+          inv_nummatrix = matmul(H, Pf_HT)
+          inv_tmpmatrix = R + inv_nummatrix
+
+          ! +++ inverse matrix calculate for 2x2 on formula
+          call inverse_matrix_for2x2(       &
+          inv_tmpmatrix, inv_matrix         &
+          )
+
+          eye_matrix = matmul(inv_tmpmatrix, inv_matrix)
+          write(6,*) '#confirm eye matrix calculate ... '
+          write(6,*) eye_matrix
+          Kg = matmul(Pf_HT, inv_matrix)
+
+          do imem = 1, mems
+            call gaussian_noise(sqrt(R(1,1)), Gnoise)
+            x_innov = x_obs(it/obs_interval) + Gnoise - x_da_m(it, imem)
+            call gaussian_noise(sqrt(R(2,2)), Gnoise)
+            y_innov = y_obs(it/obs_interval) + Gnoise - y_da_m(it, imem)
+
+            x_da_m(it, imem) = x_da_m(it, imem) + Kg()
+
+          end do
+
+      end do
+ 
+    end if
   
   ! --- Sec5. Prediction after Data assimilation
   do it = nt_asm+1, nt_asm+nt_prd
@@ -463,7 +555,6 @@ program lorenz63
   
   end subroutine gaussian_noise
   
-
   subroutine del_spaces(space)
     implicit none
     character(*), intent(inout) :: space
