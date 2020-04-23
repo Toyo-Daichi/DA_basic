@@ -68,6 +68,7 @@ program lorenz63
   real(r_size) :: lwork0
   real(r_size) :: ch2_Obs(Nobs,1)
   real(r_size) :: Obs_diff(Nobs,1)
+  real(r_size) :: Obs_ens(:,:)
   
   real(r_size), allocatable :: work_on(:)
   
@@ -132,7 +133,7 @@ program lorenz63
   allocate(x_prtb(mems), y_prtb(mems), z_prtb(mems))
 
   allocate(x_obs(0:nt_asm/obs_interval), y_obs(0:nt_asm/obs_interval))
-  allocate(x_innov(mems), y_innov(mems))
+  allocate(Obs_ens(2, mems), x_innov(mems), y_innov(mems))
   allocate(obs_chr(2, 0:nt_asm+nt_prd))
 
   !----------------------------------------------------------------------
@@ -405,14 +406,28 @@ program lorenz63
           do imem = 1, mems
             ! Pertuturbed observation method (PO)
             call gaussian_noise(sqrt(R(1,1)), Gnoise)
-            x_innov = x_obs(it/obs_interval) + Gnoise - x_da_m(it, imem)
+            x_innov(imem) = x_obs(it/obs_interval) + Gnoise
+            Obs_ens(1,imem) = x_innov(imem)
             call gaussian_noise(sqrt(R(2,2)), Gnoise)
-            y_innov = y_obs(it/obs_interval) + Gnoise - y_da_m(it, imem)
+            y_innov(imem) = y_obs(it/obs_interval) + Gnoise
+            Obs_ens(2,imem) = y_innov(imem)
+            
+            Xa(1,1) = x_da_m(it, imem); Xa(2,1) = y_da_m(it, imem); Xa(3,1) = z_da_m(it, imem)
+            Y(1,1) = Obs_ens(1,imem); Y(2,1) = Obs(2,imem)
+            ch2_Obs = matmul(H, Xa)
+            Obs_diff = Y - ch2_Obs
+
+            Xa = Xa + matmul(Kg, Obs_diff)
+            x_da_m(it, imem) = Xa(1,1); y_da_m(it, imem) = Xa(2,1); z_da_m(it, imem) = Xa(3,1)
           end do
 
-            x_da_m(it, imem) = x_da_m(it, imem) + Kg()
+          x_da(it) = sum(x_da_m(it, 1:mems))/mems
+          y_da(it) = sum(y_da_m(it, 1:mems))/mems
+          z_da(it) = sum(z_da_m(it, 1:mems))/mems
 
-
+           ! >> 4.2.5 analysis error covariance matrix
+          Pa = Pf - matmul(matmul(Kg, H), Pf)
+          Pf = Pa
       end do
  
     end if
