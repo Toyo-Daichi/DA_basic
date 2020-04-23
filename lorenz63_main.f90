@@ -58,7 +58,7 @@ program lorenz63
   integer :: ierr
   integer :: iflag
   integer :: iter
-  real(r_size) :: x_innov, y_innov
+  real(r_size) :: x_innov(:), y_innov(:)
   real(r_size) :: Gnoise ! Gaussian noise
   
   ! --- matrix calculation
@@ -132,6 +132,7 @@ program lorenz63
   allocate(x_prtb(mems), y_prtb(mems), z_prtb(mems))
 
   allocate(x_obs(0:nt_asm/obs_interval), y_obs(0:nt_asm/obs_interval))
+  allocate(x_innov(mems), y_innov(mems))
   allocate(obs_chr(2, 0:nt_asm+nt_prd))
 
   !----------------------------------------------------------------------
@@ -402,14 +403,15 @@ program lorenz63
           Kg = matmul(Pf_HT, inv_matrix)
 
           do imem = 1, mems
+            ! Pertuturbed observation method (PO)
             call gaussian_noise(sqrt(R(1,1)), Gnoise)
             x_innov = x_obs(it/obs_interval) + Gnoise - x_da_m(it, imem)
             call gaussian_noise(sqrt(R(2,2)), Gnoise)
             y_innov = y_obs(it/obs_interval) + Gnoise - y_da_m(it, imem)
+          end do
 
             x_da_m(it, imem) = x_da_m(it, imem) + Kg()
 
-          end do
 
       end do
  
