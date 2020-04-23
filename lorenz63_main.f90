@@ -27,7 +27,9 @@ program lorenz63
 
   real(r_size), allocatable :: x_da_m(:, :), y_da_m(:, :), z_da_m(:, :)
   real(r_size), allocatable :: x_prtb(:), y_prtb(:), z_prtb(:)
-
+  
+  real(r_size), allocatable :: Obs_ens(:,:)
+  real(r_size), allocatable :: x_innov(:), y_innov(:)
 
   ! --- Matrix(element 1:x, 2:y, 3:z)
   ! +++ default setting
@@ -58,7 +60,6 @@ program lorenz63
   integer :: ierr
   integer :: iflag
   integer :: iter
-  real(r_size) :: x_innov(:), y_innov(:)
   real(r_size) :: Gnoise ! Gaussian noise
   
   ! --- matrix calculation
@@ -68,7 +69,6 @@ program lorenz63
   real(r_size) :: lwork0
   real(r_size) :: ch2_Obs(Nobs,1)
   real(r_size) :: Obs_diff(Nobs,1)
-  real(r_size) :: Obs_ens(:,:)
   
   real(r_size), allocatable :: work_on(:)
   
@@ -133,7 +133,8 @@ program lorenz63
   allocate(x_prtb(mems), y_prtb(mems), z_prtb(mems))
 
   allocate(x_obs(0:nt_asm/obs_interval), y_obs(0:nt_asm/obs_interval))
-  allocate(Obs_ens(2, mems), x_innov(mems), y_innov(mems))
+  allocate(Obs_ens(2, mems))
+  allocate(x_innov(mems), y_innov(mems))
   allocate(obs_chr(2, 0:nt_asm+nt_prd))
 
   !----------------------------------------------------------------------
@@ -343,24 +344,24 @@ program lorenz63
         do imem = 1, mems
           ! 4.1: Time integration
           call cal_Lorenz(                                              &
-          x_da_m(imem, it-1), y_da_m(imem, it-1), z_da_m(imem, it-1),   & ! IN
+          x_da_m(it-1, imem), y_da_m(it-1, imem), z_da_m(it-1, imem),   & ! IN
           x_k(1), y_k(1), z_k(1)                                        & ! OUT
           )
         
           !------------------------------------------------------- 
           ! +++ Euler method
           if ( trim(intg_method) == 'Euler' ) then
-            x_da_m(imem, it) = x_da_m(imem, it-1) + dt * x_k(1)
-            y_da_m(imem, it) = y_da_m(imem, it-1) + dt * y_k(1)
-            z_da_m(imem, it) = z_da_m(imem, it-1) + dt * z_k(1)
+            x_da_m(it, imem) = x_da_m(it-1, imem) + dt * x_k(1)
+            y_da_m(it, imem) = y_da_m(it-1, imem) + dt * y_k(1)
+            z_da_m(it, imem) = z_da_m(it-1, imem) + dt * z_k(1)
 
           !------------------------------------------------------- 
           ! +++ Runge-Kutta method
           else if ( trim(intg_method) == 'Runge-Kutta' ) then 
 
             call Lorenz63_Runge_Kutta(                                     &
-            x_da_m(imem, it-1), y_da_m(imem, it-1), z_da_m(imem, it-1),    & ! IN
-            x_da_m(imem, it), y_da_m(imem, it), z_da_m(imem, it)           & ! OUT
+            x_da_m(it-1, imem), y_da_m(it-1, imem), z_da_m(it-1, imem),    & ! IN
+            x_da_m(it, imem), y_da_m(it, imem), z_da_m(it, imem)           & ! OUT
             )
           end if
         end do
@@ -413,7 +414,7 @@ program lorenz63
             Obs_ens(2,imem) = y_innov(imem)
             
             Xa(1,1) = x_da_m(it, imem); Xa(2,1) = y_da_m(it, imem); Xa(3,1) = z_da_m(it, imem)
-            Y(1,1) = Obs_ens(1,imem); Y(2,1) = Obs(2,imem)
+            Y(1,1) = Obs_ens(1,imem); Y(2,1) = Obs_ens(2,imem)
             ch2_Obs = matmul(H, Xa)
             Obs_diff = Y - ch2_Obs
 
@@ -428,6 +429,7 @@ program lorenz63
            ! >> 4.2.5 analysis error covariance matrix
           Pa = Pf - matmul(matmul(Kg, H), Pf)
           Pf = Pa
+        end if
       end do
  
     end if
