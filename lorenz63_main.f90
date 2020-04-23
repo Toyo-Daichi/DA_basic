@@ -422,14 +422,15 @@ program lorenz63
             x_da_m(it, imem) = Xa(1,1); y_da_m(it, imem) = Xa(2,1); z_da_m(it, imem) = Xa(3,1)
           end do
 
-          x_da(it) = sum(x_da_m(it, 1:mems))/mems
-          y_da(it) = sum(y_da_m(it, 1:mems))/mems
-          z_da(it) = sum(z_da_m(it, 1:mems))/mems
-
-           ! >> 4.2.5 analysis error covariance matrix
-          Pa = Pf - matmul(matmul(Kg, H), Pf)
-          Pf = Pa
         end if
+        
+        x_da(it) = sum(x_da_m(it, 1:mems))/mems
+        y_da(it) = sum(y_da_m(it, 1:mems))/mems
+        z_da(it) = sum(z_da_m(it, 1:mems))/mems
+
+        ! >> 4.2.5 analysis error covariance matrix
+        Pa = Pf - matmul(matmul(Kg, H), Pf)
+        Pf = Pa
       end do
  
     end if
