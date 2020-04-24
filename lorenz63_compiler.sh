@@ -12,13 +12,13 @@ rm -rf *.mod ${prg}
 nt_asm=2500
 nt_prd=7500
 obs_interval=20
-DA_METHOD='KF' #'KF' or 'EnKF' or 'Ajoint'
+DA_METHOD='EnKF' #'KF' or 'EnKF' or 'Ajoint'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
 mem=5000
 
 # +++ initial value
 x_tinit=0.0d0; y_tinit=10.0d0; z_tinit=20.0d0
-x_sinit=1.0d0; y_sinit=11.0d0; z_sinit=19.5d0
+x_sinit=3.0d0; y_sinit=13.0d0; z_sinit=13.0d0
 
 # +++ initial matrix
 # Forecast error covariance matrix
