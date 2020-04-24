@@ -17,7 +17,7 @@ program oscillation
   real(r_size), parameter  :: k    = 0.5d0
   real(r_size), parameter  :: dump = 0.3d0  ! Damping coefficinet
   real(r_size), parameter  :: dt   = 1.0d-2 ! Time step
-  real(r_size), parameter  :: pi   = 3.14159265358979d0
+  real(r_dble), parameter  :: pi   = 3.14159265358979d0
 
   character(8) :: da_method
   
@@ -226,7 +226,7 @@ program oscillation
 
       call random_number(noise1)
       call random_number(noise2)
-      Gnoise = sqrt(Pa(2,1))*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
+      Gnoise = sqrt(Pa(2,2))*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
       v_da_m(0,imem) = v_sim(0) + Gnoise ! perturbation
     end do
 
