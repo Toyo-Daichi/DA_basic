@@ -28,7 +28,7 @@ program lorenz63
   real(r_size), allocatable :: x_da_m(:, :), y_da_m(:, :), z_da_m(:, :)
   real(r_size), allocatable :: x_prtb(:), y_prtb(:), z_prtb(:)
   
-  real(r_size), allocatable :: Obs_ens(:,:)
+  real(r_size), allocatable :: obs_ens(:,:)
   real(r_size), allocatable :: x_innov(:), y_innov(:)
 
   ! --- Matrix(element 1:x, 2:y, 3:z)
@@ -38,7 +38,7 @@ program lorenz63
   !         Pzx: 0.0  Pzy: 0.0 Pzz: 1.0 )
 
   real(r_size) :: Xa(Nx,1)
-  real(r_size) :: Y(Nobs,1)
+  real(r_size) :: Yobs(Nobs,1)
   
   real(r_size) :: M(Nx,Nx)     ! state transient matrix
   real(r_size) :: Pf(Nx,Nx)    ! Forecast error convariance matrix (in KF, EnKF)
@@ -67,8 +67,8 @@ program lorenz63
   ! for inverse
   integer      :: ipiv(1:Nx), lwork
   real(r_size) :: lwork0
-  real(r_size) :: ch2_Obs(Nobs,1)
-  real(r_size) :: Obs_diff(Nobs,1)
+  real(r_size) :: Hx(Nobs,1)
+  real(r_size) :: Diff(Nobs,1)
   
   real(r_size), allocatable :: work_on(:)
   
@@ -133,7 +133,7 @@ program lorenz63
   allocate(x_prtb(mems), y_prtb(mems), z_prtb(mems))
 
   allocate(x_obs(0:nt_asm/obs_interval), y_obs(0:nt_asm/obs_interval))
-  allocate(Obs_ens(2, mems))
+  allocate(obs_ens(2, mems))
   allocate(x_innov(mems), y_innov(mems))
   allocate(obs_chr(2, 0:nt_asm+nt_prd))
 
@@ -311,11 +311,11 @@ program lorenz63
           ! >> 4.2.4 calculate innovation and correlation
           ! +++ Kalman Filter Main equation
           Xa(1,1) = x_da(it);  Xa(2,1) = y_da(it); Xa(3,1) = z_da(it)
-          Y(1,1) = x_obs(it/obs_interval); Y(2,1) = y_obs(it/obs_interval)
+          Yobs(1,1) = x_obs(it/obs_interval); Yobs(2,1) = y_obs(it/obs_interval)
 
-          ch2_Obs = matmul(H, Xa)
-          Obs_diff = Y - ch2_Obs
-          Xa = Xa + matmul(Kg, Obs_diff)
+          Hx = matmul(H, Xa)
+          Diff = Yobs - Hx
+          Xa = Xa + matmul(Kg, Diff)
           x_da(it) = Xa(1,1); y_da(it) = Xa(2,1); z_da(it) = Xa(3,1)
 
           ! >> 4.2.5 analysis error covariance matrix
@@ -408,17 +408,17 @@ program lorenz63
             ! Pertuturbed observation method (PO)
             call gaussian_noise(sqrt(R(1,1)), Gnoise)
             x_innov(imem) = x_obs(it/obs_interval) + Gnoise
-            Obs_ens(1,imem) = x_innov(imem)
+            obs_ens(1,imem) = x_innov(imem)
             call gaussian_noise(sqrt(R(2,2)), Gnoise)
             y_innov(imem) = y_obs(it/obs_interval) + Gnoise
-            Obs_ens(2,imem) = y_innov(imem)
+            obs_ens(2,imem) = y_innov(imem)
             
             Xa(1,1) = x_da_m(it, imem); Xa(2,1) = y_da_m(it, imem); Xa(3,1) = z_da_m(it, imem)
-            Y(1,1) = Obs_ens(1,imem); Y(2,1) = Obs_ens(2,imem)
-            ch2_Obs = matmul(H, Xa)
-            Obs_diff = Y - ch2_Obs
+            Yobs(1,1) = obs_ens(1,imem); Yobs(2,1) = obs_ens(2,imem)
+            Hx = matmul(H, Xa)
+            Diff = Yobs - Hx
 
-            Xa = Xa + matmul(Kg, Obs_diff)
+            Xa = Xa + matmul(Kg, Diff)
             x_da_m(it, imem) = Xa(1,1); y_da_m(it, imem) = Xa(2,1); z_da_m(it, imem) = Xa(3,1)
           end do
 
@@ -505,8 +505,8 @@ program lorenz63
     z_cal(1) = z_in + 0.5*z_k(1)*dt
     
     call cal_Lorenz(                         &
-    x_cal(1), y_cal(1), z_cal(1),          & ! IN
-    x_k(2), y_k(2), z_k(2)                 & ! OUT
+    x_cal(1), y_cal(1), z_cal(1),            & ! IN
+    x_k(2), y_k(2), z_k(2)                   & ! OUT
     )
     
     x_cal(2) = x_in + 0.5*x_k(2)*dt 
