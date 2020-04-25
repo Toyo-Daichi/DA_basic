@@ -4,5 +4,6 @@
 
 #dir
 log
-./output/.*
+./output/*.ipynb
 ./output/*.png
+./output/.*
