@@ -1,3 +1,2 @@
 #.gitattributes
-./output/* linguist-vendored 
 ./output/* linguist-documentation
