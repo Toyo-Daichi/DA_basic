@@ -1,2 +1,2 @@
 #.gitattributes
-output/* linguist-documentation
+./output/* linguist-documentation
