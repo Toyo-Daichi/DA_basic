@@ -50,8 +50,9 @@ program lorenz63
   ! --- Output control
   character(7),allocatable :: obs_chr(:, :)
   integer, parameter       :: output_interval = 5
-  !logical                 :: opt_beach = .false.
+  logical                  :: opt_veach = .true.
   character(256)           :: output_file
+  character(256)           :: output_file_error_covariance
   character(1096)          :: linebuf
 
   ! --- Working variable
@@ -99,7 +100,7 @@ program lorenz63
   namelist /ensemble_size/ mems
   namelist /initial_score/ x_tinit, y_tinit, z_tinit, x_sinit, y_sinit, z_sinit
   namelist /initial_matrix/ Pf_init, B_init, R_init, Kg_init, H_init
-  namelist /output/ output_file ! opt_beach
+  namelist /output/ output_file, output_file_error_covariance, opt_veach
 
   read(5, nml=set_parm, iostat = ierr)
   read(5, nml=da_setting, iostat = ierr)
@@ -116,6 +117,7 @@ program lorenz63
     write(6,*) '   Not found namelist.        '
     write(6,*) '   Use default values.        '
   else if (ierr > 0) then
+    write(6,*) trim(output_file), opt_veach
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
     write(6,*) '   *** Warning : Not appropriate names in namelist !! Check !!'
     write(6,*) '   Stop : lorenz63_main.f90              '
@@ -238,10 +240,11 @@ program lorenz63
       z_da(0) = z_sim(0)
       
       do it = 1, nt_asm
+        if ( opt_veach ) then
+          call write_error_covariance_matrix(it, nt_asm, Pf)
+        end if  
+
         write(6,*) 'Data assim. time step: ', it
-        write(6,*) Pf(1,1), Pf(1,2), Pf(1,3)
-        write(6,*) Pf(2,1), Pf(2,2), Pf(2,3)
-        write(6,*) Pf(3,1), Pf(3,2), Pf(3,3)
         
         ! 4.1: Time integration
         call cal_Lorenz(                         &
@@ -272,40 +275,43 @@ program lorenz63
         M(1,1) = 1 - dt*sig;             M(1,2) = dt*sig;         M(1,3) = 0.0d0
         M(2,1) = dt*(gamm - z_da(it-1)); M(2,2) = 1.0d0 - dt;     M(2,3) = -dt*x_da(it-1)
         M(3,1) = dt*y_da(it-1);          M(3,2) = dt*x_da(it-1);  M(3,3) = 1.0d0 - dt*b
-
+        
         if (mod(it, obs_interval) == 0) then
           Ptmp = transpose(M)
           Ptmp = matmul(Pf, Ptmp)
           Pf   = matmul(M, Ptmp)
+          !------------------------------------------------------- 
           ! >> 4.2.3 Kalman gain: Weighting of model result and obs.
           ! (Note) Observation in x,y ----> component 2 (x,y)
           ! calculate inverse matrix @inv_tmpmatrix
           ! *** ref:
           ! http://www.rcs.arch.t.u-tokyo.ac.jp/kusuhara/tips/linux/fortran.html
-
+          
           Pf_HT = matmul(Pf, transpose(H))
           inv_nummatrix = matmul(H, Pf_HT)
           inv_tmpmatrix = R + inv_nummatrix
-
+          
+          !------------------------------------------------------- 
           ! +++ inverse matrix calculate for 2x2 on formula
           call inverse_matrix_for2x2(       &
           inv_tmpmatrix, inv_matrix         &
           )
-
+          
           eye_matrix = matmul(inv_tmpmatrix, inv_matrix)
-          write(6,*) '#confirm eye matrix calculate ... '
+          write(6,*) ' +++ confirm eye matrix calculate ... '
           write(6,*) eye_matrix
           Kg = matmul(Pf_HT, inv_matrix)
-
+          
+          !======================================================== 
           ! +++ inverse matrix calculate for 2x2 on LAPACK
-          !call dgetrf(Nx,Nx,inv_tmpmatrix,Nx,ipiv,ierr)
-          !call dgetri(Nx,inv_tmpmatrix,Nx,ipiv,lwork0,-1,ierr)
-          !lwork = int(lwork0)
-          !allocate(work_on(1:lwork))
+          ! call dgetrf(Nx,Nx,inv_tmpmatrix,Nx,ipiv,ierr)
+          ! call dgetri(Nx,inv_tmpmatrix,Nx,ipiv,lwork0,-1,ierr)
+          ! lwork = int(lwork0)
+          ! allocate(work_on(1:lwork))
           !
-          !call dgetri(Nx,inv_tmpmatrix,Nx,ipiv,work_on,lwork,ierr)
-          !deallocate(work_on)
-          !Kg = matmul(Pf_HT, inv_tmpmatrix)
+          ! call dgetri(Nx,inv_tmpmatrix,Nx,ipiv,work_on,lwork,ierr)
+          ! deallocate(work_on)
+          ! Kg = matmul(Pf_HT, inv_tmpmatrix)
 
           !------------------------------------------------------- 
           ! >> 4.2.4 calculate innovation and correlation
@@ -340,6 +346,9 @@ program lorenz63
       z_da(0) = sum(x_da_m(0, 1:mems))/mems
 
       do it = 1, nt_asm
+        if ( opt_veach ) then
+          call write_error_covariance_matrix(it, nt_asm, Pf)
+        end if 
         ! 4.1: Time integration
         do imem = 1, mems
           ! 4.1: Time integration
@@ -376,12 +385,13 @@ program lorenz63
             y_prtb(imem) = y_da_m(it, imem) - x_da(it)
             z_prtb(imem) = z_da_m(it, imem) - x_da(it)
 
-            ! dispersion
+            !------------------------------------------------------- 
+            ! +++ Dispersion
             Pf(1,1) = Pf(1,1) + x_prtb(imem)**2/(mems-1)
             Pf(2,2) = Pf(2,2) + y_prtb(imem)**2/(mems-1)
             Pf(3,3) = Pf(3,3) + z_prtb(imem)**2/(mems-1)
-          
-            !　Covariance(x,y; x,z; y,z)
+            
+            ! +++　Covariance(x,y; x,z; y,z)
             Pf(1,2) = Pf(1,2) + x_prtb(imem)*y_prtb(imem)/(mems-1)
             Pf(2,1) = Pf(1,2)
             Pf(1,3) = Pf(1,3) + x_prtb(imem)*z_prtb(imem)/(mems-1)
@@ -394,18 +404,20 @@ program lorenz63
           inv_nummatrix = matmul(H, Pf_HT)
           inv_tmpmatrix = R + inv_nummatrix
 
+          !------------------------------------------------------- 
           ! +++ inverse matrix calculate for 2x2 on formula
           call inverse_matrix_for2x2(       &
           inv_tmpmatrix, inv_matrix         &
           )
 
           eye_matrix = matmul(inv_tmpmatrix, inv_matrix)
-          write(6,*) '#confirm eye matrix calculate ... '
+          write(6,*) ' +++ confirm eye matrix calculate ... '
           write(6,*) eye_matrix
           Kg = matmul(Pf_HT, inv_matrix)
 
           do imem = 1, mems
-            ! Pertuturbed observation method (PO)
+            !------------------------------------------------------- 
+            ! +++ Pertuturbed observation method (PO)
             call gaussian_noise(sqrt(R(1,1)), Gnoise)
             x_innov(imem) = x_obs(it/obs_interval) + Gnoise
             obs_ens(1,imem) = x_innov(imem)
@@ -436,58 +448,68 @@ program lorenz63
     end if
   
   ! --- Sec5. Prediction after Data assimilation
-  do it = nt_asm+1, nt_asm+nt_prd
-    write(6,*) 'Data assim. time step: ', it
-    ! forward time step
-    
-    call cal_Lorenz(                           &
-    x_da(it-1), y_da(it-1), z_da(it-1),        & ! IN
-    x_k(1), y_k(1), z_k(1)                     & ! OUT
-    )
-    
-    !------------------------------------------------------- 
-    ! +++ Euler method
-    if ( trim(intg_method) == 'Euler' ) then
-      x_da(it) = x_da(it-1) + dt * x_k(1)
-      y_da(it) = y_da(it-1) + dt * y_k(1)
-      z_da(it) = z_da(it-1) + dt * z_k(1)
+    do it = nt_asm+1, nt_asm+nt_prd
+      write(6,*) 'Data assim. time step: ', it
+      ! forward time step
       
-      !------------------------------------------------------- 
-      ! +++ Runge-Kutta method
-    else if ( trim(intg_method) == 'Runge-Kutta' ) then 
-      
-      call Lorenz63_Runge_Kutta(               &
-        x_da(it-1), y_da(it-1), z_da(it-1),    & ! IN
-        x_da(it), y_da(it), z_da(it)           & ! OUT
+      call cal_Lorenz(                           &
+      x_da(it-1), y_da(it-1), z_da(it-1),        & ! IN
+      x_k(1), y_k(1), z_k(1)                     & ! OUT
       )
       
-    end if
-  end do
-
-
-  obs_chr(:, 0:nt_asm+nt_prd) = 'None'
-  do it = 1, nt_asm
-    if (mod(it, obs_interval) == 0) then
-      write(obs_chr(1, it), '(F7.2)')  x_obs(it/obs_interval)
-      write(obs_chr(2, it), '(F7.2)')  y_obs(it/obs_interval)
-    end if
-  end do
-
-  open (1, file=trim(output_file), status='replace')
-    write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_da, y_da, z_da, x_obs, y_obs'
-    do it = 0, nt_asm+nt_prd
-      if (mod(it, output_interval) == 0) then
-        write(linebuf, *) dt*it, ',', x_true(it), ',', y_true(it), ',', z_true(it), ',', &
-                                      x_sim(it), ',', y_sim(it), ',', z_sim(it), ',',    &
-                                      x_da(it), ',', y_da(it), ',', z_da(it), ',',       &
-                                      obs_chr(1, it), ',', obs_chr(2, it)
-        call del_spaces(linebuf)
-        write(1, '(a)') trim(linebuf)
+      !------------------------------------------------------- 
+      ! +++ Euler method
+      if ( trim(intg_method) == 'Euler' ) then
+        x_da(it) = x_da(it-1) + dt * x_k(1)
+        y_da(it) = y_da(it-1) + dt * y_k(1)
+        z_da(it) = z_da(it-1) + dt * z_k(1)
+        
+        !------------------------------------------------------- 
+        ! +++ Runge-Kutta method
+      else if ( trim(intg_method) == 'Runge-Kutta' ) then 
+        
+        call Lorenz63_Runge_Kutta(               &
+        x_da(it-1), y_da(it-1), z_da(it-1),    & ! IN
+        x_da(it), y_da(it), z_da(it)           & ! OUT
+        )
+        
       end if
     end do
-  close(1)
+    
+    ! --- Sec6. Writing OUTPUT
+    if ( opt_veach ) then
+      obs_chr(:, 0:nt_asm+nt_prd) = 'None'
+      do it = 1, nt_asm
+        if (mod(it, obs_interval) == 0) then
+          write(obs_chr(1, it), '(F7.2)')  x_obs(it/obs_interval)
+          write(obs_chr(2, it), '(F7.2)')  y_obs(it/obs_interval)
+        end if
+      end do
+      
+      open (1, file=trim(output_file), status='replace')
+      write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_da, y_da, z_da, x_obs, y_obs'
+      do it = 0, nt_asm+nt_prd
+        if (mod(it, output_interval) == 0) then
+          write(linebuf, *) dt*it, ',', x_true(it), ',', y_true(it), ',', z_true(it), ',',                     &
+            x_sim(it), ',', y_sim(it), ',', z_sim(it), ',', x_da(it), ',', y_da(it), ',', z_da(it), ',',       &
+            obs_chr(1, it), ',', obs_chr(2, it)
+          call del_spaces(linebuf)
+          write(1, '(a)') trim(linebuf)
+        end if
+      end do
+      close(1)
+      write(6,*) '-------------------------------------------------------'
+      write(6,*) '+++ Check Writing output system,  '
+      write(6,*) ' && Successfuly output !!!        '  
+   
+    else if ( .not. opt_veach ) then
+      write(6,*) '-------------------------------------------------------'
+      write(6,*) '+++ Check calculation system,  '
+      write(6,*) ' && Successfuly calculate !!!  '  
 
-  contains
+    end if
+
+contains
 
   subroutine Lorenz63_Runge_Kutta(  &
     x_in, y_in, z_in,               & ! IN: previous step score 
@@ -544,12 +566,29 @@ program lorenz63
     real(r_size), intent(in)   :: matrix(2,2) 
     real(r_size), intent(out)  :: inv_matrix(2,2)
 
-    write(6,*) '#calculate on 2x2 inverse formula'
+    write(6,*) ' +++ calculate on 2x2 inverse formula'
     inv_prm = 1.0d0 / ( matrix(1,1)*matrix(2,2) - matrix(1,2)*matrix(2,1) )
     inv_matrix(1,1) =  inv_prm*matrix(2,2); inv_matrix(1,2) = -inv_prm*matrix(1,2)
     inv_matrix(2,1) = -inv_prm*matrix(2,1); inv_matrix(2,2) =  inv_prm*matrix(1,1)
 
     return
+  end subroutine
+
+  subroutine write_error_covariance_matrix(it, last_step, error_covariance_matrix)
+    implicit none
+    integer                    :: it, last_step
+    real(r_size)               :: error_covariance_matrix(3,3)
+
+    if ( it == 1 ) then
+      open(2, file=trim(output_file_error_covariance), form='unformatted', status='replace')
+        write(2) error_covariance_matrix
+    else if ( it /= 1 .and. it /= last_step) then
+      write(2) error_covariance_matrix
+    else if ( it == last_step ) then
+      write(2) error_covariance_matrix
+      close(2)
+    end if
+      
   end subroutine
 
   subroutine gaussian_noise(    &
