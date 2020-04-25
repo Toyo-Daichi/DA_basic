@@ -1,8 +1,7 @@
 #.gitignore
-
 .DS_Store
 *.swp
 
-#
+#dir
 log
 ./output/*.png

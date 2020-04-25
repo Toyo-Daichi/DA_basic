@@ -476,18 +476,21 @@ program lorenz63
       end do
       
       open (1, file=trim(output_file), status='replace')
-        write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_da, y_da, z_da, x_obs, y_obs'
-        do it = 0, nt_asm+nt_prd
-          if (mod(it, output_interval) == 0) then
-            write(linebuf, *) dt*it, ',', x_true(it), ',', y_true(it), ',', z_true(it), ',', &
-              x_sim(it), ',', y_sim(it), ',', z_sim(it), ',',    &
-              x_da(it), ',', y_da(it), ',', z_da(it), ',',       &
-              obs_chr(1, it), ',', obs_chr(2, it)
-            call del_spaces(linebuf)
-            write(1, '(a)') trim(linebuf)
-          end if
-        end do
+      write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_da, y_da, z_da, x_obs, y_obs'
+      do it = 0, nt_asm+nt_prd
+        if (mod(it, output_interval) == 0) then
+          write(linebuf, *) dt*it, ',', x_true(it), ',', y_true(it), ',', z_true(it), ',', &
+          x_sim(it), ',', y_sim(it), ',', z_sim(it), ',',    &
+          x_da(it), ',', y_da(it), ',', z_da(it), ',',       &
+          obs_chr(1, it), ',', obs_chr(2, it)
+          call del_spaces(linebuf)
+          write(1, '(a)') trim(linebuf)
+        end if
+      end do
       close(1)
+      write(6,*) '-------------------------------------------------------'
+      write(6,*) '+++ Check Writing output system,  '
+      write(6,*) ' && Successfuly output !!!        '  
    
     else if ( .not. opt_veach ) then
       write(6,*) '-------------------------------------------------------'
