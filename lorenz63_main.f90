@@ -575,10 +575,14 @@ contains
   end subroutine
 
   subroutine write_error_covariance_matrix(it, last_step, error_covariance_matrix)
+    implicit none
+    integer                    :: it, last_step
+    real(r_size)               :: error_covariance_matrix(3,3)
+
     if ( it == 1 ) then
       open(2, file=trim(output_file_error_covariance), form='unformatted', status='replace')
         write(2) error_covariance_matrix
-    else if ( it \=  1 .and. it \= last_step) then
+    else if ( it /= 1 .and. it /= last_step) then
       write(2) error_covariance_matrix
     else if ( it == last_step ) then
       write(2) error_covariance_matrix

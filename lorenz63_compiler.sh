@@ -43,9 +43,9 @@ H_init=(  1.0d0 0.0d0 0.0d0
 
 # +++ output info
 boolen='true' # write putput
-outputname='lorenz63_'${DA_METHOD}'.csv'
-outputfile='./output/'${outputname}
-outputfile_error_matrix='./output/'Error_matrix_${outputname}
+outputname='lorenz63_'${DA_METHOD}
+outputfile='./output/'${outputname}'.csv'
+outputfile_error_matrix='./output/'Error_matrix_${outputname}'.grd'
 
 #----------------------------------------------------------------------
 # +++ Run exp.
