@@ -50,7 +50,7 @@ program lorenz63
   ! --- Output control
   character(7),allocatable :: obs_chr(:, :)
   integer, parameter       :: output_interval = 5
-  !logical                 :: opt_beach = .false.
+  logical                  :: opt_veach = .true.
   character(256)           :: output_file
   character(1096)          :: linebuf
 
@@ -99,7 +99,7 @@ program lorenz63
   namelist /ensemble_size/ mems
   namelist /initial_score/ x_tinit, y_tinit, z_tinit, x_sinit, y_sinit, z_sinit
   namelist /initial_matrix/ Pf_init, B_init, R_init, Kg_init, H_init
-  namelist /output/ output_file ! opt_beach
+  namelist /output/ output_file, opt_veach
 
   read(5, nml=set_parm, iostat = ierr)
   read(5, nml=da_setting, iostat = ierr)
@@ -116,6 +116,7 @@ program lorenz63
     write(6,*) '   Not found namelist.        '
     write(6,*) '   Use default values.        '
   else if (ierr > 0) then
+    write(6,*) trim(output_file), opt_veach
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
     write(6,*) '   *** Warning : Not appropriate names in namelist !! Check !!'
     write(6,*) '   Stop : lorenz63_main.f90              '
@@ -436,58 +437,66 @@ program lorenz63
     end if
   
   ! --- Sec5. Prediction after Data assimilation
-  do it = nt_asm+1, nt_asm+nt_prd
-    write(6,*) 'Data assim. time step: ', it
-    ! forward time step
-    
-    call cal_Lorenz(                           &
-    x_da(it-1), y_da(it-1), z_da(it-1),        & ! IN
-    x_k(1), y_k(1), z_k(1)                     & ! OUT
-    )
-    
-    !------------------------------------------------------- 
-    ! +++ Euler method
-    if ( trim(intg_method) == 'Euler' ) then
-      x_da(it) = x_da(it-1) + dt * x_k(1)
-      y_da(it) = y_da(it-1) + dt * y_k(1)
-      z_da(it) = z_da(it-1) + dt * z_k(1)
+    do it = nt_asm+1, nt_asm+nt_prd
+      write(6,*) 'Data assim. time step: ', it
+      ! forward time step
       
-      !------------------------------------------------------- 
-      ! +++ Runge-Kutta method
-    else if ( trim(intg_method) == 'Runge-Kutta' ) then 
-      
-      call Lorenz63_Runge_Kutta(               &
-        x_da(it-1), y_da(it-1), z_da(it-1),    & ! IN
-        x_da(it), y_da(it), z_da(it)           & ! OUT
+      call cal_Lorenz(                           &
+      x_da(it-1), y_da(it-1), z_da(it-1),        & ! IN
+      x_k(1), y_k(1), z_k(1)                     & ! OUT
       )
       
-    end if
-  end do
-
-
-  obs_chr(:, 0:nt_asm+nt_prd) = 'None'
-  do it = 1, nt_asm
-    if (mod(it, obs_interval) == 0) then
-      write(obs_chr(1, it), '(F7.2)')  x_obs(it/obs_interval)
-      write(obs_chr(2, it), '(F7.2)')  y_obs(it/obs_interval)
-    end if
-  end do
-
-  open (1, file=trim(output_file), status='replace')
-    write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_da, y_da, z_da, x_obs, y_obs'
-    do it = 0, nt_asm+nt_prd
-      if (mod(it, output_interval) == 0) then
-        write(linebuf, *) dt*it, ',', x_true(it), ',', y_true(it), ',', z_true(it), ',', &
-                                      x_sim(it), ',', y_sim(it), ',', z_sim(it), ',',    &
-                                      x_da(it), ',', y_da(it), ',', z_da(it), ',',       &
-                                      obs_chr(1, it), ',', obs_chr(2, it)
-        call del_spaces(linebuf)
-        write(1, '(a)') trim(linebuf)
+      !------------------------------------------------------- 
+      ! +++ Euler method
+      if ( trim(intg_method) == 'Euler' ) then
+        x_da(it) = x_da(it-1) + dt * x_k(1)
+        y_da(it) = y_da(it-1) + dt * y_k(1)
+        z_da(it) = z_da(it-1) + dt * z_k(1)
+        
+        !------------------------------------------------------- 
+        ! +++ Runge-Kutta method
+      else if ( trim(intg_method) == 'Runge-Kutta' ) then 
+        
+        call Lorenz63_Runge_Kutta(               &
+        x_da(it-1), y_da(it-1), z_da(it-1),    & ! IN
+        x_da(it), y_da(it), z_da(it)           & ! OUT
+        )
+        
       end if
     end do
-  close(1)
+    
+    ! --- Sec6. Writing OUTPUT
+    if ( opt_veach ) then
+      obs_chr(:, 0:nt_asm+nt_prd) = 'None'
+      do it = 1, nt_asm
+        if (mod(it, obs_interval) == 0) then
+          write(obs_chr(1, it), '(F7.2)')  x_obs(it/obs_interval)
+          write(obs_chr(2, it), '(F7.2)')  y_obs(it/obs_interval)
+        end if
+      end do
+      
+      open (1, file=trim(output_file), status='replace')
+        write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_da, y_da, z_da, x_obs, y_obs'
+        do it = 0, nt_asm+nt_prd
+          if (mod(it, output_interval) == 0) then
+            write(linebuf, *) dt*it, ',', x_true(it), ',', y_true(it), ',', z_true(it), ',', &
+              x_sim(it), ',', y_sim(it), ',', z_sim(it), ',',    &
+              x_da(it), ',', y_da(it), ',', z_da(it), ',',       &
+              obs_chr(1, it), ',', obs_chr(2, it)
+            call del_spaces(linebuf)
+            write(1, '(a)') trim(linebuf)
+          end if
+        end do
+      close(1)
+   
+    else if ( .not. opt_veach ) then
+      write(6,*) '-------------------------------------------------------'
+      write(6,*) '+++ Check calculation system,  '
+      write(6,*) ' && Successfuly calculate !!!  '  
 
-  contains
+    end if
+
+contains
 
   subroutine Lorenz63_Runge_Kutta(  &
     x_in, y_in, z_in,               & ! IN: previous step score 

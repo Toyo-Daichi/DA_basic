@@ -12,7 +12,7 @@ rm -rf *.mod ${prg}
 nt_asm=2500
 nt_prd=7500
 obs_interval=20
-DA_METHOD='EnKF' #'KF' or 'EnKF' or 'Ajoint'
+DA_METHOD='EnKF' #'KF' or 'EnKF'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
 mem=5000
 
@@ -28,6 +28,7 @@ Pf_init=( 1.0d0 0.0d0 0.0d0
           0.0d0 0.0d0 1.0d0 )
 
 # Observation error covariance matrix
+# In this case, two elem(x, y)
 R_init=(  0.01d0  0.00d0 
           0.00d0  0.01d0 )
 
@@ -41,7 +42,7 @@ H_init=(  1.0d0 0.0d0 0.0d0
           0.0d0 1.0d0 0.0d0 )
 
 # +++ output info
-boolen='true' # write putput
+boolen='false' # write putput
 outputname='lorenz63_'${DA_METHOD}'.csv'
 outputfile='./output/'${outputname}
 
@@ -91,7 +92,7 @@ gfortran -fbounds-check kinddef.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_m
   /
   &output
     output_file  = '${outputfile}',
-    !opt_veach   = '.${boolen}.'
+    opt_veach    = .${boolen}.
   /
 EOF
 
