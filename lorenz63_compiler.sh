@@ -42,9 +42,10 @@ H_init=(  1.0d0 0.0d0 0.0d0
           0.0d0 1.0d0 0.0d0 )
 
 # +++ output info
-boolen='false' # write putput
+boolen='true' # write putput
 outputname='lorenz63_'${DA_METHOD}'.csv'
 outputfile='./output/'${outputname}
+outputfile_error_matrix='./output/'Error_matrix_${outputname}
 
 #----------------------------------------------------------------------
 # +++ Run exp.
@@ -92,6 +93,7 @@ gfortran -fbounds-check kinddef.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_m
   /
   &output
     output_file  = '${outputfile}',
+    output_file_error_covariance = '${outputfile_error_matrix}'
     opt_veach    = .${boolen}.
   /
 EOF
