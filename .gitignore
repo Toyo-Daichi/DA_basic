@@ -4,4 +4,5 @@
 
 #dir
 log
+./output/.*
 ./output/*.png
