@@ -6,4 +6,5 @@
 log
 ./output/*.ipynb
 ./output/*.png
+./output/*.grd
 ./output/.*

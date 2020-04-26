@@ -576,16 +576,21 @@ contains
 
   subroutine write_error_covariance_matrix(it, last_step, error_covariance_matrix)
     implicit none
-    integer                    :: it, last_step
+    integer                    :: it, last_step, irec
     real(r_size)               :: error_covariance_matrix(3,3)
 
     if ( it == 1 ) then
-      open(2, file=trim(output_file_error_covariance), form='unformatted', status='replace')
-        write(2) error_covariance_matrix
+      open( 2, file=trim(output_file_error_covariance), &
+            form='unformatted', status='replace',       &
+            access='direct', recl=4*3*3*last_step)
+        irec = 1
+        write(2, rec=irec) error_covariance_matrix(:,:)
     else if ( it /= 1 .and. it /= last_step) then
-      write(2) error_covariance_matrix
+      irec = irec +1
+      write(2, rec=irec) error_covariance_matrix(:,:)
     else if ( it == last_step ) then
-      write(2) error_covariance_matrix
+      irec = irec +1
+      write(2, rec=irec) error_covariance_matrix(:,:)
       close(2)
     end if
       
