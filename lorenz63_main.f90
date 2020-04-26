@@ -584,7 +584,7 @@ contains
 
     if ( it == 1 ) then
       open(2, file=trim(output_file_error_covariance), status='replace')
-      write(linebuf, '(9(f10.6, ","))') error_covariance_matrix
+      write(linebuf, '(8(f10.5, ","), f10.5)') error_covariance_matrix
         call del_spaces(linebuf)
         write(2, '(a)') trim(linebuf)
         write(6,*) '+++ err covariance matrix 1st. step'
@@ -592,13 +592,13 @@ contains
         
       else if ( it /= 1 .and. it /= last_step) then
         write(6,*) '+++ err covariance matrix 2nd. step ~'
-        write(linebuf, '(9(f10.6, ","))') error_covariance_matrix
+        write(linebuf, '(8(f10.5, ","), f10.5)') error_covariance_matrix
         call del_spaces(linebuf)
         write(2, '(a)') trim(linebuf)
         write(6,*) error_covariance_matrix(:,:)
         
       else if ( it == last_step ) then
-        write(linebuf, '(9(f10.6, ","))') error_covariance_matrix
+        write(linebuf, '(8(f10.5, ","), f10.5)') error_covariance_matrix
         call del_spaces(linebuf)
         write(2, '(a)') trim(linebuf)
         write(6,*) '+++ err covariance matrix last step '
