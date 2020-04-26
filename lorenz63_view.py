@@ -28,13 +28,9 @@ def read_Lorenz63_csv(path: str) -> list:
   da_list   = df2_list(df, ' x_da', ' y_da', ' z_da')
   return  time_list, true_list, sim_list, da_list
 
-def open_csv(path: str) -> np.ndarray:
-  data = np.genfromtxt(path, delimiter=",")
-  return data
+def read_error_csv(path: str) -> np.ndarray:
+  return np.genfromtxt(path, delimiter=",")
 
-def read_error_matrix(path: str, timescale: int, matrix_size: int) -> np.ndarray:
-  return open_csv(path)[0].reshape(matrix_size, matrix_size)
-  
 def main_3ddraw(data: list):
   fig = plt.figure()
   ax = fig.gco(projection='3d')
@@ -64,7 +60,8 @@ if __name__ == "__main__":
   #time_list, true_list, sim_list, da_list = read_Lorenz63_csv(data_path)
   
   # +++ prediction err covariance matrix
-  err_list = read_error_matrix(err_path, timescale, matrix_size)
-  print(err_list)
-  error_heatmap(err_list)
+  err_list = read_error_csv(err_path, timescale, matrix_size)
+  for i_num in len(err_list):
+    err_data = err_list[i_num].reshape(matrix_size, matrix_size)
+    error_heatmap(err_data)
 
