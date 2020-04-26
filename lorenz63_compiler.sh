@@ -12,7 +12,7 @@ rm -rf *.mod ${prg}
 nt_asm=2500
 nt_prd=7500
 obs_interval=20
-DA_METHOD='EnKF' #'KF' or 'EnKF'
+DA_METHOD='KF' #'KF' or 'EnKF'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
 mem=5000
 
@@ -45,7 +45,7 @@ H_init=(  1.0d0 0.0d0 0.0d0
 boolen='true' # write putput
 outputname='lorenz63_'${DA_METHOD}
 outputfile='./output/'${outputname}'.csv'
-outputfile_error_matrix='./output/'Error_matrix_${outputname}'.grd'
+outputfile_error_matrix='./output/'Error_matrix_${outputname}'.csv'
 
 #----------------------------------------------------------------------
 # +++ Run exp.

@@ -6,6 +6,7 @@ Created on 2020.4.25
 
 import numpy as np
 import pandas as pd
+import seaborn as sns
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -27,14 +28,46 @@ def read_csv(path: str) -> list:
   da_list   = df2_list(df, ' x_da', ' y_da', ' z_da')
   return  time_list, true_list, sim_list, da_list
 
-def main_draw(data):
+def open_grd(path: str) -> np.ndarray:
+  with open(path, 'rb') as ifile:
+    data = np.fromfile(ifile, dtype='float64', sep = '')
+  print(data)
+  return data
+
+def read_error_matrix(path: str, timescale: int, matrix_size: int) -> np.ndarray:
+  return open_grd(path).reshape(
+    timescale, matrix_size, matrix_size, order='F'
+    )
+
+def main_3ddraw(data: list):
   fig = plt.figure()
   ax = fig.gco(projection='3d')
 
+def error_heatmap(err_data: np.ndarray):
+  fig = plt.figure()
+  cmap = sns.diverging_palette(220, 10, as_cmap=True)
+  sns.heatmap(
+    data=err_data, cmap=cmap, annot=True, fmt='g'
+  )
+
+  plt.show()
+
+
+
 if __name__ == "__main__":
-  # info. setting
+  #---------------------------------------------------------- 
+  # +++ info. setting
   outdir    = './output/'
   da_method = 'EnKF'
   data_path = outdir + 'lorenz63_' + da_method + '.csv'
+  
+  #---------------------------------------------------------- 
+  # error and covariance matrix
+  matrix_size = 3 #3*3
+  timescale   = 2500
+  err_path    = outdir + 'Error_matrix_lorenz63_EnKF.grd'
 
   time_list, true_list, sim_list, da_list = read_csv(data_path)
+  errgrd_list = read_error_matrix(err_path, timescale, matrix_size)
+
+  error_heatmap(errgrd_list[0])
