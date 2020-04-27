@@ -14,7 +14,7 @@ nt_prd=7500
 obs_interval=20
 DA_METHOD='EnKF' #'KF' or 'EnKF'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
-mem=5000
+mem=10
 
 # +++ initial value
 x_tinit=0.0d0; y_tinit=10.0d0; z_tinit=20.0d0
@@ -46,6 +46,9 @@ boolen='true' # write putput
 outputname='lorenz63_'${DA_METHOD}
 outputfile='./output/'${outputname}'.csv'
 outputfile_error_matrix='./output/'Error_matrix_${outputname}'.csv'
+if [ ${DA_METHOD} = 'EnKF' ]; then 
+  outputfile_error_matrix='./output/'Error_matrix_${outputname}_${mem}'mem.csv'
+fi
 
 #----------------------------------------------------------------------
 # +++ Run exp.
