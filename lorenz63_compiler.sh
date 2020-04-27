@@ -14,7 +14,7 @@ nt_prd=7500
 obs_interval=20
 DA_METHOD='EnKF' #'KF' or 'EnKF'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
-mem=10
+mem=5000
 
 # +++ initial value
 x_tinit=0.0d0; y_tinit=10.0d0; z_tinit=20.0d0

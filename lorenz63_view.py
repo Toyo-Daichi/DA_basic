@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 from mpl_toolkits.mplot3d import Axes3D
 
 def df2_list(Dataframe: pd.core.frame.DataFrame, *index_wrd: tuple) -> list:
@@ -31,15 +32,22 @@ def read_Lorenz63_csv(path: str) -> list:
 def read_error_csv(path: str) -> np.ndarray:
   return np.genfromtxt(path, delimiter=",")
 
-def lorenz_3ddraw(data: list):
+def lorenz_3ddraw(true_data: list, sim_data: list, da_data: list, *, timestep :int='None'):
   fig = plt.figure()
   ax = fig.gca(projection='3d')
 
-  ax.plot(data[0], data[1], data[2], lw=0.5)
   ax.set_xlabel("X Axis"); ax.set_ylabel("Y Axis");  ax.set_zlabel("Z Axis")
-  ax.set_title('Lorenz(1963)', loc='left')
+  ax.plot(true_data[0], true_data[1], true_data[2], lw=0.5)
 
-  plt.show()
+  if timestep != 'None':
+    ax.scatter(true_data[0][timestep], true_data[1][timestep], true_data[2][timestep], marker='o', color='b', label='True')
+    ax.scatter(sim_data[0][timestep], sim_data[1][timestep], sim_data[2][timestep], marker='o', color='r', label='Sim.')
+    ax.scatter(da_data[0][timestep], da_data[1][timestep], da_data[2][timestep], marker='o', color='g', label='Data assim.')
+
+    time = (timestep+1)*0.01
+    ax.set_title('Lorenz(1963) - {:.2f} sec.'.format(time))
+    plt.legend()
+    plt.savefig('./figure/Lorenz_xyz_{:.2f}sec.png'.format(time))
   plt.close('all')
 
 def error_heatmap(err_data: np.ndarray, timestep: int):
@@ -77,13 +85,13 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ lorenz63 cal. score
   time_list, true_list, sim_list, da_list = read_Lorenz63_csv(data_path)
-  print(len(true_list))
-  lorenz_3ddraw(true_list)
+  for i_num in tqdm(range(0, len(time_list[0]))):
+    lorenz_3ddraw(true_list, sim_list, da_list, timestep=i_num)
 
   # +++ prediction err covariance matrix
   """
   err_list = read_error_csv(err_path)
-  for i_num in range(0, len(err_list), obs_interval):
+  for i_num in tqdm(range(0, len(err_list), obs_interval))ls:
     err_data = err_list[i_num].reshape(matrix_size, matrix_size)
     error_heatmap(err_data, i_num)
   """

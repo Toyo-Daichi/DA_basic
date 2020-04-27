@@ -49,7 +49,7 @@ program lorenz63
   
   ! --- Output control
   character(7),allocatable :: obs_chr(:, :)
-  integer, parameter       :: output_interval = 5
+  integer, parameter       :: output_interval = 1
   logical                  :: opt_veach = .true.
   character(256)           :: output_file
   character(256)           :: output_file_error_covariance
@@ -490,7 +490,7 @@ program lorenz63
       write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_da, y_da, z_da, x_obs, y_obs'
       do it = 0, nt_asm+nt_prd
         if (mod(it, output_interval) == 0) then
-          write(linebuf, '(f3.1, ",", 9(f12.7, ","), A, ",", A)')  & 
+          write(linebuf, '(f4.2, ",", 9(f12.7, ","), A, ",", A)')  & 
             dt*it,                                      &
             x_true(it), y_true(it), z_true(it),         &
             x_sim(it), y_sim(it), z_sim(it),            &
