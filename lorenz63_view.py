@@ -13,7 +13,7 @@ from mpl_toolkits.mplot3d import Axes3D
 def df2_list(Dataframe: pd.core.frame.DataFrame, *index_wrd: tuple) -> list:
   index_list = []
   for i_index in index_wrd:
-    index_list += Dataframe[i_index].tolist()
+    index_list.append(Dataframe[i_index].tolist())
   return index_list
 
 def read_Lorenz63_csv(path: str) -> list:
@@ -77,7 +77,7 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ lorenz63 cal. score
   time_list, true_list, sim_list, da_list = read_Lorenz63_csv(data_path)
-  print(true_list)
+  print(len(true_list))
   lorenz_3ddraw(true_list)
 
   # +++ prediction err covariance matrix
