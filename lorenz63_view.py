@@ -31,11 +31,15 @@ def read_Lorenz63_csv(path: str) -> list:
 def read_error_csv(path: str) -> np.ndarray:
   return np.genfromtxt(path, delimiter=",")
 
-def main_3ddraw(data: list):
+def lorenz_3ddraw(data: list):
   fig = plt.figure()
-  ax = fig.gco(projection='3d')
+  ax = fig.gca(projection='3d')
 
+  ax.plot(data[0], data[1], data[2], lw=0.5)
+  ax.set_xlabel("X Axis"); ax.set_ylabel("Y Axis");  ax.set_zlabel("Z Axis")
+  ax.set_title('Lorenz(1963)', loc='left')
 
+  plt.show()
   plt.close('all')
 
 def error_heatmap(err_data: np.ndarray, timestep: int):
@@ -73,10 +77,13 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ lorenz63 cal. score
   time_list, true_list, sim_list, da_list = read_Lorenz63_csv(data_path)
-  
+  print(true_list)
+  lorenz_3ddraw(true_list)
+
   # +++ prediction err covariance matrix
+  """
   err_list = read_error_csv(err_path)
   for i_num in range(0, len(err_list), obs_interval):
     err_data = err_list[i_num].reshape(matrix_size, matrix_size)
     error_heatmap(err_data, i_num)
-
+  """
