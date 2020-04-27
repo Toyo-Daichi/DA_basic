@@ -48,7 +48,7 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ info. setting
   outdir    = './output/'
-  da_method = 'KF'
+  da_method = 'EnKF'
   data_path = outdir + 'lorenz63_' + da_method + '.csv'
   err_path  = outdir + 'Error_matrix_lorenz63_' + da_method + '.csv'
   
@@ -60,8 +60,9 @@ if __name__ == "__main__":
   #time_list, true_list, sim_list, da_list = read_Lorenz63_csv(data_path)
   
   # +++ prediction err covariance matrix
-  err_list = read_error_csv(err_path, timescale, matrix_size)
+  err_list = read_error_csv(err_path)
   for i_num in len(err_list):
+    print(i_num)
     err_data = err_list[i_num].reshape(matrix_size, matrix_size)
     error_heatmap(err_data)
 

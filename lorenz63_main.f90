@@ -382,8 +382,8 @@ program lorenz63
           Pf = 0.0d0
           do imem = 1, mems
             x_prtb(imem) = x_da_m(it, imem) - x_da(it)
-            y_prtb(imem) = y_da_m(it, imem) - x_da(it)
-            z_prtb(imem) = z_da_m(it, imem) - x_da(it)
+            y_prtb(imem) = y_da_m(it, imem) - y_da(it)
+            z_prtb(imem) = z_da_m(it, imem) - z_da(it)
 
             !------------------------------------------------------- 
             ! +++ Dispersion
@@ -584,7 +584,7 @@ contains
 
     if ( it == 1 ) then
       open(2, file=trim(output_file_error_covariance), status='replace')
-      write(linebuf, '(8(f10.5, ","), f10.5)') error_covariance_matrix
+      write(linebuf, '(8(f12.5, ","), f12.5)') error_covariance_matrix
         call del_spaces(linebuf)
         write(2, '(a)') trim(linebuf)
         write(6,*) '+++ err covariance matrix 1st. step'
@@ -592,13 +592,13 @@ contains
         
       else if ( it /= 1 .and. it /= last_step) then
         write(6,*) '+++ err covariance matrix 2nd. step ~'
-        write(linebuf, '(8(f10.5, ","), f10.5)') error_covariance_matrix
+        write(linebuf, '(8(f12.5, ","), f12.5)') error_covariance_matrix
         call del_spaces(linebuf)
         write(2, '(a)') trim(linebuf)
         write(6,*) error_covariance_matrix(:,:)
         
       else if ( it == last_step ) then
-        write(linebuf, '(8(f10.5, ","), f10.5)') error_covariance_matrix
+        write(linebuf, '(8(f12.5, ","), f12.5)') error_covariance_matrix
         call del_spaces(linebuf)
         write(2, '(a)') trim(linebuf)
         write(6,*) '+++ err covariance matrix last step '
