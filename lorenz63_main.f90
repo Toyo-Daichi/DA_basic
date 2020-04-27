@@ -490,7 +490,7 @@ program lorenz63
       write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_da, y_da, z_da, x_obs, y_obs'
       do it = 0, nt_asm+nt_prd
         if (mod(it, output_interval) == 0) then
-          write(linebuf, '(f3.1, ",", 9(f10.7, ","), A, ",", A)')  & 
+          write(linebuf, '(f3.1, ",", 9(f12.7, ","), A, ",", A)')  & 
             dt*it,                                      &
             x_true(it), y_true(it), z_true(it),         &
             x_sim(it), y_sim(it), z_sim(it),            &
