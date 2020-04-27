@@ -47,7 +47,7 @@ def lorenz_3ddraw(true_data: list, sim_data: list, da_data: list, *, timestep :i
     time = (timestep+1)*0.01
     ax.set_title('Lorenz(1963) - {:.2f} sec.'.format(time))
     plt.legend()
-    plt.savefig('./figure/Lorenz_xyz_{:.2f}sec.png'.format(time))
+    plt.savefig('./figure/Lorenz_xyz_{:0>5}step.png'.format(timestep))
   plt.close('all')
 
 def error_heatmap(err_data: np.ndarray, timestep: int):
