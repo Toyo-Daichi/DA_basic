@@ -35,6 +35,9 @@ def main_3ddraw(data: list):
   fig = plt.figure()
   ax = fig.gco(projection='3d')
 
+
+  plt.close('all')
+
 def error_heatmap(err_data: np.ndarray, timestep: int):
   fig, ax = plt.subplots()
   cmap = sns.diverging_palette(220, 10, as_cmap=True)
