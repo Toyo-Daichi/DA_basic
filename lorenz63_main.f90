@@ -382,8 +382,8 @@ program lorenz63
           Pf = 0.0d0
           do imem = 1, mems
             x_prtb(imem) = x_da_m(it, imem) - x_da(it)
-            y_prtb(imem) = y_da_m(it, imem) - x_da(it)
-            z_prtb(imem) = z_da_m(it, imem) - x_da(it)
+            y_prtb(imem) = y_da_m(it, imem) - y_da(it)
+            z_prtb(imem) = z_da_m(it, imem) - z_da(it)
 
             !------------------------------------------------------- 
             ! +++ Dispersion
