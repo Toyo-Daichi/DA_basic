@@ -490,9 +490,12 @@ program lorenz63
       write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_da, y_da, z_da, x_obs, y_obs'
       do it = 0, nt_asm+nt_prd
         if (mod(it, output_interval) == 0) then
-          write(linebuf, *) dt*it, ',', x_true(it), ',', y_true(it), ',', z_true(it), ',',                     &
-            x_sim(it), ',', y_sim(it), ',', z_sim(it), ',', x_da(it), ',', y_da(it), ',', z_da(it), ',',       &
-            obs_chr(1, it), ',', obs_chr(2, it)
+          write(linebuf, '(f3.1, ",", 9(f10.7, ","), A, ",", A)')  & 
+            dt*it,                                      &
+            x_true(it), y_true(it), z_true(it),         &
+            x_sim(it), y_sim(it), z_sim(it),            &
+            x_da(it), y_da(it), z_da(it),               &
+            obs_chr(1, it), obs_chr(2, it)
           call del_spaces(linebuf)
           write(1, '(a)') trim(linebuf)
         end if
@@ -576,16 +579,30 @@ contains
 
   subroutine write_error_covariance_matrix(it, last_step, error_covariance_matrix)
     implicit none
-    integer                    :: it, last_step
-    real(r_size)               :: error_covariance_matrix(3,3)
+    integer, intent(in)       :: it, last_step
+    real(r_size), intent(in)  :: error_covariance_matrix(3,3)
 
     if ( it == 1 ) then
-      open(2, file=trim(output_file_error_covariance), form='unformatted', status='replace')
-        write(2) error_covariance_matrix
-    else if ( it /= 1 .and. it /= last_step) then
-      write(2) error_covariance_matrix
-    else if ( it == last_step ) then
-      write(2) error_covariance_matrix
+      open(2, file=trim(output_file_error_covariance), status='replace')
+      write(linebuf, '(8(f12.5, ","), f12.5)') error_covariance_matrix
+        call del_spaces(linebuf)
+        write(2, '(a)') trim(linebuf)
+        write(6,*) '+++ err covariance matrix 1st. step'
+        write(6,*) error_covariance_matrix(:,:)
+        
+      else if ( it /= 1 .and. it /= last_step) then
+        write(6,*) '+++ err covariance matrix 2nd. step ~'
+        write(linebuf, '(8(f12.5, ","), f12.5)') error_covariance_matrix
+        call del_spaces(linebuf)
+        write(2, '(a)') trim(linebuf)
+        write(6,*) error_covariance_matrix(:,:)
+        
+      else if ( it == last_step ) then
+        write(linebuf, '(8(f12.5, ","), f12.5)') error_covariance_matrix
+        call del_spaces(linebuf)
+        write(2, '(a)') trim(linebuf)
+        write(6,*) '+++ err covariance matrix last step '
+        write(6,*) error_covariance_matrix(:,:)
       close(2)
     end if
       
