@@ -4,20 +4,25 @@ Created on 2020.4.25
 @author: Toyo_Daichi
 """
 
+import os, sys
+sys.path.append(os.path.join(os.path.dirname(__file__), './lib'))
+
+import cal_statics
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from multiprocessing import Pool
 from mpl_toolkits.mplot3d import Axes3D
 
-def df2_list(Dataframe: pd.core.frame.DataFrame, *index_wrd: tuple) -> list:
+def df2_list(Dataframe:pd.core.frame.DataFrame, *index_wrd:tuple) -> list:
   index_list = []
   for i_index in index_wrd:
     index_list.append(Dataframe[i_index].tolist())
   return index_list
 
-def read_Lorenz63_csv(path: str) -> list:
+def read_Lorenz63_csv(path:str) -> list:
   """
   return list.shape
   list[0] = x score, list[1] = x score, list[2] = x score, 
@@ -29,10 +34,10 @@ def read_Lorenz63_csv(path: str) -> list:
   da_list   = df2_list(df, ' x_da', ' y_da', ' z_da')
   return  time_list, true_list, sim_list, da_list
 
-def read_error_csv(path: str) -> np.ndarray:
+def read_error_csv(path:str) -> np.ndarray:
   return np.genfromtxt(path, delimiter=",")
 
-def lorenz_3ddraw(true_data: list, sim_data: list, da_data: list, *, timestep :int='None'):
+def lorenz_3ddraw(true_data:list, sim_data:list, da_data:list, *, timestep:int='None'):
   fig = plt.figure()
   ax = fig.gca(projection='3d')
 
@@ -50,7 +55,7 @@ def lorenz_3ddraw(true_data: list, sim_data: list, da_data: list, *, timestep :i
     plt.savefig('./figure/Lorenz_xyz_{:0>5}step.png'.format(timestep))
   plt.close('all')
 
-def error_heatmap(err_data: np.ndarray, timestep: int):
+def error_heatmap(err_data:np.ndarray, timestep:int):
   fig, ax = plt.subplots()
   cmap = sns.diverging_palette(220, 10, as_cmap=True)
   sns.set(style='white')
@@ -72,7 +77,7 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ info. setting
   matrix_size  = 3
-  obs_interval = 20 
+  obs_interval = 20
   mem          = 10
 
   outdir    = './output/'
@@ -83,15 +88,17 @@ if __name__ == "__main__":
     err_path  = outdir + 'Error_matrix_lorenz63_' + da_method + '_' + str(mem) + 'mem.csv'
 
   #---------------------------------------------------------- 
-  # +++ lorenz63 cal. score
+  # +++ basic info
+  # > lorenz63 cal. score
   time_list, true_list, sim_list, da_list = read_Lorenz63_csv(data_path)
-  for i_num in tqdm(range(0, len(time_list[0]))):
-    lorenz_3ddraw(true_list, sim_list, da_list, timestep=i_num)
-
-  # +++ prediction err covariance matrix
-  """
+  # > prediction err covariance matrix
   err_list = read_error_csv(err_path)
-  for i_num in tqdm(range(0, len(err_list), obs_interval))ls:
+  
+  # draw func.
+  with 
+
+  """
+  for i_num in tqdm(range(0, len(err_list), obs_interval)):
     err_data = err_list[i_num].reshape(matrix_size, matrix_size)
     error_heatmap(err_data, i_num)
   """
