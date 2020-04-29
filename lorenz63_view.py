@@ -18,7 +18,7 @@ from multiprocessing import Pool
 from mpl_toolkits.mplot3d import Axes3D
 
 class lorenz63_score:
-  def __init__(self, path):
+  def __init__(self, path:str):
     self.df = pd.read_csv(path, sep=',')
     self.time_list = self.df2_list(self.df, ' timestep')
     self.true_list = self.df2_list(self.df, ' x_true', ' y_true', ' z_true')
@@ -55,27 +55,29 @@ class lorenz63_score:
 
     return timestep
 
+class lorenz63_error_covariance_matrix:
+  def __init__(self, path:str):
+    self.err_data = self.read_error_csv(path)
 
-def read_error_csv(path:str) -> np.ndarray:
-  return np.genfromtxt(path, delimiter=",")
+  def read_error_csv(self, path:str) -> np.ndarray:
+    return np.genfromtxt(path, delimiter=",")
 
-def error_heatmap(err_data:np.ndarray, timestep:int):
-  fig, ax = plt.subplots()
-  cmap = sns.diverging_palette(220, 10, as_cmap=True)
-  sns.set(style='white')
-  sns.heatmap(
-    data=err_data, cmap=cmap, annot=True, fmt='.6f',
-    vmax=0.1, vmin=-0.1, center=0,
-    square=True, linewidths=.5, 
-    cbar_kws={"shrink": .5, "extend": 'both'},
-    xticklabels=['x','y','z'], yticklabels=['x','y','z']
-  )
+  def error_heatmap(self, err_data:np.ndarray, timestep:int):
+    fig, ax = plt.subplots()
+    cmap = sns.diverging_palette(220, 10, as_cmap=True)
+    sns.set(style='white')
+    sns.heatmap(
+      data=err_data, cmap=cmap, annot=True, fmt='.6f',
+      vmax=0.1, vmin=-0.1, center=0,
+      square=True, linewidths=.5, 
+      cbar_kws={"shrink": .5, "extend": 'both'},
+      xticklabels=['x','y','z'], yticklabels=['x','y','z']
+    )
 
-  time = timestep*0.01
-  ax.set_title('Back ground Error Cov. - {:.1f} sec.'.format(time), loc='center')
-  plt.savefig('./figure/error_heatmap_{:.1f}sec.png'.format(time))
-
-  plt.close('all')
+    time = timestep*0.01
+    ax.set_title('Back ground Error Cov. - {:.1f} sec.'.format(time), loc='center')
+    plt.savefig('./figure/error_heatmap_{:.1f}sec.png'.format(time))
+    plt.close('all')
 
 if __name__ == "__main__":
   #---------------------------------------------------------- 
@@ -93,25 +95,26 @@ if __name__ == "__main__":
     err_path  = outdir + 'Error_matrix_lorenz63_' + da_method + '_' + str(mem) + 'mem_little_diff.csv'
 
   #---------------------------------------------------------- 
-  # +++ basic info
+  # +++ class set
   # > lorenz63 cal. score
   score = lorenz63_score(data_path)
   # > prediction err covariance matrix
-  #err_list = read_error_csv(err_path)
+  e_matrix = lorenz63_error_covariance_matrix(err_path)
   
-  # draw func.
+  #---------------------------------------------------------- 
+  # +++ draw func.
+  # > 3D draw
   time_before = time.time()
   laststep = 2500
-  viewstep = int(2500 / 3) +1
+  viewstep = int(laststep / 3) +1
   values = [ i_num for i_num in range(0, len(score.time_list[0][0:laststep]), 3)]
   with Pool(4) as pool:
     sleeps = list(tqdm(pool.imap(score.lorenz_3ddraw, values), total=viewstep))
   time_after = time.time()
   elapsed_time = time_after - time_before
-  print(f'time:{elapsed_time}s')
+  print(f'time: {elapsed_time} sec.')
   
-  """
+  # > error covariance matrix
   for i_num in tqdm(range(0, len(err_list), obs_interval)):
-    err_data = err_list[i_num].reshape(matrix_size, matrix_size)
-    error_heatmap(err_data, i_num)
-  """
+    matrix_data = e_matrix.err_data[i_num].reshape(matrix_size, matrix_size)
+    error_heatmap(matrix_data, i_num)
