@@ -85,18 +85,19 @@ if __name__ == "__main__":
   mem          = 10
 
   outdir    = './output/'
-  da_method = 'KF'
+  da_method = 'EnKF'
   data_path = outdir + 'lorenz63_' + da_method + '_little_diff.csv'
   err_path  = outdir + 'Error_matrix_lorenz63_' + da_method + '.csv'
-  if (da_method == 'EnKF'):
-    err_path  = outdir + 'Error_matrix_lorenz63_' + da_method + '_' + str(mem) + 'mem.csv'
+  if da_method is 'EnKF':
+    data_path = outdir + 'lorenz63_' + da_method + '_' + str(mem) + 'mem_little_diff.csv'
+    err_path  = outdir + 'Error_matrix_lorenz63_' + da_method + '_' + str(mem) + 'mem_little_diff.csv'
 
   #---------------------------------------------------------- 
   # +++ basic info
   # > lorenz63 cal. score
   score = lorenz63_score(data_path)
   # > prediction err covariance matrix
-  err_list = read_error_csv(err_path)
+  #err_list = read_error_csv(err_path)
   
   # draw func.
   time_before = time.time()

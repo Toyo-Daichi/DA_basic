@@ -12,9 +12,9 @@ rm -rf *.mod ${prg}
 nt_asm=2500
 nt_prd=2500
 obs_interval=20
-DA_METHOD='KF' #'KF' or 'EnKF'
+DA_METHOD='EnKF' #'KF' or 'EnKF'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
-mem=3
+mem=10
 
 # +++ initial value
 x_tinit=0.0d0; y_tinit=10.0d0; z_tinit=20.0d0
