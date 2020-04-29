@@ -20,10 +20,18 @@ from mpl_toolkits.mplot3d import Axes3D
 class lorenz63_score:
   def __init__(self, path:str):
     self.df = pd.read_csv(path, sep=',')
+    # sim. list
     self.time_list = self.df2_list(self.df, ' timestep')
     self.true_list = self.df2_list(self.df, ' x_true', ' y_true', ' z_true')
     self.sim_list  = self.df2_list(self.df, ' x_sim', ' y_sim', ' z_sim')
     self.da_list   = self.df2_list(self.df, ' x_da', ' y_da', ' z_da')
+    # obs. list
+    undef = -999.e0
+    obs = self.df.loc[ :, [' timestep', ' x_true', ' y_true', ' x_obs', ' y_obs']]
+    obs = obs[obs[' x_obs'] != undef]
+    self.obs_time_list  = self.df2_list(obs, ' timestep')
+    self.obs_4true_list = self.df2_list(obs, ' x_true', ' y_true')
+    self.obs_list       = self.df2_list(obs, ' x_obs', ' y_obs')
     """
     list.shape
     list[0] = x score, list[1] = x score, list[2] = x score, 
@@ -35,6 +43,12 @@ class lorenz63_score:
     for i_index in index_wrd:
       index_list.append(Dataframe[i_index].tolist())
     return index_list
+
+  def accuracy_func(self) -> None:
+    rmse_sim = cal_statics.rmse(self.true_list[0], self.sim_list[0])
+    rmse_da  = cal_statics.rmse(self.true_list[0], self.da_list[0]) 
+
+    print(rmse_sim)
 
   def lorenz_3ddraw(self, timestep:int) -> int:
     fig = plt.figure()
@@ -92,7 +106,7 @@ if __name__ == "__main__":
   err_path  = outdir + 'Error_matrix_lorenz63_' + da_method + '.csv'
   if da_method is 'EnKF':
     data_path = outdir + 'lorenz63_' + da_method + '_' + str(mem) + 'mem_little_diff.csv'
-    err_path  = outdir + 'Error_matrix_lorenz63_' + da_method + '_' + str(mem) + 'mem_little_diff.csv'
+    err_path  = outdir + 'Error_matrix_lorenz63_' + da_method + '_' + str(mem) + 'mem.csv'
 
   #---------------------------------------------------------- 
   # +++ class set
@@ -101,6 +115,8 @@ if __name__ == "__main__":
   # > prediction err covariance matrix
   e_matrix = lorenz63_error_covariance_matrix(err_path)
   
+  score.accuracy_func()
+  sys.exit()
   #---------------------------------------------------------- 
   # +++ draw func.
   # > 3D draw
@@ -117,4 +133,6 @@ if __name__ == "__main__":
   # > error covariance matrix
   for i_num in tqdm(range(0, len(err_list), obs_interval)):
     matrix_data = e_matrix.err_data[i_num].reshape(matrix_size, matrix_size)
-    error_heatmap(matrix_data, i_num)
+    e_matrix.error_heatmap(matrix_data, i_num)
+
+  # > rmse draw
