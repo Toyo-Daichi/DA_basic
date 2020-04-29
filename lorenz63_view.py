@@ -16,48 +16,47 @@ from tqdm import tqdm
 from multiprocessing import Pool
 from mpl_toolkits.mplot3d import Axes3D
 
-def df2_list(Dataframe:pd.core.frame.DataFrame, *index_wrd:tuple) -> list:
-  index_list = []
-  for i_index in index_wrd:
-    index_list.append(Dataframe[i_index].tolist())
-  return index_list
+class lorenz63_score:
+  def __init__(self, path):
+    self.df = pd.read_csv(path, sep=',')
+    self.time_list = self.df2_list(self.df, ' timestep')
+    self.true_list = self.df2_list(self.df, ' x_true', ' y_true', ' z_true')
+    self.sim_list  = self.df2_list(self.df, ' x_sim', ' y_sim', ' z_sim')
+    self.da_list   = self.df2_list(self.df, ' x_da', ' y_da', ' z_da')
+    """
+    list.shape
+    list[0] = x score, list[1] = x score, list[2] = x score, 
+    """
+    print('Call ..... Constract of lorenz63_score')
+  
+  def df2_list(self, Dataframe:pd.core.frame.DataFrame, *index_wrd:tuple) -> list:
+    index_list = []
+    for i_index in index_wrd:
+      index_list.append(Dataframe[i_index].tolist())
+    return index_list
 
-def read_Lorenz63_csv(path:str) -> list:
-  """
-  return list.shape
-  list[0] = x score, list[1] = x score, list[2] = x score, 
-  """
-  df = pd.read_csv(path, sep=',')
-  time_list = df2_list(df, ' timestep')
-  true_list = df2_list(df, ' x_true', ' y_true', ' z_true')
-  sim_list  = df2_list(df, ' x_sim', ' y_sim', ' z_sim')
-  da_list   = df2_list(df, ' x_da', ' y_da', ' z_da')
-  return  time_list, true_list, sim_list, da_list
+  def lorenz_3ddraw(self, timestep:int) -> int:
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
 
-def read_error_csv(path:str) -> np.ndarray:
-  return np.genfromtxt(path, delimiter=",")
+    ax.set_xlabel("X Axis"); ax.set_ylabel("Y Axis");  ax.set_zlabel("Z Axis")
+    ax.plot(self.true_list[0], self.true_list[1], self.true_list[2], lw=0.5)
 
-def lorenz_3ddraw(timestep:int) -> int:
-  time_data, true_data, sim_data, da_data = read_Lorenz63_csv(data_path)
-
-  fig = plt.figure()
-  ax = fig.gca(projection='3d')
-
-  ax.set_xlabel("X Axis"); ax.set_ylabel("Y Axis");  ax.set_zlabel("Z Axis")
-  ax.plot(true_data[0], true_data[1], true_data[2], lw=0.5)
-
-  if timestep != 'None':
-    ax.scatter(true_data[0][timestep], true_data[1][timestep], true_data[2][timestep], marker='o', color='b', label='True')
-    ax.scatter(sim_data[0][timestep], sim_data[1][timestep], sim_data[2][timestep], marker='o', color='r', label='Sim.')
-    ax.scatter(da_data[0][timestep], da_data[1][timestep], da_data[2][timestep], marker='o', color='g', label='Data assim.')
+    ax.scatter(self.true_list[0][timestep], self.true_list[1][timestep], self.true_list[2][timestep], marker='o', color='b',label='True', alpha=0.5)
+    ax.scatter(self.sim_list[0][timestep], self.sim_list[1][timestep], self.sim_list[2][timestep], marker='o', color='r', label='Sim.', alpha=0.5)
+    ax.scatter(self.da_list[0][timestep], self.da_list[1][timestep], self.da_list[2][timestep], marker='o', color='g', label='Data assim.', alpha=0.5)
 
     time = (timestep+1)*0.01
     ax.set_title('Lorenz(1963) - {:.2f} sec.'.format(time))
     plt.legend()
     plt.savefig('./figure/Lorenz_xyz_{:0>5}step.png'.format(timestep))
-  plt.close('all')
+    plt.close('all')
 
-  return timestep
+    return timestep
+
+
+def read_error_csv(path:str) -> np.ndarray:
+  return np.genfromtxt(path, delimiter=",")
 
 def error_heatmap(err_data:np.ndarray, timestep:int):
   fig, ax = plt.subplots()
@@ -94,14 +93,14 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ basic info
   # > lorenz63 cal. score
-  time_list, true_list, sim_list, da_list = read_Lorenz63_csv(data_path)
+  score = lorenz63_score(data_path)
   # > prediction err covariance matrix
   err_list = read_error_csv(err_path)
   
   # draw func.
-  values = [ i_num for i_num in range(0, len(time_list[0]))]
+  values = [ i_num for i_num in range(0, len(score.time_list[0][0:5000]))]
   with Pool(4) as pool:
-    sleeps = list(tqdm(pool.imap(lorenz_3ddraw, values), total=len(time_list[0])))
+    sleeps = list(tqdm(pool.imap(score.lorenz_3ddraw, values), total=5000))
   
   """
   for i_num in tqdm(range(0, len(err_list), obs_interval)):
