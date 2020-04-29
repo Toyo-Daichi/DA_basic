@@ -37,9 +37,7 @@ def read_Lorenz63_csv(path:str) -> list:
 def read_error_csv(path:str) -> np.ndarray:
   return np.genfromtxt(path, delimiter=",")
 
-#def lorenz_3ddraw(true_data:list, sim_data:list, da_data:list, timestep:int):
-def lorenz_3ddraw(timestep:int):
-  print('start' + str(timestep))
+def lorenz_3ddraw(timestep:int) -> int:
   time_data, true_data, sim_data, da_data = read_Lorenz63_csv(data_path)
 
   fig = plt.figure()
@@ -59,8 +57,7 @@ def lorenz_3ddraw(timestep:int):
     plt.savefig('./figure/Lorenz_xyz_{:0>5}step.png'.format(timestep))
   plt.close('all')
 
-  def lorenz_3ddraw_wrapper(args) -> None:
-    return lorenz_3ddraw(*args)
+  return timestep
 
 def error_heatmap(err_data:np.ndarray, timestep:int):
   fig, ax = plt.subplots()
@@ -104,7 +101,7 @@ if __name__ == "__main__":
   # draw func.
   values = [ i_num for i_num in range(0, len(time_list[0]))]
   with Pool(4) as pool:
-    sleeps = [pool.map(lorenz_3ddraw, values)]
+    sleeps = list(tqdm(pool.imap(lorenz_3ddraw, values), total=len(time_list[0])))
   
   """
   for i_num in tqdm(range(0, len(err_list), obs_interval)):
