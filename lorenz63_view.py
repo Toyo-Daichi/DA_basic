@@ -11,6 +11,7 @@ import cal_statics
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import time
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from multiprocessing import Pool
@@ -47,7 +48,7 @@ class lorenz63_score:
     ax.scatter(self.da_list[0][timestep], self.da_list[1][timestep], self.da_list[2][timestep], marker='o', color='g', label='Data assim.', alpha=0.5)
 
     time = (timestep+1)*0.01
-    ax.set_title('Lorenz(1963) - {:.2f} sec.'.format(time))
+    ax.set_title('Lorenz(1963) - {:.2f} sec.'.format(time), loc='left')
     plt.legend()
     plt.savefig('./figure/Lorenz_xyz_{:0>5}step.png'.format(timestep))
     plt.close('all')
@@ -71,7 +72,7 @@ def error_heatmap(err_data:np.ndarray, timestep:int):
   )
 
   time = timestep*0.01
-  ax.set_title('Back ground Error Cov. - {:.1f} sec.'.format(time), loc='left')
+  ax.set_title('Back ground Error Cov. - {:.1f} sec.'.format(time), loc='center')
   plt.savefig('./figure/error_heatmap_{:.1f}sec.png'.format(time))
 
   plt.close('all')
@@ -84,8 +85,8 @@ if __name__ == "__main__":
   mem          = 10
 
   outdir    = './output/'
-  da_method = 'EnKF'
-  data_path = outdir + 'lorenz63_' + da_method + '.csv'
+  da_method = 'KF'
+  data_path = outdir + 'lorenz63_' + da_method + '_little_diff.csv'
   err_path  = outdir + 'Error_matrix_lorenz63_' + da_method + '.csv'
   if (da_method == 'EnKF'):
     err_path  = outdir + 'Error_matrix_lorenz63_' + da_method + '_' + str(mem) + 'mem.csv'
@@ -98,9 +99,15 @@ if __name__ == "__main__":
   err_list = read_error_csv(err_path)
   
   # draw func.
-  values = [ i_num for i_num in range(0, len(score.time_list[0][0:5000]))]
+  time_before = time.time()
+  laststep = 2500
+  viewstep = int(2500 / 3) +1
+  values = [ i_num for i_num in range(0, len(score.time_list[0][0:laststep]), 3)]
   with Pool(4) as pool:
-    sleeps = list(tqdm(pool.imap(score.lorenz_3ddraw, values), total=5000))
+    sleeps = list(tqdm(pool.imap(score.lorenz_3ddraw, values), total=viewstep))
+  time_after = time.time()
+  elapsed_time = time_after - time_before
+  print(f'time:{elapsed_time}s')
   
   """
   for i_num in tqdm(range(0, len(err_list), obs_interval)):
