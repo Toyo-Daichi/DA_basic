@@ -8,6 +8,7 @@ import os, sys
 sys.path.append(os.path.join(os.path.dirname(__file__), './lib'))
 
 import cal_statics
+import itertools
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -21,7 +22,7 @@ class lorenz63_score:
   def __init__(self, path:str):
     self.df = pd.read_csv(path, sep=',')
     # sim. list
-    self.time_list = self.df2_list(self.df, ' timestep')
+    self.time_list = self.df2_list(self.df, ' timestep')[0]
     self.true_list = self.df2_list(self.df, ' x_true', ' y_true', ' z_true')
     self.sim_list  = self.df2_list(self.df, ' x_sim', ' y_sim', ' z_sim')
     self.da_list   = self.df2_list(self.df, ' x_da', ' y_da', ' z_da')
@@ -29,12 +30,12 @@ class lorenz63_score:
     undef = -999.e0
     obs = self.df.loc[ :, [' timestep', ' x_true', ' y_true', ' x_obs', ' y_obs']]
     obs = obs[obs[' x_obs'] != undef]
-    self.obs_time_list  = self.df2_list(obs, ' timestep')
-    self.obs_4true_list = self.df2_list(obs, ' x_true', ' y_true')
+    self.obs_time_list  = self.df2_list(obs, ' timestep')[0]
+    self.obs_true_list = self.df2_list(obs, ' x_true', ' y_true')
     self.obs_list       = self.df2_list(obs, ' x_obs', ' y_obs')
     """
     list.shape
-    list[0] = x score, list[1] = x score, list[2] = x score, 
+    list[0] = x score, list[1] = y score, list[2] = z score, 
     """
     print('Call ..... Constract of lorenz63_score')
   
@@ -44,11 +45,18 @@ class lorenz63_score:
       index_list.append(Dataframe[i_index].tolist())
     return index_list
 
-  def accuracy_func(self) -> None:
-    rmse_sim = cal_statics.rmse(self.true_list[0], self.sim_list[0])
-    rmse_da  = cal_statics.rmse(self.true_list[0], self.da_list[0]) 
+  def accuracy_rmse_func(self, true_list:list, asses_list:list, num_elem:int) -> list:
+    rmse_list  = []
+    time_range = len(true_list[0])
+    for i_num in range(time_range):
+      rmse_true_list , rmse_asses_list= [], []
+      for i_elem in range(num_elem):
+        rmse_true_list.append(true_list[i_elem][i_num])
+        rmse_asses_list.append(asses_list[i_elem][i_num])
 
-    print(rmse_sim)
+      rmse = cal_statics.rmse(rmse_true_list, rmse_asses_list)
+      rmse_list.append(rmse)
+    return rmse_list
 
   def lorenz_3ddraw(self, timestep:int) -> int:
     fig = plt.figure()
@@ -68,6 +76,24 @@ class lorenz63_score:
     plt.close('all')
 
     return timestep
+
+  def lorenz_rmse_draw(self, rmse_sim:list, rmse_da:list, rmse_obs:list, da_method) -> None:
+    fig = plt.figure()
+    ax1 = fig.subplots()
+    
+    sns.set_style('whitegrid')
+    ax1.plot(self.time_list, rmse_da, ls="--", color='r', label='Data assim.')
+    ax1.scatter(self.obs_time_list, rmse_obs, marker='o', color='g', s=20, alpha=0.5, edgecolor='k', label='Obs.')
+
+    ax1.set_xlabel('sec.')
+    ax1.set_ylabel('RMSE')
+    ax1.set_ylim(0, 1.6)
+    ax1.set_xlim(0, 25)
+    ax1.set_title('Lorenz(1963) RMSE, Data assim. method: ' + da_method, loc='left')
+
+    plt.grid()
+    plt.legend()
+    plt.show()
 
 class lorenz63_error_covariance_matrix:
   def __init__(self, path:str):
@@ -98,7 +124,7 @@ if __name__ == "__main__":
   # +++ info. setting
   matrix_size  = 3
   obs_interval = 20
-  mem          = 10
+  mem          = 5000
 
   outdir    = './output/'
   da_method = 'EnKF'
@@ -115,11 +141,10 @@ if __name__ == "__main__":
   # > prediction err covariance matrix
   e_matrix = lorenz63_error_covariance_matrix(err_path)
   
-  score.accuracy_func()
-  sys.exit()
   #---------------------------------------------------------- 
   # +++ draw func.
   # > 3D draw
+  """
   time_before = time.time()
   laststep = 2500
   viewstep = int(laststep / 3) +1
@@ -134,5 +159,13 @@ if __name__ == "__main__":
   for i_num in tqdm(range(0, len(err_list), obs_interval)):
     matrix_data = e_matrix.err_data[i_num].reshape(matrix_size, matrix_size)
     e_matrix.error_heatmap(matrix_data, i_num)
-
+  """
+  
   # > rmse draw
+  num_sim_elem = 3
+  rmse_sim = score.accuracy_rmse_func(score.true_list, score.sim_list, num_sim_elem)
+  rmse_da  = score.accuracy_rmse_func(score.true_list, score.da_list, num_sim_elem)
+  num_obs_elem = 2
+  rmse_obs = score.accuracy_rmse_func(score.obs_true_list, score.obs_list, num_obs_elem)
+
+  score.lorenz_rmse_draw(rmse_sim, rmse_da, rmse_obs, da_method)
