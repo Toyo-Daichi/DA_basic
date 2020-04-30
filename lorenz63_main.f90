@@ -48,12 +48,12 @@ program lorenz63
   real(r_size) :: H(Nobs,Nx)   ! Observation operator
   
   ! --- Output control
-  character(7),allocatable :: obs_chr(:, :)
-  integer, parameter       :: output_interval = 1
-  logical                  :: opt_veach = .true.
-  character(256)           :: output_file
-  character(256)           :: output_file_error_covariance
-  character(1096)          :: linebuf
+  real(r_size), allocatable :: obs_chr(:, :)
+  integer, parameter        :: output_interval = 1
+  logical                   :: opt_veach = .true.
+  character(256)            :: output_file
+  character(256)            :: output_file_error_covariance
+  character(1096)           :: linebuf
 
   ! --- Working variable
   integer :: it
@@ -62,7 +62,8 @@ program lorenz63
   integer :: iflag
   integer :: iter
   real(r_size) :: Gnoise ! Gaussian noise
-  
+  real(r_size), parameter:: undef = -999.e0
+
   ! --- matrix calculation
   real(r_size) :: Ptmp(Nx,Nx)
   ! for inverse
@@ -478,11 +479,11 @@ program lorenz63
     
     ! --- Sec6. Writing OUTPUT
     if ( opt_veach ) then
-      obs_chr(:, 0:nt_asm+nt_prd) = 'None'
+      obs_chr(:, 0:nt_asm+nt_prd) = undef
       do it = 1, nt_asm
         if (mod(it, obs_interval) == 0) then
-          write(obs_chr(1, it), '(F7.2)')  x_obs(it/obs_interval)
-          write(obs_chr(2, it), '(F7.2)')  y_obs(it/obs_interval)
+          obs_chr(1, it) = x_obs(it/obs_interval)
+          obs_chr(2, it) = y_obs(it/obs_interval)
         end if
       end do
       
@@ -490,7 +491,7 @@ program lorenz63
       write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_da, y_da, z_da, x_obs, y_obs'
       do it = 0, nt_asm+nt_prd
         if (mod(it, output_interval) == 0) then
-          write(linebuf, '(f4.2, ",", 9(f12.7, ","), A, ",", A)')  & 
+          write(linebuf, '(f5.2, ",", 9(f12.7, ","), F7.2, ",", F7.2)')  & 
             dt*it,                                      &
             x_true(it), y_true(it), z_true(it),         &
             x_sim(it), y_sim(it), z_sim(it),            &
