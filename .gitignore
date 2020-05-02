@@ -5,7 +5,4 @@
 #dir
 log
 figure
-./output/*.ipynb
-./output/*.png
-./output/*.grd
-./output/.*
+output
