@@ -4,7 +4,7 @@
 
 module lorenz96_prm
   
-  use kinddef
+  use common
 
   private
 

@@ -18,7 +18,10 @@ outputfile='./output/'${outputname}'.csv'
 #----------------------------------------------------------------------
 # +++ Run exp.
 #----------------------------------------------------------------------
-gfortran -fbounds-check SFMT.f90 kinddef.f90 lorenz96_prm.f90 lorenz96_main.f90 lorenz96_spinup.f90 -o ${prg} 
+cp ./common/SFMT.f90 .
+cp ./common/common.f90 .
+#gfortran -fbounds-check SFMT.f90 common.f90 lorenz96_prm.f90 lorenz96_main.f90 lorenz96_spinup.f90 -o ${prg} 
+gfortran SFMT.f90 common.f90 lorenz96_prm.f90 lorenz96_main.f90 lorenz96_spinup.f90 -o ${prg} 
 
 ./${prg} > ./log/${today}_${prg}_${DA_METHOD}.log << EOF
   &output

@@ -2,7 +2,7 @@
 ! @author: Toyo_Daichi
 
 program lorenz96_spinup
-  use kinddef
+  use common
   use lorenz96_prm
   use lorenz96_main
   
@@ -32,7 +32,7 @@ program lorenz96_spinup
 
   call com_randn(nx, x)
   x = x*5.0d0
-  call titeg_tk4(kt_oneday*360*100, x, x)
+  call ting_rk4(kt_oneday*360*100, x, x)
 
   ! --- Sec. Writing OUTPUT
   if ( opt_veach ) then

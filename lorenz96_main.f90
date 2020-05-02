@@ -3,11 +3,11 @@
 
 module lorenz96_main
 
-  use kinddef
+  use common
   use lorenz96_prm
 
   private  :: none ! None
-  public   :: ting_rk4, Lorenz96_core, com_randn, del_spaces
+  public   :: ting_rk4, Lorenz96_core, del_spaces
 
   contains
 
@@ -77,49 +77,6 @@ module lorenz96_main
     
     return
   end subroutine Lorenz96_core
-  
-  subroutine com_randn(ndim, var)
-    implicit none
-    
-    integer, intent(in)       :: ndim
-    real(r_size), intent(out) :: var(1:ndim)
-    real(r_dble), parameter   :: pi=3.14159265358979
-    
-    real(r_size)  :: rnd(2)
-    real(r_dble)  :: genrand_res53
-    logical, save :: first = .true.
-    
-    ! --- Working variable
-    integer :: idate(8)
-    integer :: i, iseed
-
-    if (first) then
-      call date_and_time(values=idate)
-      iseed = idate(8) + idate(7)*1000
-      call init_gen_rand(iseed)
-      first = .false.
-    end if
-
-    if (mod(ndim,2) == 0) then
-      do i = 1, ndim/2
-        rnd(1) = genrand_res53()
-        rnd(2) = genrand_res53()
-        var(i*2-1) = sqrt(-2.0d0*log(rnd(1))*sin(2.0d0*pi*rnd(2)))
-        var(i*2) = sqrt(-2.0d0*log(rnd(1))*cos(2.0d0*pi*rnd(2)))
-      end do
-    else
-      do i = 1, (ndim-1)/2
-        rnd(1) = genrand_res53()
-        rnd(2) = genrand_res53()
-        var(i*2-1) = sqrt(-2.0d0*log(rnd(1))*sin(2.0d0*pi*rnd(2)))
-        var(i*2) = sqrt(-2.0d0*log(rnd(1))*cos(2.0d0*pi*rnd(2)))
-      end do
-      rnd(1) = genrand_res53()
-      rnd(2) = genrand_res53()
-      var(ndim) = sqrt(-2.0d0*log(rnd(1))*cos(2.0d0*pi*rnd(2)))
-    end if
-    return
-  end subroutine com_randn
   
   subroutine del_spaces(space)
     implicit none
