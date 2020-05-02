@@ -3,7 +3,6 @@
 
 module lorenz96_main
 
-  use mod_sfmt
   use kinddef
   use lorenz96_prm
 
