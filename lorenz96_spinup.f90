@@ -15,8 +15,8 @@ program lorenz96_spinup
   character(12) :: intg_method
   
   ! --- Output control
-  logical         :: opt_veach = .true.
-  character(256)  :: output_file
+  logical, save, public :: opt_veach = .true.
+  character(256)        :: output_file
   
   ! --- Working variable
   integer         :: kt_oneday
