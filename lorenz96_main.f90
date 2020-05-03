@@ -6,19 +6,12 @@ module lorenz96_main
   use common
   use lorenz96_prm
 
-  private  :: none ! None
+  private  :: none
   public   :: ting_rk4, Lorenz96_core, del_spaces
 
   contains
 
-  !======================================================================
-  ! +++ Methods of Lorenz96
-  !
-  ! --- Sec.1 Input control
-  !----------------------------------------------------------------------
-  ! +++ open namelist, allocation
-  !----------------------------------------------------------------------
-
+ 
   subroutine ting_rk4(kt, x_in, x_out)
     implicit none
 

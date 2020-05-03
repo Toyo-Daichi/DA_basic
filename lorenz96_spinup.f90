@@ -9,24 +9,52 @@ program lorenz96_spinup
   implicit none
 
   ! --- setting parameter
-  real(r_size) :: x(nx)
-  integer      :: kt_oneday
+  real(r_size), allocatable :: x(:)
 
+  character(8)  :: da_method
+  character(12) :: intg_method
+  
   ! --- Output control
   logical         :: opt_veach = .true.
   character(256)  :: output_file
-
+  
   ! --- Working variable
+  integer         :: kt_oneday
   integer         :: it, ierr
 
+  !======================================================================
+  !
   ! --- Sec.1 Input control
   !----------------------------------------------------------------------
   ! +++ open namelist, allocation
   !----------------------------------------------------------------------
 
+  namelist /set_parm/ nx, dt, force, oneday
+  namelist /set_exp/ da_method, intg_method
   namelist /output/ output_file, opt_veach
-
+  
+  read(5, nml=set_parm, iostat=ierr)
+  read(5, nml=set_exp, iostat=ierr)
   read(5, nml=output, iostat=ierr)
+
+  ! name list io check
+  if (ierr < 0 ) then
+    write(6,*) '   Msg : Main[ .sh /  @namelist ] '
+    write(6,*) '   Not found namelist.        '
+    write(6,*) '   Use default values.        '
+  else if (ierr > 0) then
+    write(6,*) trim(output_file), opt_veach
+    write(6,*) '   Msg : Main[ .sh /  @namelist ] '
+    write(6,*) '   *** Warning : Not appropriate names in namelist !! Check !!'
+    write(6,*) '   Stop : lorenz63_main.f90              '
+    stop
+  end if
+
+  allocate(x(nx))
+
+  ! +++ display namelist
+  write(6,*) 'Data assimlation method :: ', da_method
+  write(6,*) 'Integral method         :: ', intg_method
 
   kt_oneday = int(oneday/dt)
 
