@@ -3,7 +3,7 @@
 
 set -ex
 CDIR=`pwd`
-tool='spinup' #spinup or normal
+tool='normal' #spinup or normal
 prg=lorenz96_${tool}_maintools
 today=$(date "+%Y%m%d%H%M")
 rm -rf *.mod ${prg}
@@ -24,7 +24,7 @@ da_method=''
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
 
 # +++ output info
-boolen='true' # write putput
+boolen='false' # write putput
 outputname='lorenz96'
 initialfile='./output/'${outputname}_spinup_initial'.csv'
 outputfile='./output/'${outputname}'.csv'

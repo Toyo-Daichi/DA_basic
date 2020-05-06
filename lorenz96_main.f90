@@ -75,7 +75,7 @@ program lorenz96_main
     call ting_rk4(kt_oneday*spinup_period, x_in, x_out)
   else if ( trim(tool) == 'normal' ) then
     open(2, file=trim(initial_file), form='formatted', status='old')
-      read(2) x_in
+      read(2,*) x_in
     close(2)
     call ting_rk4(kt_oneday*normal_period, x_in, x_out)
   end if
