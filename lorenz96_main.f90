@@ -1,125 +1,99 @@
-! Created on 2020.5.2
+! Created on 2020.5.2 ~
 ! @author: Toyo_Daichi
 
-module lorenz96_main
-
+program lorenz96_main
   use common
   use lorenz96_prm
+  use lorenz96_cal
+  
+  implicit none
 
-  public   :: ting_rk4, Lorenz96_core
-  private  :: write_Lorenz96_output ,del_spaces
+  ! --- setting parameter
+  real(r_size), allocatable :: x_in(:)
+  real(r_size), allocatable :: x_out(:)
 
-  contains
+  character(8)  :: tool, da_method
+  character(12) :: intg_method
+  
+  ! --- Output control
+  logical, save         :: opt_veach = .true.
+  character(256)        :: initial_file
+  character(256)        :: output_file
+  
+  ! --- Working variable
+  integer         :: spinup_period, normal_period
+  integer         :: kt_oneday
+  integer         :: it, ierr
+
+  !======================================================================
+  !
+  ! --- Sec.1 Input control
+  !----------------------------------------------------------------------
+  ! +++ open namelist, allocation
+  !----------------------------------------------------------------------
+
+  namelist /set_parm/ nx, dt, force, oneday
+  namelist /set_exp/ tool, da_method, intg_method
+  namelist /set_period/ spinup_period, normal_period
+  namelist /output/ initial_file, output_file, opt_veach
+  
+  read(5, nml=set_parm, iostat=ierr)
+  read(5, nml=set_exp, iostat=ierr)
+  read(5, nml=output, iostat=ierr)
+
+  ! name list io check
+  if (ierr < 0 ) then
+    write(6,*) '   Msg : Main[ .sh /  @namelist ] '
+    write(6,*) '   Not found namelist.        '
+    write(6,*) '   Use default values.        '
+  else if (ierr > 0) then
+    write(6,*) trim(output_file), opt_veach
+    write(6,*) '   Msg : Main[ .sh /  @namelist ] '
+    write(6,*) '   *** Warning : Not appropriate names in namelist !! Check !!'
+    write(6,*) '   Stop : lorenz63_main.f90              '
+    stop
+  end if
+
+  allocate(x_in(nx), x_out(nx))
+
+  !======================================================================
+  !
+  ! --- Sec.2 lorenz96 calculation
+  ! +++ display namelist
+  write(6,*) 'Exp. setting            :: ', tool
+  write(6,*) 'Data assimlation method :: ', da_method
+  write(6,*) 'Integral method         :: ', intg_method
+
+  kt_oneday = int(oneday/dt) ! Unit change for 1day
+
+  if ( trim(tool) == 'spinup' ) then  
+    call com_randn(nx, x_in)
+    x_in = x_in*5.0d0
+    call ting_rk4(kt_oneday*spinup_period, x_in, x_out)
+  else if ( trim(tool) == 'normal' ) then
+    open(2, file=trim(initial_file), form='formatted', status='old')
+      read(2) x_in
+    close(2)
+    call ting_rk4(kt_oneday*normal_period, x_in, x_out)
+  end if
+  
+
+  !======================================================================
+  !
+  ! --- Sec.* Writing OUTPUT
+  if ( opt_veach ) then
+    
+    write(6,*) '-------------------------------------------------------'
+    write(6,*) '+++ Check Writing output system,  '
+    write(6,*) ' && Successfuly output !!!        '  
  
-  subroutine ting_rk4(kt, x_in, x_out)
-    implicit none
+  else if ( .not. opt_veach ) then
+    write(6,*) x_out
+    write(6,*) '-------------------------------------------------------'
+    write(6,*) '+++ Check calculation system,  '
+    write(6,*) ' && Successfuly calculate !!!  '  
 
-    integer, intent(in)  :: kt
+  end if
 
-    real(r_size), intent(in)  :: x_in(1:nx) 
-    real(r_size), intent(out) :: x_out(1:nx)
-
-    real(r_size), allocatable :: x(:), xtmp(:)
-    real(r_size), allocatable :: q1(:), q2(:), q3(:), q4(:)
-
-    ! --- Working variable
-    integer :: ik
-    
-    allocate(x(1:nx), xtmp(1:nx))
-    allocate(q1(1:nx), q2(1:nx), q3(1:nx), q4(1:nx))
-    
-    x(:) = x_in(:)
-    
-    ! --- time integration start
-    do ik = 1, kt
-      xtmp(:) = x(:)
-      call Lorenz96_core(xtmp, q1)
-      xtmp(:) = x(:) + 0.5d0 * q1(:)
-      call Lorenz96_core(xtmp, q2)
-      xtmp(:) = x(:) + 0.5d0 * q2(:)
-      call Lorenz96_core(xtmp, q3)
-      xtmp(:) = x(:) + q3(:)
-      call Lorenz96_core(xtmp, q4)
-      x(:) = x(:) + (q1(:) + 2.0d0*q2(:) + 2.0d0*q3(:) + q4(:))/6.0d0
-      if ( opt_veach ) then
-        call write_Lorenz96_output(ik, kt, x)
-      end if
-    end do
-    x_out(:) = x(:)
-
-    ! --- tidy up
-    deallocate(xtmp, q1, q2, q3, q4)
-    return
-  end subroutine ting_rk4
-
-  subroutine Lorenz96_core(x_in, x_out)
-    implicit none
-    real(r_size), intent(in)  :: x_in(1:nx)
-    real(r_size), intent(out) :: x_out(1:nx)
-
-    ! --- Working variable
-    integer :: i
-    
-    x_out(1) = x_in(nx)*(x_in(2) - x_in(nx-1)) - x_in(1) + force
-    x_out(2) = x_in(1)*(x_in(3) - x_in(nx)) - x_in(2) + force
-    
-    do i = 3, nx-1
-      x_out(i) = x_in(i-1)*(x_in(i+1) - x_in(i-2)) - x_in(i) + force
-    end do
-    x_out(nx) = x_in(nx-1)*(x_in(1) - x_in(nx-2)) - x_in(nx) + force
-    x_out = dt* x_out(:)
-    
-    return
-  end subroutine Lorenz96_core
-
-  subroutine write_Lorenz96_output(it, last_step, x_in)
-    implicit none
-    integer, intent(in)       :: it, last_step
-    real(r_size), intent(in)  :: x_in(1:nx)
-    character(1096)           :: linebuf
-  
-
-    if ( it == 1 ) then
-      open(2, trim(output_file), status='replace')
-      write(linebuf, )
-      call del_spaces(linebuf)
-      write(2, '(a)') trim(linebuf)
-      write(6,*) '+++ err covariance matrix 1st. step'
-      write(6,*) error_covariance_matrix(:,:)
-        
-    else if ( it /= 1 .and. it /= last_step) then
-      write(6,*) '+++ err covariance matrix 2nd. step ~'
-      write(linebuf, '(8(f12.5, ","), f12.5)') error_covariance_matrix
-      call del_spaces(linebuf)
-      write(2, '(a)') trim(linebuf)
-      write(6,*) error_covariance_matrix(:,:)
-        
-    else if ( it == last_step ) then
-      write(linebuf, '(8(f12.5, ","), f12.5)') error_covariance_matrix
-      call del_spaces(linebuf)
-      write(2, '(a)') trim(linebuf)
-      write(6,*) '+++ err covariance matrix last step '
-      write(6,*) error_covariance_matrix(:,:)
-      close(2)
-    end if
-      
-  end subroutine write_Lorenz96_output
-  
-  subroutine del_spaces(space)
-    implicit none
-    character(*), intent(inout) :: space
-    character(len=len(space))   :: tmp
-    integer ::  i, j
-
-    j = 1
-    do i = 1, len(space)
-      if (space(i:i)==' ') cycle
-      tmp(j:j) = space(i:i)
-      j = j + 1
-    end do
-    space = tmp(1:j-1)
-
-    return
-  end subroutine del_spaces
-
-end module lorenz96_main
+  stop
+end program lorenz96_main
