@@ -6,8 +6,8 @@ module lorenz96_cal
   use common
   use lorenz96_prm
 
-  public   :: ting_rk4, Lorenz96_core
-  private  :: del_spaces
+  public   :: ting_rk4, Lorenz96_core, del_spaces
+  private  :: none
 
   contains
  

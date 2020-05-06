@@ -11,9 +11,9 @@ rm -rf *.mod ${prg}
 #----------------------------------------------------------------------
 # +++ Set intial setting
 #----------------------------------------------------------------------
-nx=40
+nx=24
 dt=0.005d0
-force=8.0d0
+force=3.85d0
 oneday=0.2d0
 
 # +++ integral period
@@ -24,8 +24,9 @@ da_method=''
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
 
 # +++ output info
-boolen='false' # write putput
+boolen='true' # write putput
 outputname='lorenz96'
+initialfile='./output/'${outputname}_spinup_initial'.csv'
 outputfile='./output/'${outputname}'.csv'
 
 #----------------------------------------------------------------------
@@ -52,7 +53,7 @@ gfortran -fbounds-check SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_ca
     normal_period = ${normal_period}
   /
   &output
-    initial_file = '${outputfile}'
+    initial_file = '${initialfile}'
     output_file  = '${outputfile}',
     opt_veach    = .${boolen}.
   /

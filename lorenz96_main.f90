@@ -16,11 +16,14 @@ program lorenz96_main
   character(12) :: intg_method
   
   ! --- Output control
-  logical, save         :: opt_veach = .true.
+  logical, save         :: opt_veach = .false.
   character(256)        :: initial_file
   character(256)        :: output_file
   
   ! --- Working variable
+  character(1096) :: linebuf
+  character(24)   :: cfmt
+  character(4)    :: cfmt_num
   integer         :: spinup_period, normal_period
   integer         :: kt_oneday
   integer         :: it, ierr
@@ -77,18 +80,29 @@ program lorenz96_main
     call ting_rk4(kt_oneday*normal_period, x_in, x_out)
   end if
   
-
   !======================================================================
   !
   ! --- Sec.* Writing OUTPUT
   if ( opt_veach ) then
-    
     write(6,*) '-------------------------------------------------------'
     write(6,*) '+++ Check Writing output system,  '
+    if (nx .lt. 100 ) then 
+      cfmt = '(xx(F12.7, ","), F12.7)'
+      write(cfmt_num,"(I2)") nx-1
+      cfmt(2:3) = cfmt_num
+    else if (nx .ge. 100 ) then
+      cfmt = '(xxx(F12.7, ","), F12.7)'
+      write(cfmt_num, "(I3)") nx-1
+      cfmt(2:4) = cfmt_num
+    end if
+    open(2, file=trim(initial_file), form='formatted', status='replace')
+      write(linebuf, cfmt) x_out
+      call del_spaces(linebuf)
+      write(2,'(a)') linebuf
+    close(2)
     write(6,*) ' && Successfuly output !!!        '  
  
   else if ( .not. opt_veach ) then
-    write(6,*) x_out
     write(6,*) '-------------------------------------------------------'
     write(6,*) '+++ Check calculation system,  '
     write(6,*) ' && Successfuly calculate !!!  '  
