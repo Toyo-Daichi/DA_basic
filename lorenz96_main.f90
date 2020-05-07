@@ -22,7 +22,7 @@ program lorenz96_main
   character(256)        :: output_file
   
   ! --- Working variable
-  character(512) :: linebuf
+  character(512)  :: linebuf
   character(24)   :: cfmt
   character(4)    :: cfmt_num
   integer         :: spinup_period, normal_period
@@ -119,7 +119,8 @@ program lorenz96_main
 
     else if ( trim(tool) == 'normal' ) then
       open(2, file=trim(output_file), form='formatted', status='replace')
-      do it = 0, kt_oneday*normal_period
+      do it = 0, kt_oneday*normal_period, kt_oneday
+        print *, it
         write(linebuf, cfmt) x_out(it,:)
         call del_spaces(linebuf)
         write(2,'(a)') linebuf
