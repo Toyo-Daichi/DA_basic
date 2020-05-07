@@ -21,10 +21,10 @@ spinup_period=365
 normal_period=40
 
 da_method=''
-intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
+intg_method='Runge-Kutta'
 
 # +++ output info
-boolen='false' # write putput
+boolen='true' # write putput
 outputname='lorenz96'
 initialfile='./output/'${outputname}_spinup_initial'.csv'
 outputfile='./output/'${outputname}'.csv'
@@ -34,7 +34,10 @@ outputfile='./output/'${outputname}'.csv'
 #----------------------------------------------------------------------
 cp ${CDIR}/common/SFMT.f90 SFMT_mod.f90
 cp ${CDIR}/common/common.f90 common_mod.f90
-gfortran -fbounds-check SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 -o ${prg} 
+
+# +++ compile
+gfortran -fbounds-check \
+SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 -o ${prg} 
 
 ./${prg} > ./log/${today}_${prg}_${DA_METHOD}.log << EOF
   &set_parm
@@ -49,7 +52,7 @@ gfortran -fbounds-check SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_ca
     intg_method = '${intg_method}'
   /
   &set_period
-    spiup_period = ${spinup_period},
+    spinup_period = ${spinup_period},
     normal_period = ${normal_period}
   /
   &output

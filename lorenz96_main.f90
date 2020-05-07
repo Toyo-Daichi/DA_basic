@@ -9,8 +9,9 @@ program lorenz96_main
   implicit none
 
   ! --- setting parameter
-  real(r_size), allocatable :: x_in(:)
-  real(r_size), allocatable :: x_out(:)
+  real(r_size), allocatable :: x_in(:,:)
+  real(r_size), allocatable :: x_out(:,:)
+  real(r_size), allocatable :: x_tmp(:)
 
   character(8)  :: tool, da_method
   character(12) :: intg_method
@@ -21,7 +22,7 @@ program lorenz96_main
   character(256)        :: output_file
   
   ! --- Working variable
-  character(1096) :: linebuf
+  character(512) :: linebuf
   character(24)   :: cfmt
   character(4)    :: cfmt_num
   integer         :: spinup_period, normal_period
@@ -34,7 +35,7 @@ program lorenz96_main
   !----------------------------------------------------------------------
   ! +++ open namelist, allocation
   !----------------------------------------------------------------------
-
+  
   namelist /set_parm/ nx, dt, force, oneday
   namelist /set_exp/ tool, da_method, intg_method
   namelist /set_period/ spinup_period, normal_period
@@ -42,42 +43,55 @@ program lorenz96_main
   
   read(5, nml=set_parm, iostat=ierr)
   read(5, nml=set_exp, iostat=ierr)
-  read(5, nml=output, iostat=ierr)
-
+  read(5, nml=set_period, iostat=ierr)
+  
   ! name list io check
   if (ierr < 0 ) then
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
     write(6,*) '   Not found namelist.        '
     write(6,*) '   Use default values.        '
   else if (ierr > 0) then
-    write(6,*) trim(output_file), opt_veach
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
     write(6,*) '   *** Warning : Not appropriate names in namelist !! Check !!'
     write(6,*) '   Stop : lorenz63_main.f90              '
     stop
   end if
-
-  allocate(x_in(nx), x_out(nx))
+  read(5, nml=output, iostat=ierr)
+  
+  kt_oneday = int(oneday/dt) ! Unit change for 1day
+  if ( trim(tool) == 'spinup' ) then 
+    allocate(x_in(1, nx), x_out(1, nx))
+    allocate(x_tmp(nx))
+  else if ( trim(tool) == 'normal' ) then
+    allocate(x_in(0:kt_oneday*normal_period, nx), x_out(0:kt_oneday*normal_period, nx))
+    allocate(x_tmp(nx))
+  end if
 
   !======================================================================
   !
   ! --- Sec.2 lorenz96 calculation
+  !----------------------------------------------------------------------
   ! +++ display namelist
+  !----------------------------------------------------------------------
+
   write(6,*) 'Exp. setting            :: ', tool
   write(6,*) 'Data assimlation method :: ', da_method
   write(6,*) 'Integral method         :: ', intg_method
-
-  kt_oneday = int(oneday/dt) ! Unit change for 1day
-
-  if ( trim(tool) == 'spinup' ) then  
-    call com_randn(nx, x_in)
-    x_in = x_in*5.0d0
-    call ting_rk4(kt_oneday*spinup_period, x_in, x_out)
+  
+  if ( trim(tool) == 'spinup' ) then
+    call com_randn(nx, x_in(1,:))
+    x_in(1,:) = x_in(1,:)*5.0d0
+    call ting_rk4(kt_oneday*spinup_period, x_in(1,:), x_out(1,:))
+    
   else if ( trim(tool) == 'normal' ) then
     open(2, file=trim(initial_file), form='formatted', status='old')
-      read(2,*) x_in
+    read(2,*) x_tmp
+    x_in(0, :) = x_tmp; x_out(0, :) = x_tmp
+    do it = 1, kt_oneday*normal_period
+      call ting_rk4(it, x_in(it-1,:), x_out(it,:))
+      x_in(it, :) = x_out(it, :)
+    end do
     close(2)
-    call ting_rk4(kt_oneday*normal_period, x_in, x_out)
   end if
   
   !======================================================================
@@ -95,12 +109,25 @@ program lorenz96_main
       write(cfmt_num, "(I3)") nx-1
       cfmt(2:4) = cfmt_num
     end if
-    open(2, file=trim(initial_file), form='formatted', status='replace')
-      write(linebuf, cfmt) x_out
-      call del_spaces(linebuf)
-      write(2,'(a)') linebuf
-    close(2)
-    write(6,*) ' && Successfuly output !!!        '  
+    
+    ! select open file
+    if ( trim(tool) == 'spinup' ) then
+      open(2, file=trim(initial_file), form='formatted', status='replace')
+        write(linebuf, cfmt) x_out(0,:)
+        call del_spaces(linebuf)
+        write(2,'(a)') linebuf
+
+    else if ( trim(tool) == 'normal' ) then
+      open(2, file=trim(output_file), form='formatted', status='replace')
+      do it = 0, kt_oneday*normal_period
+        write(linebuf, cfmt) x_out(it,:)
+        call del_spaces(linebuf)
+        write(2,'(a)') linebuf
+      end do
+
+    endif
+      close(2)
+      write(6,*) ' && Successfuly output !!!        '  
  
   else if ( .not. opt_veach ) then
     write(6,*) '-------------------------------------------------------'
@@ -108,6 +135,6 @@ program lorenz96_main
     write(6,*) ' && Successfuly calculate !!!  '  
 
   end if
-
+  deallocate(x_in, x_out, x_tmp)
   stop
 end program lorenz96_main
