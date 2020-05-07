@@ -119,7 +119,7 @@ program lorenz96_main
 
     else if ( trim(tool) == 'normal' ) then
       open(2, file=trim(output_file), form='formatted', status='replace')
-      do it = 0, kt_oneday*normal_period, kt_oneday
+      do it = 0, kt_oneday*normal_period, kt_oneday/4
         print *, it
         write(linebuf, cfmt) x_out(it,:)
         call del_spaces(linebuf)
