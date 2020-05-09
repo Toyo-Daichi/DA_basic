@@ -49,7 +49,7 @@ gfortran -fbounds-check lorenz_*.f90 -o ${prg} -I/usr/local/include -llapack -lb
 1. assimilation_tool_ver1.0(減衰振動のデータ同化手法の実装)　2020年4月1日
 2. assimilation_tool_ver2.0(Lorenz63モデルとKFの実装)　2020年4月17日
 
-# 今後の計画
+### 今後の計画
 - lorenz63に誤差共分散膨張の導入後にタグ化
 - lorenz96にこれまでの同化手法を実装後にタグ化
 - 最終的なリファクタリングを行いタグ化（色々な手法を試したみた結果も載せたい。）
