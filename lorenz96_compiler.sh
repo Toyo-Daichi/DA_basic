@@ -24,7 +24,7 @@ da_method=''
 intg_method='Runge-Kutta'
 
 # +++ output info
-boolen='true' # write putput
+boolen='false' # write putput
 outputname='lorenz96'
 initialfile='./output/'${outputname}_spinup_initial'.csv'
 outputfile='./output/'${outputname}'.csv'
