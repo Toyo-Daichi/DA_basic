@@ -100,11 +100,11 @@ program lorenz96_main
   if ( opt_veach ) then
     write(6,*) '-------------------------------------------------------'
     write(6,*) '+++ Check Writing output system,  '
-    if (nx .lt. 100 ) then 
+    if (nx <= 100 ) then 
       cfmt = '(xx(F12.7, ","), F12.7)'
       write(cfmt_num,"(I2)") nx-1
       cfmt(2:3) = cfmt_num
-    else if (nx .ge. 100 ) then
+    else if (nx >= 100 ) then
       cfmt = '(xxx(F12.7, ","), F12.7)'
       write(cfmt_num, "(I3)") nx-1
       cfmt(2:4) = cfmt_num
