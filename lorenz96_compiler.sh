@@ -23,6 +23,10 @@ normal_period=40
 da_method=''
 intg_method='Runge-Kutta'
 
+# +++ making obs. info
+obs_xintv=2
+obs_tintv=20
+
 # +++ output info
 boolen='false' # write putput
 outputname='lorenz96'
@@ -54,6 +58,10 @@ SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 
   &set_period
     spinup_period = ${spinup_period},
     normal_period = ${normal_period}
+  /
+  &set_mobs
+    obs_xintv = ${obs_xintv},
+    obs_tintv = ${obs_tintv}
   /
   &output
     initial_file = '${initialfile}'

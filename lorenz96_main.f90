@@ -20,8 +20,7 @@ program lorenz96_main
   ! ***
   real(r_size), parameter   :: size_noise_obs = 1.0d-2
   integer                   :: ny, nt
-  integer, parameter        :: obs_tintv = 10
-  integer, parameter        :: obs_xintv = 2
+  integer                   :: obs_xintv, obs_tintv
 
   ! --- settign exp.
   character(8)  :: tool, da_method
@@ -51,11 +50,13 @@ program lorenz96_main
   namelist /set_parm/ nx, dt, force, oneday
   namelist /set_exp/ tool, da_method, intg_method
   namelist /set_period/ spinup_period, normal_period
+  namelist /set_mobs/ obs_xintv, obs_tintv
   namelist /output/ initial_file, output_file, opt_veach
   
   read(5, nml=set_parm, iostat=ierr)
   read(5, nml=set_exp, iostat=ierr)
   read(5, nml=set_period, iostat=ierr)
+  read(5, nml=set_mobs, iostat=ierr)
   
   ! name list io check
   if (ierr < 0 ) then
