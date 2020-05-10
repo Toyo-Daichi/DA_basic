@@ -11,9 +11,12 @@ program lorenz96_main
   ! --- setting parameter
   ! *** x(timescale, nx)
   real(r_size), allocatable :: x_true(:,:)
-  real(r_size), allocatable :: x_NoDA(:,:)
   real(r_size), allocatable :: x_DA(:,:)
-  
+  real(r_size), allocatable :: x_NoDA(:,:)
+  ! *** x_mem(timescale, nx, member)
+  real(r_size), allocatable :: x_DA_mem(:,:,:)
+  real(r_size), allocatable :: x_NoDA_mem(:,:,:)
+
   ! --- For spinup && OBS info
   real(r_size), allocatable :: x_out(:,:)
   real(r_size), allocatable :: x_tmp(:)
@@ -22,6 +25,7 @@ program lorenz96_main
   real(r_size), parameter   :: size_noise_obs = 1.0d-2
   integer                   :: ny, nt
   integer                   :: obs_xintv, obs_tintv
+  integer                   :: mem
 
   ! --- settign exp.
   character(8)  :: tool, da_method
@@ -43,9 +47,11 @@ program lorenz96_main
   ! --- Output control
   logical, save         :: opt_veach = .false.
   logical, save         :: da_veach  = .false.
-  character(256)        :: initial_true_file
+  character(256)        :: initial_true_file,
   character(256)        :: initial_sim_file
-  character(256)        :: output_file
+  character(256)        :: output_true_file
+  character(256)        :: output_DA_file
+  character(256)        :: output_NoDA_file
   
   ! --- Working variable
   character(512)  :: linebuf
@@ -68,10 +74,11 @@ program lorenz96_main
   
   namelist /set_parm/ nx, dt, force, oneday
   namelist /set_exp/ tool, intg_method
-  namelist /set_da_exp/ da_veach, da_method
+  namelist /set_da_exp/ da_veach, mem, da_method
   namelist /set_period/ spinup_period, normal_period
   namelist /set_mobs/ obs_xintv, obs_tintv
-  namelist /output/ initial_true_file, initial_sim_file, output_file, opt_veach
+  namelist /output/ initial_true_file, initial_sim_file, &
+    & output_true_file, output_DA_file, output_NoDA_file, output opt_veach
   
   read(5, nml=set_parm, iostat=ierr)
   read(5, nml=set_exp, iostat=ierr)
@@ -111,8 +118,12 @@ program lorenz96_main
     ! +++ Data assim. set 
     !----------------------------------------------------------------------
     if ( da_veach ) then
-      allocate(x_NoDA(0:kt_oneday*normal_period, nx))
       allocate(x_DA(0:kt_oneday*normal_period, nx))
+      allocate(x_NoDA(0:kt_oneday*normal_period, nx))
+      if ( da_method == 'EnKF' ) then
+        allocate(x_DA_mem(0:kt_oneday*normal_period, nx, mem))
+        allocate(x_NoDA_mem(0:kt_oneday*normal_period, nx, mem))
+      end if
       ! covariance matrix set.
       allocate(Pf(1:nx, 1:nx))
       allocate(Pa(1:nx, 1:nx))

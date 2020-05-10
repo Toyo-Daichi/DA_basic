@@ -22,6 +22,7 @@ normal_period=40
 
 da_method='KF'
 intg_method='Runge-Kutta'
+mem=40
 
 # +++ making obs. info
 obs_xintv=2
@@ -59,7 +60,8 @@ SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 
     intg_method = '${intg_method}'
   /
   &set_da_exp
-    da_veach = .${da_boolen}.,
+    da_veach  = .${da_boolen}.,
+    mem       = ${mem},
     da_method = '${da_method}'
   /
   &set_period
@@ -71,12 +73,12 @@ SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 
     obs_tintv = ${obs_tintv}
   /
   &output
-    initial_true_file = '${initial_true_file}'
-    initial_sim_file = '${initial_sim_file}'
+    initial_true_file = '${initial_true_file}',
+    initial_sim_file  = '${initial_sim_file}',
     output_true_file  = '${outputfile}',
+    output_DA_file    = '${outputfile}',
     output_NoDA_file  = '${outputfile}',
-    output_DA_file  = '${outputfile}',
-    opt_veach    = .${out_boolen}.
+    opt_veach = .${out_boolen}.
   /
 EOF
 
