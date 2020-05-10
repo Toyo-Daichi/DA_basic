@@ -37,6 +37,7 @@ program lorenz96_main
 
   real(r_size), allocatable :: obs_matrix(:,:)
   real(r_size), allocatable :: obs_inv_matrix(:,:)
+  real(r_size), allocatable :: eye_matrix(:,:)
   real(r_size), allocatable :: work(:)
 
   ! --- Output control
@@ -119,6 +120,7 @@ program lorenz96_main
       allocate( H(1:ny, 1:nx))
       ! for kalmangain inverse calculate.
       allocate(R(1:ny, 1:ny))
+      allocate(eye_matrix(1:ny, 1:ny))
       allocate(obs_matrix(1:ny, 1:ny))
       allocate(obs_inv_matrix(1:ny, 1:ny))
     end if
@@ -190,13 +192,10 @@ program lorenz96_main
       Kg = 0.d0;  H = 0.d0; R = 0.d0
       
       ! making identity matrix
-      forall ( il=1:nx, ir=1:nx ) 
-        Pf(il, ir) = 1.0d0 
-        Pa(il, ir) = 1.0d0
-      end forall
-      forall ( il=1:nx, ir=1:ny ) Kg(il, ir) = 1.0d0
-      forall ( il=1:ny, ir=1:nx )  H(il, ir) = 1.0d0
-      forall ( il=1:ny, ir=1:ny )  R(il, ir) = size_noise_obs
+      forall ( il=1:nx ) Pf(il, il) = 1.0d0 
+      forall ( il=1:nx ) Pa(il, il) = 1.0d0
+      forall ( il=1:ny )  R(il, il) = size_noise_obs
+      forall ( il=1:ny )  H(il, il) = 1.0d0
 
       data_assim_loop :&
       do it = 1, kt_oneday*normal_period
@@ -210,15 +209,22 @@ program lorenz96_main
           !-----------------------------------------------------------
           obs_matrix = matmul(matmul(H, Pf), transpose(H)) + R
           obs_inv_matrix = obs_matrix
-
           call dgetrf(ny, ny, obs_inv_matrix, lda, ipiv, ierr)
           call dgetri(ny, obs_inv_matrix, lda, ipiv, work, lwork, ierr)
-
+          eye_matrix = matmul(obs_matrix, obs_inv_matrix)
+          
+          !------------------------------------------------------
+          !check_eye_loop :&
+          !do ix = 1, ny
+          !  write(6,*) eye_matrix(ix,:)
+          !end do &
+          !check_eye_loop
+          !------------------------------------------------------
+          
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv_matrix)
           x_DA(it,:) = x_DA(it,:) + matmul(Kg, (yt_obs(it/obs_tintv,:) - matmul(H, x_DA(it,:))))
           Pa = Pf - matmul(matmul(Kg, H), Pf)
         end if
-        write(6,*) matmul(obs_matrix, obs_inv_matrix)
       end do &
       data_assim_loop
 
