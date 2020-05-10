@@ -20,7 +20,7 @@ oneday=0.2d0
 spinup_period=365
 normal_period=40
 
-da_method='KF'
+da_method='EnKF'
 intg_method='Runge-Kutta'
 mem=40
 
@@ -61,7 +61,7 @@ SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 
   /
   &set_da_exp
     da_veach  = .${da_boolen}.,
-    mem       = ${mem},
+    mems      = ${mem},
     da_method = '${da_method}'
   /
   &set_period

@@ -13,9 +13,9 @@ program lorenz96_main
   real(r_size), allocatable :: x_true(:,:)
   real(r_size), allocatable :: x_DA(:,:)
   real(r_size), allocatable :: x_NoDA(:,:)
-  ! *** x_mem(timescale, nx, member)
+  ! *** x_mem(timescale, nx, member), x_prtb(nx, member)
   real(r_size), allocatable :: x_DA_mem(:,:,:)
-  real(r_size), allocatable :: x_NoDA_mem(:,:,:)
+  real(r_size), allocatable :: x_prtb(:,:)
 
   ! --- For spinup && OBS info
   real(r_size), allocatable :: x_out(:,:)
@@ -25,7 +25,7 @@ program lorenz96_main
   real(r_size), parameter   :: size_noise_obs = 1.0d-2
   integer                   :: ny, nt
   integer                   :: obs_xintv, obs_tintv
-  integer                   :: mem
+  integer                   :: mems
 
   ! --- settign exp.
   character(8)  :: tool, da_method
@@ -47,7 +47,7 @@ program lorenz96_main
   ! --- Output control
   logical, save         :: opt_veach = .false.
   logical, save         :: da_veach  = .false.
-  character(256)        :: initial_true_file,
+  character(256)        :: initial_true_file
   character(256)        :: initial_sim_file
   character(256)        :: output_true_file
   character(256)        :: output_DA_file
@@ -60,7 +60,7 @@ program lorenz96_main
   real(r_size)    :: gnoise
   integer         :: spinup_period, normal_period
   integer         :: kt_oneday
-  integer         :: ix, it, il, ir, ierr, lda, ipiv, lwork
+  integer         :: ix, it, il, imem, ierr, lda, ipiv, lwork
 
   real(r_size), parameter :: alpha = 0.05d0
   integer, parameter      :: one_loop=1
@@ -74,18 +74,15 @@ program lorenz96_main
   
   namelist /set_parm/ nx, dt, force, oneday
   namelist /set_exp/ tool, intg_method
-  namelist /set_da_exp/ da_veach, mem, da_method
+  namelist /set_da_exp/ da_veach, mems, da_method
   namelist /set_period/ spinup_period, normal_period
   namelist /set_mobs/ obs_xintv, obs_tintv
   namelist /output/ initial_true_file, initial_sim_file, &
-    & output_true_file, output_DA_file, output_NoDA_file, output opt_veach
+    output_true_file, output_DA_file, output_NoDA_file, opt_veach
   
   read(5, nml=set_parm, iostat=ierr)
   read(5, nml=set_exp, iostat=ierr)
   read(5, nml=set_da_exp, iostat=ierr)
-  read(5, nml=set_period, iostat=ierr)
-  read(5, nml=set_mobs, iostat=ierr)
-  
   ! name list io check
   if (ierr < 0 ) then
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
@@ -97,6 +94,8 @@ program lorenz96_main
     write(6,*) '   Stop : lorenz63_main.f90              '
     stop
   end if
+  read(5, nml=set_period, iostat=ierr)
+  read(5, nml=set_mobs, iostat=ierr)
   read(5, nml=output, iostat=ierr)
   
   kt_oneday = int(oneday/dt) ! Unit change for 1day
@@ -121,8 +120,8 @@ program lorenz96_main
       allocate(x_DA(0:kt_oneday*normal_period, nx))
       allocate(x_NoDA(0:kt_oneday*normal_period, nx))
       if ( da_method == 'EnKF' ) then
-        allocate(x_DA_mem(0:kt_oneday*normal_period, nx, mem))
-        allocate(x_NoDA_mem(0:kt_oneday*normal_period, nx, mem))
+        allocate(x_DA_mem(0:kt_oneday*normal_period, nx, mems))
+        allocate(x_prtb(nx, mems))
       end if
       ! covariance matrix set.
       allocate(Pf(1:nx, 1:nx))
@@ -158,7 +157,7 @@ program lorenz96_main
     close(2)
     x_true(0, :) = x_tmp
     do it = 1, kt_oneday*normal_period
-      call ting_rk4(it, x_true(it-1,:), x_true(it,:))
+      call ting_rk4(one_loop, x_true(it-1,:), x_true(it,:))
       
       !-------------------------------------------------------------------
       ! +++ making obs score
@@ -178,6 +177,7 @@ program lorenz96_main
   !======================================================================
   !
   ! --- Sec.3 Data Assimlation
+  DataAssim_exp_set :&
   if ( da_veach ) then
     write(6,*) '-------------------------------------------------------'
     write(6,*) '+++ Data assimilation exp. start '
@@ -190,8 +190,7 @@ program lorenz96_main
     forall ( il=1:nx ) Pf(il, il) = 1.0d0 
     forall ( il=1:nx ) Pa(il, il) = 1.0d0
     forall ( il=1:ny )  R(il, il) = size_noise_obs
-    ! not regular matrix
-    forall ( il=1:ny ) H(il, il) = 1.0d0
+    forall ( il=1:ny )  H(il, il) = 1.0d0   ! not regular matrix
     
     !-------------------------------------------------------------------
     ! +++ making NoDA score
@@ -204,19 +203,18 @@ program lorenz96_main
       call ting_rk4(kt_oneday*normal_period, x_NoDA(it-1,:), x_NoDA(it,:))
     end do
     
-    
     !-------------------------------------------------------------------
     ! +++ Data assimilation
+    DataAssim_exp_kind :&
     if ( trim(da_method) == 'KF' ) then
-      
       ! --- initialize
       x_DA(0,:) = x_NoDA(0,:)
 
       data_assim_KF_loop :&
       do it = 1, kt_oneday*normal_period
         write(6,*) 'Data assim. time step: ', it
-        call ting_rk4(kt_oneday*normal_period, x_DA(it-1,:), x_DA(it,:))
-
+        call ting_rk4(one_loop, x_DA(it-1,:), x_DA(it,:))
+        
         if ( mod(it, obs_tintv)==0 ) then
           call tinteg_rk4_ptbmtx( alpha, one_loop, nx, x_DA(it,:), Pa, Pf)
           !-----------------------------------------------------------
@@ -229,21 +227,76 @@ program lorenz96_main
           eye_matrix = matmul(obs_matrix, obs_inv_matrix)
           
           call confirm_matrix(eye_matrix, ny)
-
+          
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv_matrix)
           x_DA(it,:) = x_DA(it,:) + matmul(Kg, (yt_obs(it/obs_tintv,:) - matmul(H, x_DA(it,:))))
           Pa = Pf - matmul(matmul(Kg, H), Pf)
         end if
       end do &
       data_assim_KF_loop
-
-    else if ( trim(da_method) == 'EnKF' ) then
       
-      ! --- initialize
-        
+    else if ( trim(da_method) == 'EnKF' ) then
+      !-----------------------------------------------------------
+      ! +++ making ensemble initial score
+      !-----------------------------------------------------------
+      do imem = 1, mems
+        call gaussian_noise(size_noise_obs, gnoise)
+        x_DA_mem(0, :, imem) = x_NoDA(0, :) + gnoise
+      end do
+      do ix = 1, nx
+        x_DA(0, ix) = sum(x_DA_mem(0,ix,1:mems))/mems
+      end do
+      
+      !-----------------------------------------------------------
+      ! +++ assimilation loop start
+      data_assim_EnKF_loop :&
+      do it = 1, kt_oneday*normal_period
+        write(6,*) 'Data assim. time step: ', it
+        do imem = 1, mems
+          call ting_rk4(one_loop, x_DA_mem(it-1,:, imem), x_DA_mem(it,:, imem))
+        end do
+      
+        if ( mod(it, obs_tintv)==0 ) then
+          Pf = 0.0d0
+          do ix = 1, nx
+            x_DA(it, ix) = sum(x_DA_mem(it,ix,1:mems))/mems
+          end do
+          do imem = 1, mems
+            x_prtb(:, imem) = x_DA_mem(it, :, imem) - x_DA(it, :)
+            !------------------------------------------------------- 
+            ! +++ making ptbmtx
+            !------------------------------------------------------- 
+            forall ( il=1:nx ) Pf(il,il) = Pf(il,il) + x_prtb(il,imem)**2/(mems-1)
+            do il = 1, nx-1
+              Pf(il,il+1) = Pf(il,il+1) + x_prtb(il, imem)*x_prtb(il+1,imem)/(mems-1)
+              Pf(il+1,il) = Pf(il,il+1)
+            end do
+            Pf(nx,1) = Pf(nx,1) + x_prtb(nx, imem)*x_prtb(1,imem)/(mems-1)
+          end do
+          
+          !-----------------------------------------------------------
+          ! +++ making inverse matrix
+          !-----------------------------------------------------------
+          obs_matrix = matmul(matmul(H, Pf), transpose(H)) + R
+          obs_inv_matrix = obs_matrix
+          call dgetrf(ny, ny, obs_inv_matrix, lda, ipiv, ierr)
+          call dgetri(ny, obs_inv_matrix, lda, ipiv, work, lwork, ierr)
+          eye_matrix = matmul(obs_matrix, obs_inv_matrix)
+          
+          call confirm_matrix(eye_matrix, ny)
+          
+          Kg = matmul(matmul(Pf, transpose(H)), obs_inv_matrix)
+          x_DA(it,:) = x_DA(it,:) + matmul(Kg, (yt_obs(it/obs_tintv,:) - matmul(H, x_DA(it,:))))
+          Pa = Pf - matmul(matmul(Kg, H), Pf)
+        end if
+      end do &
+      data_assim_EnKF_loop
 
-    end if
-  end if
+    end if &
+    DataAssim_exp_kind
+  end if &
+  DataAssim_exp_set
+
 
   !======================================================================
   !
@@ -269,7 +322,7 @@ program lorenz96_main
       write(2,'(a)') linebuf
       
     else if ( trim(tool) == 'normal' ) then
-      open(2, file=trim(output_file), form='formatted', status='replace')
+      open(2, file=trim(output_true_file), form='formatted', status='replace')
       do it = 0, kt_oneday*normal_period, kt_oneday/4
         print *, it
         write(linebuf, cfmt) x_true(it,:)
