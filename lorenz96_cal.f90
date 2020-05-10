@@ -98,8 +98,8 @@ contains
     real(r_size), intent(in)  :: alpha ! NL(x+alpha*dx) = NL(x) + alpha*dxf
     integer, intent(in)       :: kt, nx 
     real(r_size), intent(in)  :: x_in(1:nx)
-    real(r_size), intent(in)  :: Pf(1:nx, 1:nx)
-    real(r_size), intent(out) :: Pa(1:nx, 1:nx)
+    real(r_size), intent(in)  :: Pa(1:nx, 1:nx)
+    real(r_size), intent(out) :: Pf(1:nx, 1:nx)
 
     ! --- Working variable
     real(r_size), allocatable :: work1(:), work2(:)
@@ -108,9 +108,9 @@ contains
     allocate(work1(1:nx), work2(1:nx))
     call ting_rk4(kt, x_in, work1)
     do i = 1, nx
-      work2(:) = pa(:,i) * alpha + x_in(:)
+      work2(:) = Pa(:,i) * alpha + x_in(:)
       call ting_rk4(kt, work2, work2)
-      pf(:,i) = (work2 - work1) / alpha
+      Pf(:,i) = (work2 - work1) / alpha
     end do
 
     ! --- tidy up

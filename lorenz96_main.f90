@@ -32,8 +32,12 @@ program lorenz96_main
   real(r_size), allocatable :: Pf(:,:)
   real(r_size), allocatable :: Pa(:,:)
   real(r_size), allocatable :: Kg(:,:)
-  real(r_size), allocatable :: H(:,:)
-  real(r_size), allocatable :: inv_matrix(:,:)
+  real(r_size), allocatable ::  H(:,:)
+  real(r_size), allocatable ::  R(:,:)
+
+  real(r_size), allocatable :: obs_matrix(:,:)
+  real(r_size), allocatable :: obs_inv_matrix(:,:)
+  real(r_size), allocatable :: work(:)
 
   ! --- Output control
   logical, save         :: opt_veach = .false.
@@ -46,12 +50,13 @@ program lorenz96_main
   character(512)  :: linebuf
   character(24)   :: cfmt
   character(4)    :: cfmt_num
-  real(r_size)    :: gnoise, alpha
+  real(r_size)    :: gnoise
   integer         :: spinup_period, normal_period
   integer         :: kt_oneday
-  integer         :: ix, it, il, ir, ierr
+  integer         :: ix, it, il, ir, ierr, lda, ipiv, lwork
 
-  integer, parameter :: one_loop=1
+  real(r_size), parameter :: alpha = 0.05d0
+  integer, parameter      :: one_loop=1
 
   !======================================================================
   !
@@ -65,10 +70,11 @@ program lorenz96_main
   namelist /set_da_exp/ da_veach, da_method
   namelist /set_period/ spinup_period, normal_period
   namelist /set_mobs/ obs_xintv, obs_tintv
-  namelist /output/ initial_true_file, intial_sim_file, output_file, opt_veach
+  namelist /output/ initial_true_file, initial_sim_file, output_file, opt_veach
   
   read(5, nml=set_parm, iostat=ierr)
   read(5, nml=set_exp, iostat=ierr)
+  read(5, nml=set_da_exp, iostat=ierr)
   read(5, nml=set_period, iostat=ierr)
   read(5, nml=set_mobs, iostat=ierr)
   
@@ -97,14 +103,24 @@ program lorenz96_main
     ny = int(nx/obs_xintv)
     nt = int((kt_oneday*normal_period)/obs_tintv)
     allocate(yt_obs(nt,ny))
+    lda = ny; lwork = ny
+    allocate(work(ny))
     
+    !----------------------------------------------------------------------
+    ! +++ Data assim. set 
+    !----------------------------------------------------------------------
     if ( da_veach ) then
+      allocate(x_NoDA(0:kt_oneday*normal_period, nx))
+      allocate(x_DA(0:kt_oneday*normal_period, nx))
       ! covariance matrix set.
       allocate(Pf(1:nx, 1:nx))
       allocate(Pa(1:nx, 1:nx))
       allocate(Kg(1:nx, 1:ny))
       allocate( H(1:ny, 1:nx))
-      allocate( inv_matrix(1:ny, 1:ny))
+      ! for kalmangain inverse calculate.
+      allocate(R(1:ny, 1:ny))
+      allocate(obs_matrix(1:ny, 1:ny))
+      allocate(obs_inv_matrix(1:ny, 1:ny))
     end if
   end if
 
@@ -170,20 +186,17 @@ program lorenz96_main
     if ( trim(da_method) == 'KF' ) then
       ! --- initialize
       x_DA(0,:) = x_NoDA(0,:)
-      Pf = 0; Pa = 0; Kg = 0; H = 0
-      alpha = 0.05d0
+      Pf = 0.d0; Pa = 0.d0
+      Kg = 0.d0;  H = 0.d0; R = 0.d0
       
       ! making identity matrix
       forall ( il=1:nx, ir=1:nx ) 
         Pf(il, ir) = 1.0d0 
         Pa(il, ir) = 1.0d0
       end forall
-      forall ( il=1:nx, ir=1:ny ) 
-        Kg(il, ir) = 1.0d0
-      end forall
-      forall ( il=1:ny, ir=1:nx )
-        H(il, ir) = 1.0d0
-      end forall
+      forall ( il=1:nx, ir=1:ny ) Kg(il, ir) = 1.0d0
+      forall ( il=1:ny, ir=1:nx )  H(il, ir) = 1.0d0
+      forall ( il=1:ny, ir=1:ny )  R(il, ir) = size_noise_obs
 
       data_assim_loop :&
       do it = 1, kt_oneday*normal_period
@@ -191,17 +204,21 @@ program lorenz96_main
         call ting_rk4(kt_oneday*normal_period, x_DA(it-1,:), x_DA(it,:))
 
         if ( mod(it, obs_tintv)==0 ) then
-          call tinteg_rk4_ptbmtx( alpha, one_loop, nx, x_DA(it), Pa, Pf)
+          call tinteg_rk4_ptbmtx( alpha, one_loop, nx, x_DA(it,:), Pa, Pf)
           !-----------------------------------------------------------
           ! +++ making inverse matrix
           !-----------------------------------------------------------
-          ***          
-          
-          Kg = matmul(matmul(Pf, transpose(H)), inv_matrix)
-          x_DA(it,:) = x_DA(it,:) + matmul(Kg, (yt_obs(it,:) - matmul(H, x_DA(it,:))))
+          obs_matrix = matmul(matmul(H, Pf), transpose(H)) + R
+          obs_inv_matrix = obs_matrix
+
+          call dgetrf(ny, ny, obs_inv_matrix, lda, ipiv, ierr)
+          call dgetri(ny, obs_inv_matrix, lda, ipiv, work, lwork, ierr)
+
+          Kg = matmul(matmul(Pf, transpose(H)), obs_inv_matrix)
+          x_DA(it,:) = x_DA(it,:) + matmul(Kg, (yt_obs(it/obs_tintv,:) - matmul(H, x_DA(it,:))))
           Pa = Pf - matmul(matmul(Kg, H), Pf)
         end if
-
+        write(6,*) matmul(obs_matrix, obs_inv_matrix)
       end do &
       data_assim_loop
 

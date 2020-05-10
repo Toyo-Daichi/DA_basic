@@ -20,7 +20,7 @@ oneday=0.2d0
 spinup_period=365
 normal_period=40
 
-da_method=''
+da_method='KF'
 intg_method='Runge-Kutta'
 
 # +++ making obs. info
@@ -29,7 +29,7 @@ obs_tintv=20
 
 # +++ output info
 out_boolen='false' # write putput
-da_boolen='false'
+da_boolen='true'
 outputname='lorenz96'
 initial_true_file='./output/'${outputname}_spinup_initial'.csv'
 initial_sim_file='./output/'${outputname}_spinup_initial'.csv'
@@ -42,10 +42,10 @@ cp ${CDIR}/common/SFMT.f90 SFMT_mod.f90
 cp ${CDIR}/common/common.f90 common_mod.f90
 
 # +++ compile
-gfortran -fbounds-check \
+gfortran -fbounds-check -I/usr/local/include -lm -lblas -llapack \
 SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 -o ${prg} 
 
-./${prg} > ./log/${today}_${prg}_${DA_METHOD}.log << EOF
+./${prg} > ./log/${today}_${prg}_${da_method}.log << EOF
   &set_parm
     nx = ${nx},
     dt = ${dt},
