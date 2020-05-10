@@ -144,7 +144,6 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ draw func.
   # > 3D draw
-  """
   time_before = time.time()
   laststep = 2500
   viewstep = int(laststep / 3) +1
@@ -155,11 +154,11 @@ if __name__ == "__main__":
   elapsed_time = time_after - time_before
   print(f'time: {elapsed_time} sec.')
   
+  """
   # > error covariance matrix
   for i_num in tqdm(range(0, len(err_list), obs_interval)):
     matrix_data = e_matrix.err_data[i_num].reshape(matrix_size, matrix_size)
     e_matrix.error_heatmap(matrix_data, i_num)
-  """
   
   # > rmse draw
   num_sim_elem = 3
@@ -169,3 +168,4 @@ if __name__ == "__main__":
   rmse_obs = score.accuracy_rmse_func(score.obs_true_list, score.obs_list, num_obs_elem)
 
   score.lorenz_rmse_draw(rmse_sim, rmse_da, rmse_obs, da_method)
+  """
