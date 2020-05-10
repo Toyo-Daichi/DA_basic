@@ -9,6 +9,7 @@ program lorenz96_main
   implicit none
 
   ! --- setting parameter
+  ! *** x(timescale, nx)
   real(r_size), allocatable :: x_true(:,:)
   real(r_size), allocatable :: x_NoDA(:,:)
   real(r_size), allocatable :: x_DA(:,:)
@@ -26,19 +27,31 @@ program lorenz96_main
   character(8)  :: tool, da_method
   character(12) :: intg_method
   
+  ! --- Data assimilation exp.
+  ! *** Extend Kalamn Filter
+  real(r_size), allocatable :: Pf(:,:)
+  real(r_size), allocatable :: Pa(:,:)
+  real(r_size), allocatable :: Kg(:,:)
+  real(r_size), allocatable :: H(:,:)
+  real(r_size), allocatable :: inv_matrix(:,:)
+
   ! --- Output control
   logical, save         :: opt_veach = .false.
-  character(256)        :: initial_file
+  logical, save         :: da_veach  = .false.
+  character(256)        :: initial_true_file
+  character(256)        :: initial_sim_file
   character(256)        :: output_file
   
   ! --- Working variable
   character(512)  :: linebuf
   character(24)   :: cfmt
   character(4)    :: cfmt_num
-  real(r_size)    :: gnoise
+  real(r_size)    :: gnoise, alpha
   integer         :: spinup_period, normal_period
   integer         :: kt_oneday
-  integer         :: ix, it, ierr
+  integer         :: ix, it, il, ir, ierr
+
+  integer, parameter :: one_loop=1
 
   !======================================================================
   !
@@ -48,10 +61,11 @@ program lorenz96_main
   !----------------------------------------------------------------------
   
   namelist /set_parm/ nx, dt, force, oneday
-  namelist /set_exp/ tool, da_method, intg_method
+  namelist /set_exp/ tool, intg_method
+  namelist /set_da_exp/ da_veach, da_method
   namelist /set_period/ spinup_period, normal_period
   namelist /set_mobs/ obs_xintv, obs_tintv
-  namelist /output/ initial_file, output_file, opt_veach
+  namelist /output/ initial_true_file, intial_sim_file, output_file, opt_veach
   
   read(5, nml=set_parm, iostat=ierr)
   read(5, nml=set_exp, iostat=ierr)
@@ -78,11 +92,22 @@ program lorenz96_main
   else if ( trim(tool) == 'normal' ) then
     allocate(x_true(0:kt_oneday*normal_period, nx))
     allocate(x_tmp(nx))
+    
+    ! Obs set.
     ny = int(nx/obs_xintv)
     nt = int((kt_oneday*normal_period)/obs_tintv)
     allocate(yt_obs(nt,ny))
+    
+    if ( da_veach ) then
+      ! covariance matrix set.
+      allocate(Pf(1:nx, 1:nx))
+      allocate(Pa(1:nx, 1:nx))
+      allocate(Kg(1:nx, 1:ny))
+      allocate( H(1:ny, 1:nx))
+      allocate( inv_matrix(1:ny, 1:ny))
+    end if
   end if
-  
+
   !======================================================================
   !
   ! --- Sec.2 lorenz96 calculation
@@ -91,7 +116,6 @@ program lorenz96_main
   !----------------------------------------------------------------------
 
   write(6,*) 'Exp. setting            :: ', tool
-  write(6,*) 'Data assimlation method :: ', da_method
   write(6,*) 'Integral method         :: ', intg_method
   
   if ( trim(tool) == 'spinup' ) then
@@ -100,12 +124,13 @@ program lorenz96_main
     call ting_rk4(kt_oneday*spinup_period, x_true(1,:), x_out(1,:))
     
   else if ( trim(tool) == 'normal' ) then
-    open(2, file=trim(initial_file), form='formatted', status='old')
-    read(2,*) x_tmp
+    open(2, file=trim(initial_true_file), form='formatted', status='old')
+      read(2,*) x_tmp
+    close(2)
     x_true(0, :) = x_tmp
     do it = 1, kt_oneday*normal_period
       call ting_rk4(it, x_true(it-1,:), x_true(it,:))
-
+      
       !-------------------------------------------------------------------
       ! +++ making obs score
       !-------------------------------------------------------------------
@@ -121,6 +146,69 @@ program lorenz96_main
     close(2)
   end if
   
+  !======================================================================
+  !
+  ! --- Sec.3 Data Assimlation
+  if ( da_veach ) then
+    write(6,*) '-------------------------------------------------------'
+    write(6,*) '+++ Data assimilation exp. start '
+    write(6,*) ' >> Data assimilation method  :: ', da_method
+    
+    !-------------------------------------------------------------------
+    ! +++ making NoDA score
+    !-------------------------------------------------------------------
+    open(2, file=trim(initial_sim_file), form='formatted', status='old')
+      read(2,*) x_tmp
+    close(2)
+    x_NoDA(0,:) = x_tmp
+    do it = 1, kt_oneday*normal_period
+      call ting_rk4(kt_oneday*normal_period, x_NoDA(it-1,:), x_NoDA(it,:))
+    end do
+
+    !-------------------------------------------------------------------
+    ! +++ Data assimilation
+    if ( trim(da_method) == 'KF' ) then
+      ! --- initialize
+      x_DA(0,:) = x_NoDA(0,:)
+      Pf = 0; Pa = 0; Kg = 0; H = 0
+      alpha = 0.05d0
+      
+      ! making identity matrix
+      forall ( il=1:nx, ir=1:nx ) 
+        Pf(il, ir) = 1.0d0 
+        Pa(il, ir) = 1.0d0
+      end forall
+      forall ( il=1:nx, ir=1:ny ) 
+        Kg(il, ir) = 1.0d0
+      end forall
+      forall ( il=1:ny, ir=1:nx )
+        H(il, ir) = 1.0d0
+      end forall
+
+      data_assim_loop :&
+      do it = 1, kt_oneday*normal_period
+        write(6,*) 'Data assim. time step: ', it
+        call ting_rk4(kt_oneday*normal_period, x_DA(it-1,:), x_DA(it,:))
+
+        if ( mod(it, obs_tintv)==0 ) then
+          call tinteg_rk4_ptbmtx( alpha, one_loop, nx, x_DA(it), Pa, Pf)
+          !-----------------------------------------------------------
+          ! +++ making inverse matrix
+          !-----------------------------------------------------------
+          ***          
+          
+          Kg = matmul(matmul(Pf, transpose(H)), inv_matrix)
+          x_DA(it,:) = x_DA(it,:) + matmul(Kg, (yt_obs(it,:) - matmul(H, x_DA(it,:))))
+          Pa = Pf - matmul(matmul(Kg, H), Pf)
+        end if
+
+      end do &
+      data_assim_loop
+
+    else if ( trim(da_method) == 'EnKF' ) then
+    end if
+  end if
+
   !======================================================================
   !
   ! --- Sec.* Writing OUTPUT
@@ -139,7 +227,7 @@ program lorenz96_main
     
     ! select open file
     if ( trim(tool) == 'spinup' ) then
-      open(2, file=trim(initial_file), form='formatted', status='replace')
+      open(2, file=trim(initial_true_file), form='formatted', status='replace')
       write(linebuf, cfmt) x_out(0,:)
       call del_spaces(linebuf)
       write(2,'(a)') linebuf
@@ -152,7 +240,6 @@ program lorenz96_main
         call del_spaces(linebuf)
         write(2,'(a)') linebuf
       end do
-      
     endif
     close(2)
     write(6,*) ' && Successfuly output !!!        '  

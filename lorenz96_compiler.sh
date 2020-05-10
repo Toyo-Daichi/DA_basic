@@ -28,9 +28,11 @@ obs_xintv=2
 obs_tintv=20
 
 # +++ output info
-boolen='false' # write putput
+out_boolen='false' # write putput
+da_boolen='false'
 outputname='lorenz96'
-initialfile='./output/'${outputname}_spinup_initial'.csv'
+initial_true_file='./output/'${outputname}_spinup_initial'.csv'
+initial_sim_file='./output/'${outputname}_spinup_initial'.csv'
 outputfile='./output/'${outputname}'.csv'
 
 #----------------------------------------------------------------------
@@ -52,8 +54,11 @@ SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 
   /
   &set_exp
     tool = '${tool}'
-    da_method = '${da_method}',
     intg_method = '${intg_method}'
+  /
+  &set_da_exp
+    da_veach = .${da_boolen}.,
+    da_method = '${da_method}'
   /
   &set_period
     spinup_period = ${spinup_period},
@@ -64,9 +69,10 @@ SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 
     obs_tintv = ${obs_tintv}
   /
   &output
-    initial_file = '${initialfile}'
+    initial_true_file = '${initial_true_file}'
+    initial_sim_file = '${initial_sim_file}'
     output_file  = '${outputfile}',
-    opt_veach    = .${boolen}.
+    opt_veach    = .${out_boolen}.
   /
 EOF
 
