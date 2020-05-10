@@ -172,32 +172,36 @@ program lorenz96_main
     write(6,*) '+++ Data assimilation exp. start '
     write(6,*) ' >> Data assimilation method  :: ', da_method
     
+    ! making identity matrix
+    Pf = 0.d0; Pa = 0.d0
+    Kg = 0.d0;  H = 0.d0; R = 0.d0
+
+    forall ( il=1:nx ) Pf(il, il) = 1.0d0 
+    forall ( il=1:nx ) Pa(il, il) = 1.0d0
+    forall ( il=1:ny )  R(il, il) = size_noise_obs
+    ! not regular matrix
+    forall ( il=1:ny ) H(il, il) = 1.0d0
+    
     !-------------------------------------------------------------------
     ! +++ making NoDA score
     !-------------------------------------------------------------------
     open(2, file=trim(initial_sim_file), form='formatted', status='old')
-      read(2,*) x_tmp
+    read(2,*) x_tmp
     close(2)
     x_NoDA(0,:) = x_tmp
     do it = 1, kt_oneday*normal_period
       call ting_rk4(kt_oneday*normal_period, x_NoDA(it-1,:), x_NoDA(it,:))
     end do
-
+    
+    
     !-------------------------------------------------------------------
     ! +++ Data assimilation
     if ( trim(da_method) == 'KF' ) then
+      
       ! --- initialize
       x_DA(0,:) = x_NoDA(0,:)
-      Pf = 0.d0; Pa = 0.d0
-      Kg = 0.d0;  H = 0.d0; R = 0.d0
-      
-      ! making identity matrix
-      forall ( il=1:nx ) Pf(il, il) = 1.0d0 
-      forall ( il=1:nx ) Pa(il, il) = 1.0d0
-      forall ( il=1:ny )  R(il, il) = size_noise_obs
-      forall ( il=1:ny )  H(il, il) = 1.0d0
 
-      data_assim_loop :&
+      data_assim_KF_loop :&
       do it = 1, kt_oneday*normal_period
         write(6,*) 'Data assim. time step: ', it
         call ting_rk4(kt_oneday*normal_period, x_DA(it-1,:), x_DA(it,:))
@@ -213,22 +217,20 @@ program lorenz96_main
           call dgetri(ny, obs_inv_matrix, lda, ipiv, work, lwork, ierr)
           eye_matrix = matmul(obs_matrix, obs_inv_matrix)
           
-          !------------------------------------------------------
-          !check_eye_loop :&
-          !do ix = 1, ny
-          !  write(6,*) eye_matrix(ix,:)
-          !end do &
-          !check_eye_loop
-          !------------------------------------------------------
-          
+          call confirm_matrix(eye_matrix, ny)
+
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv_matrix)
           x_DA(it,:) = x_DA(it,:) + matmul(Kg, (yt_obs(it/obs_tintv,:) - matmul(H, x_DA(it,:))))
           Pa = Pf - matmul(matmul(Kg, H), Pf)
         end if
       end do &
-      data_assim_loop
+      data_assim_KF_loop
 
     else if ( trim(da_method) == 'EnKF' ) then
+      
+      ! --- initialize
+        
+
     end if
   end if
 
@@ -304,5 +306,21 @@ contains
     gnoise=size_gnoise*sqrt(-2.0d0*log(1.0d0-noise1))*cos(2.0d0*pi*noise2)
   
   end subroutine gaussian_noise
+
+  subroutine confirm_matrix(X,N)
+    implicit none
+
+    integer, intent(in)          :: N
+    double precision, intent(in) :: X(N,N)
+    integer                      :: i, j
+    
+    do i=1,n
+      do j=1,n
+        write(*,fmt='(f15.8)',advance='no') X(i,j)
+      end do
+      write(*,*)
+    end do
+    print *, "==============================="
+  end subroutine
 
 end program lorenz96_main

@@ -33,7 +33,9 @@ da_boolen='true'
 outputname='lorenz96'
 initial_true_file='./output/'${outputname}_spinup_initial'.csv'
 initial_sim_file='./output/'${outputname}_spinup_initial'.csv'
-outputfile='./output/'${outputname}'.csv'
+output_true_file='./output/'${outputname}'.csv'
+output_NoDA_file='./output/'${outputname}'.csv'
+output_DA_file='./output/'${outputname}'.csv'
 
 #----------------------------------------------------------------------
 # +++ Run exp.
@@ -71,7 +73,9 @@ SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 
   &output
     initial_true_file = '${initial_true_file}'
     initial_sim_file = '${initial_sim_file}'
-    output_file  = '${outputfile}',
+    output_true_file  = '${outputfile}',
+    output_NoDA_file  = '${outputfile}',
+    output_DA_file  = '${outputfile}',
     opt_veach    = .${out_boolen}.
   /
 EOF
