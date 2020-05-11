@@ -22,7 +22,7 @@ program lorenz96_main
   real(r_size), allocatable :: x_tmp(:)
   real(r_size), allocatable :: yt_obs(:,:)
   ! ***
-  real(r_size), parameter   :: size_noise_obs = 1.0d-2
+  real(r_size), parameter   :: size_noise_obs = 1.0d-1
   integer                   :: ny, nt
   integer                   :: obs_xintv, obs_tintv
   integer                   :: mems
@@ -52,18 +52,19 @@ program lorenz96_main
   character(256)        :: output_true_file
   character(256)        :: output_DA_file
   character(256)        :: output_NoDA_file
+  character(256)        :: output_obs_file
   
   ! --- Working variable
-  character(512)  :: linebuf
-  character(24)   :: cfmt
-  character(4)    :: cfmt_num
+  character(1086)  :: linebuf
+  character(36)   :: cfmt, cfmt_obs
+  character(4)    :: cfmt_num, cfmt_obsnum
   real(r_size)    :: gnoise
   integer         :: spinup_period, normal_period
   integer         :: kt_oneday
   integer         :: ix, it, il, imem, ierr, lda, ipiv, lwork
 
   real(r_size), parameter :: alpha = 0.05d0
-  integer, parameter      :: one_loop=1
+  integer, parameter      :: one_loop = 1
 
   !======================================================================
   !
@@ -78,7 +79,7 @@ program lorenz96_main
   namelist /set_period/ spinup_period, normal_period
   namelist /set_mobs/ obs_xintv, obs_tintv
   namelist /output/ initial_true_file, initial_sim_file, &
-    output_true_file, output_DA_file, output_NoDA_file, opt_veach
+    output_true_file, output_DA_file, output_NoDA_file, output_obs_file, opt_veach
   
   read(5, nml=set_parm, iostat=ierr)
   read(5, nml=set_exp, iostat=ierr)
@@ -229,6 +230,11 @@ program lorenz96_main
           
           call confirm_matrix(eye_matrix, ny)
           
+          !-----------------------------------------------------------
+          ! +++ adaptive inflation mode
+          !-----------------------------------------------------------
+          Pf = Pf*(1.0d0 + alpha*2)
+          
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv_matrix)
           x_DA(it,:) = x_DA(it,:) + matmul(Kg, (yt_obs(it/obs_tintv,:) - matmul(H, x_DA(it,:))))
           Pa = Pf - matmul(matmul(Kg, H), Pf)
@@ -284,8 +290,13 @@ program lorenz96_main
           call dgetri(ny, obs_inv_matrix, lda, ipiv, work, lwork, ierr)
           eye_matrix = matmul(obs_matrix, obs_inv_matrix)
           
-          call confirm_matrix(Pf, nx)
+          call confirm_matrix(eye_matrix, ny)
           
+          !-----------------------------------------------------------
+          ! +++ adaptive inflation mode
+          !-----------------------------------------------------------
+          Pf = Pf*(1.0d0 + alpha*2)
+
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv_matrix)
           x_DA(it,:) = x_DA(it,:) + matmul(Kg, (yt_obs(it/obs_tintv,:) - matmul(H, x_DA(it,:))))
           Pa = Pf - matmul(matmul(Kg, H), Pf)
@@ -306,13 +317,13 @@ program lorenz96_main
     write(6,*) '-------------------------------------------------------'
     write(6,*) '+++ Check Writing output system,  '
     if (nx <= 100 ) then 
-      cfmt = '(xx(F12.7, ","), F12.7)'
+      cfmt = '(f5.2, ",", xx(F12.7, ","), F12.7)'
       write(cfmt_num,"(I2)") nx-1
-      cfmt(2:3) = cfmt_num
+      cfmt(13:14) = cfmt_num
     else if (nx >= 100 ) then
-      cfmt = '(xxx(F12.7, ","), F12.7)'
+      cfmt = '(f5.2, ",", xxx(F12.7, ","), F12.7)'
       write(cfmt_num, "(I3)") nx-1
-      cfmt(2:4) = cfmt_num
+      cfmt(13:15) = cfmt_num
     end if
     
     ! select open file
@@ -323,21 +334,43 @@ program lorenz96_main
         open(2, file=trim(initial_sim_file), form='formatted', status='replace')
       end if
 
-      write(linebuf, cfmt) x_out(0,:)
+      write(linebuf, trim(cfmt)) x_out(0,:)
       call del_spaces(linebuf)
       write(2,'(a)') linebuf
       
     else if ( trim(tool) == 'normal' ) then
-      open(2, file=trim(output_true_file), form='formatted', status='replace')
-      do it = 0, kt_oneday*normal_period, kt_oneday/4
-        print *, it
-        write(linebuf, cfmt) x_true(it,:)
+      open(21, file=trim(output_true_file), form='formatted', status='replace')
+      open(22, file=trim(output_DA_file), form='formatted', status='replace')
+      open(23, file=trim(output_NoDA_file), form='formatted', status='replace')
+      open(24, file=trim(output_obs_file), form='formatted', status='replace')
+      do it = 0, kt_oneday*normal_period
+        
+        write(linebuf, trim(cfmt)) it*dt,  x_true(it,:)
         call del_spaces(linebuf)
-        write(2,'(a)') linebuf
+        write(21,'(a)') linebuf
+        write(linebuf, trim(cfmt)) it*dt, x_DA(it,:)
+        call del_spaces(linebuf)
+        write(22,'(a)') linebuf
+        write(linebuf, trim(cfmt)) it*dt, x_NoDA(it,:)
+        call del_spaces(linebuf)
+        write(23,'(a)') linebuf
+
+        if ( mod(it,obs_tintv) == 0) then 
+          cfmt_obs = '(f5.2, ",", xx(F15.7, ","), F15.7)'
+          write(cfmt_obsnum,"(I2)") ny-1
+          cfmt_obs(13:14) = cfmt_obsnum
+          write(linebuf, trim(cfmt_obs)) it*dt, yt_obs(it, :)
+          call del_spaces(linebuf)
+          write(24,'(a)') linebuf
+        end if
+
       end do
+      close(21)
+      close(22)
+      close(23)
+      close(24)
+      write(6,*) ' && Successfuly output !!!        '  
     endif
-    close(2)
-    write(6,*) ' && Successfuly output !!!        '  
     
   else if ( .not. opt_veach ) then
     write(6,*) '-------------------------------------------------------'

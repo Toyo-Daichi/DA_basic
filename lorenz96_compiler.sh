@@ -3,8 +3,8 @@
 
 set -ex
 CDIR=`pwd`
-tool='spinup' #spinup or normal
-ts_check='sim' # if spinup output is 'true' or 'sim'.
+tool='normal' #spinup or normal
+ts_check='+-sim' # if spinup output is 'true' or 'sim'.
 prg=lorenz96_${tool}_maintools
 today=$(date "+%Y%m%d%H%M")
 rm -rf *.mod ${prg}
@@ -13,11 +13,11 @@ rm -rf *.mod ${prg}
 # +++ Set intial setting
 #----------------------------------------------------------------------
 nx=24
-dt=0.005d0
+dt=0.05d0
 force=3.85d0
 oneday=0.2d0
 
-# +++ integral period
+# +++ integral period(day)
 spinup_period=365
 normal_period=40
 
@@ -27,7 +27,7 @@ mem=40
 
 # +++ making obs. info
 obs_xintv=2
-obs_tintv=20
+obs_tintv=4
 
 # +++ output info
 out_boolen='true' # write putput
@@ -35,10 +35,13 @@ da_boolen='true'
 outputname='lorenz96'
 initial_true_file='./output/'${outputname}/'spinup_true_initial.csv'
 initial_sim_file='./output/'${outputname}/'spinup_sim_initial.csv'
-output_true_file='./output/'${outputname}'.csv'
-output_NoDA_file='./output/'${outputname}'.csv'
-output_DA_file='./output/'${outputname}'.csv'
-
+output_true_file='./output/'${outputname}/'normal_true_score.csv'
+output_NoDA_file='./output/'${outputname}/'normal_NoDA_score.csv'
+output_DA_file='./output/'${outputname}/'normal_'${da_method}'m_DA_score.csv'
+if [ ${da_method} = 'EnKF' ]; then 
+  output_DA_file='./output/'${outputname}/${tool}'_'${da_method}${mem}'_DA_score.csv'
+fi
+output_obs_file='./output/'${outputname}/${tool}'_obs_score.csv'
 #----------------------------------------------------------------------
 # +++ Run exp.
 #----------------------------------------------------------------------
@@ -77,9 +80,10 @@ SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 
   &output
     initial_true_file = '${initial_true_file}',
     initial_sim_file  = '${initial_sim_file}',
-    output_true_file  = '${outputfile}',
-    output_DA_file    = '${outputfile}',
-    output_NoDA_file  = '${outputfile}',
+    output_true_file  = '${output_true_file}',
+    output_DA_file    = '${output_NoDA_file}',
+    output_NoDA_file  = '${output_DA_file}',
+    output_obs_file   = '${output_obs_file}', 
     opt_veach = .${out_boolen}.
   /
 EOF
