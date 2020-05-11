@@ -142,7 +142,7 @@ program lorenz96_main
   !
   ! --- Sec.2 lorenz96 calculation
   !----------------------------------------------------------------------
-  ! +++ display namelist
+  ! +++ making true run.
   !----------------------------------------------------------------------
 
   write(6,*) 'Exp. setting            :: ', tool
@@ -202,7 +202,7 @@ program lorenz96_main
     close(2)
     x_NoDA(0,:) = x_tmp
     do it = 1, kt_oneday*normal_period
-      call ting_rk4(kt_oneday*normal_period, x_NoDA(it-1,:), x_NoDA(it,:))
+      call ting_rk4(one_loop, x_NoDA(it-1,:), x_NoDA(it,:))
     end do
     
     !-------------------------------------------------------------------
@@ -317,13 +317,13 @@ program lorenz96_main
     write(6,*) '-------------------------------------------------------'
     write(6,*) '+++ Check Writing output system,  '
     if (nx <= 100 ) then 
-      cfmt = '(f5.2, ",", xx(F12.7, ","), F12.7)'
+      cfmt = '(xx(F12.7, ","), F12.7)'
       write(cfmt_num,"(I2)") nx-1
-      cfmt(13:14) = cfmt_num
+      cfmt(2:3) = cfmt_num
     else if (nx >= 100 ) then
-      cfmt = '(f5.2, ",", xxx(F12.7, ","), F12.7)'
+      cfmt = 'xxx(F12.7, ","), F12.7)'
       write(cfmt_num, "(I3)") nx-1
-      cfmt(13:15) = cfmt_num
+      cfmt(2:4) = cfmt_num
     end if
     
     ! select open file
@@ -345,21 +345,21 @@ program lorenz96_main
       open(24, file=trim(output_obs_file), form='formatted', status='replace')
       do it = 0, kt_oneday*normal_period
         
-        write(linebuf, trim(cfmt)) it*dt,  x_true(it,:)
+        write(linebuf, trim(cfmt)) x_true(it,:)
         call del_spaces(linebuf)
         write(21,'(a)') linebuf
-        write(linebuf, trim(cfmt)) it*dt, x_DA(it,:)
+        write(linebuf, trim(cfmt)) x_DA(it,:)
         call del_spaces(linebuf)
         write(22,'(a)') linebuf
-        write(linebuf, trim(cfmt)) it*dt, x_NoDA(it,:)
+        write(linebuf, trim(cfmt)) x_NoDA(it,:)
         call del_spaces(linebuf)
         write(23,'(a)') linebuf
 
         if ( mod(it,obs_tintv) == 0) then 
-          cfmt_obs = '(f5.2, ",", xx(F15.7, ","), F15.7)'
+          cfmt_obs = '(xx(F15.7, ","), F15.7)'
           write(cfmt_obsnum,"(I2)") ny-1
-          cfmt_obs(13:14) = cfmt_obsnum
-          write(linebuf, trim(cfmt_obs)) it*dt, yt_obs(it, :)
+          cfmt_obs(2:3) = cfmt_obsnum
+          write(linebuf, trim(cfmt_obs)) yt_obs(it, :)
           call del_spaces(linebuf)
           write(24,'(a)') linebuf
         end if

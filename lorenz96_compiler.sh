@@ -21,13 +21,13 @@ oneday=0.2d0
 spinup_period=365
 normal_period=40
 
-da_method='EnKF'
+da_method='KF'
 intg_method='Runge-Kutta'
 mem=40
 
 # +++ making obs. info
 obs_xintv=2
-obs_tintv=4
+obs_tintv=2
 
 # +++ output info
 out_boolen='true' # write putput
@@ -37,9 +37,9 @@ initial_true_file='./output/'${outputname}/'spinup_true_initial.csv'
 initial_sim_file='./output/'${outputname}/'spinup_sim_initial.csv'
 output_true_file='./output/'${outputname}/'normal_true_score.csv'
 output_NoDA_file='./output/'${outputname}/'normal_NoDA_score.csv'
-output_DA_file='./output/'${outputname}/'normal_'${da_method}'m_DA_score.csv'
+output_DA_file='./output/'${outputname}/'normal_'${da_method}'_DA_score.csv'
 if [ ${da_method} = 'EnKF' ]; then 
-  output_DA_file='./output/'${outputname}/${tool}'_'${da_method}${mem}'_DA_score.csv'
+  output_DA_file='./output/'${outputname}/${tool}'_'${da_method}${mem}'m_DA_score.csv'
 fi
 output_obs_file='./output/'${outputname}/${tool}'_obs_score.csv'
 #----------------------------------------------------------------------
