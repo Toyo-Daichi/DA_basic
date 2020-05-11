@@ -3,7 +3,8 @@
 
 set -ex
 CDIR=`pwd`
-tool='normal' #spinup or normal
+tool='spinup' #spinup or normal
+ts_check='sim' # if spinup output is 'true' or 'sim'.
 prg=lorenz96_${tool}_maintools
 today=$(date "+%Y%m%d%H%M")
 rm -rf *.mod ${prg}
@@ -29,11 +30,11 @@ obs_xintv=2
 obs_tintv=20
 
 # +++ output info
-out_boolen='false' # write putput
+out_boolen='true' # write putput
 da_boolen='true'
 outputname='lorenz96'
-initial_true_file='./output/'${outputname}_spinup_initial'.csv'
-initial_sim_file='./output/'${outputname}_spinup_initial'.csv'
+initial_true_file='./output/'${outputname}/'spinup_true_initial.csv'
+initial_sim_file='./output/'${outputname}/'spinup_sim_initial.csv'
 output_true_file='./output/'${outputname}'.csv'
 output_NoDA_file='./output/'${outputname}'.csv'
 output_DA_file='./output/'${outputname}'.csv'
@@ -56,7 +57,8 @@ SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 
     oneday = ${oneday}
   /
   &set_exp
-    tool = '${tool}'
+    tool = '${tool}',
+    ts_check = '${ts_check}',
     intg_method = '${intg_method}'
   /
   &set_da_exp

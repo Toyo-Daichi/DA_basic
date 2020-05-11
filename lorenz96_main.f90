@@ -28,7 +28,7 @@ program lorenz96_main
   integer                   :: mems
 
   ! --- settign exp.
-  character(8)  :: tool, da_method
+  character(8)  :: tool, ts_check, da_method
   character(12) :: intg_method
   
   ! --- Data assimilation exp.
@@ -73,7 +73,7 @@ program lorenz96_main
   !----------------------------------------------------------------------
   
   namelist /set_parm/ nx, dt, force, oneday
-  namelist /set_exp/ tool, intg_method
+  namelist /set_exp/ tool, ts_check, intg_method
   namelist /set_da_exp/ da_veach, mems, da_method
   namelist /set_period/ spinup_period, normal_period
   namelist /set_mobs/ obs_xintv, obs_tintv
@@ -102,6 +102,7 @@ program lorenz96_main
   if ( trim(tool) == 'spinup' ) then 
     allocate(x_true(1,nx), x_out(1, nx))
     allocate(x_tmp(nx))
+    da_veach = .false.
   else if ( trim(tool) == 'normal' ) then
     allocate(x_true(0:kt_oneday*normal_period, nx))
     allocate(x_tmp(nx))
@@ -283,7 +284,7 @@ program lorenz96_main
           call dgetri(ny, obs_inv_matrix, lda, ipiv, work, lwork, ierr)
           eye_matrix = matmul(obs_matrix, obs_inv_matrix)
           
-          call confirm_matrix(eye_matrix, ny)
+          call confirm_matrix(Pf, nx)
           
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv_matrix)
           x_DA(it,:) = x_DA(it,:) + matmul(Kg, (yt_obs(it/obs_tintv,:) - matmul(H, x_DA(it,:))))
@@ -316,7 +317,12 @@ program lorenz96_main
     
     ! select open file
     if ( trim(tool) == 'spinup' ) then
-      open(2, file=trim(initial_true_file), form='formatted', status='replace')
+      if ( trim(ts_check) == 'true' ) then
+        open(2, file=trim(initial_true_file), form='formatted', status='replace')
+      else if (trim(ts_check) == 'sim' ) then
+        open(2, file=trim(initial_sim_file), form='formatted', status='replace')
+      end if
+
       write(linebuf, cfmt) x_out(0,:)
       call del_spaces(linebuf)
       write(2,'(a)') linebuf
