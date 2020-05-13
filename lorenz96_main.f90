@@ -21,8 +21,9 @@ program lorenz96_main
   real(r_size), allocatable :: x_out(:,:)
   real(r_size), allocatable :: x_tmp(:)
   real(r_size), allocatable :: yt_obs(:,:)
+  real(r_size), allocatable :: yt_obs_ens(:,:)
   ! ***
-  real(r_size), parameter   :: size_noise_obs = 1.0d-1
+  real(r_size), parameter   :: size_noise_obs = 0.2d0
   integer                   :: ny, nt
   integer                   :: obs_xintv, obs_tintv
   integer                   :: mems
@@ -35,6 +36,8 @@ program lorenz96_main
   ! *** Extend Kalamn Filter
   real(r_size), allocatable :: Pf(:,:)
   real(r_size), allocatable :: Pa(:,:)
+  real(r_size), allocatable :: JM(:,:)
+  real(r_size), allocatable ::  I(:,:)
   real(r_size), allocatable :: Kg(:,:)
   real(r_size), allocatable ::  H(:,:)
   real(r_size), allocatable ::  R(:,:)
@@ -63,7 +66,7 @@ program lorenz96_main
   integer         :: kt_oneday
   integer         :: ix, it, il, imem, ierr, lda, ipiv, lwork
 
-  real(r_size), parameter :: alpha = 0.05d0
+  real(r_size), parameter :: alpha = 0.01d0
   integer, parameter      :: one_loop = 1
 
   !======================================================================
@@ -124,10 +127,13 @@ program lorenz96_main
       if ( da_method == 'EnKF' ) then
         allocate(x_DA_mem(0:kt_oneday*normal_period, nx, mems))
         allocate(x_prtb(nx, mems))
+        allocate(yt_obs_ens(ny, mems))
       end if
       ! covariance matrix set.
       allocate(Pf(1:nx, 1:nx))
       allocate(Pa(1:nx, 1:nx))
+      allocate(JM(1:nx, 1:nx))
+      allocate( I(1:nx, 1:nx))
       allocate(Kg(1:nx, 1:ny))
       allocate( H(1:ny, 1:nx))
       ! for kalmangain inverse calculate.
@@ -164,7 +170,7 @@ program lorenz96_main
       !-------------------------------------------------------------------
       ! +++ making obs score
       !-------------------------------------------------------------------
-      if ( mod (it,obs_tintv)==0 ) then    
+      if ( mod (it,obs_tintv)==0 ) then
         do ix=1,nx
           if( mod(ix,obs_xintv)==0 ) then
             call gaussian_noise(size_noise_obs, gnoise)
@@ -186,11 +192,12 @@ program lorenz96_main
     write(6,*) ' >> Data assimilation method  :: ', da_method
     
     ! making identity matrix
-    Pf = 0.d0; Pa = 0.d0
+    Pf = 0.d0; Pa = 0.d0; I = 0.d0
     Kg = 0.d0;  H = 0.d0; R = 0.d0
 
     forall ( il=1:nx ) Pf(il, il) = 1.0d0 
     forall ( il=1:nx ) Pa(il, il) = 1.0d0
+    forall ( il=1:nx )  I(il, il) = 1.0d0
     forall ( il=1:ny )  R(il, il) = size_noise_obs
     forall ( il=1:ny )  H(il, il) = 1.0d0   ! not regular matrix
     
@@ -211,14 +218,16 @@ program lorenz96_main
     if ( trim(da_method) == 'KF' ) then
       ! --- initialize
       x_DA(0,:) = x_NoDA(0,:)
-
+      
       data_assim_KF_loop :&
       do it = 1, kt_oneday*normal_period
         write(6,*) 'Data assim. time step: ', it
         call ting_rk4(one_loop, x_DA(it-1,:), x_DA(it,:))
         
         if ( mod(it, obs_tintv)==0 ) then
-          call tinteg_rk4_ptbmtx( alpha, one_loop, nx, x_DA(it,:), Pa, Pf)
+          JM = 0.0d0
+          call tinteg_rk4_ptbmtx(alpha, one_loop, nx, x_DA(it,:), Pa, JM)
+          Pf = matmul(matmul(JM, Pa), transpose(JM))
           !-----------------------------------------------------------
           ! +++ making inverse matrix
           !-----------------------------------------------------------
@@ -228,16 +237,15 @@ program lorenz96_main
           call dgetri(ny, obs_inv_matrix, lda, ipiv, work, lwork, ierr)
           eye_matrix = matmul(obs_matrix, obs_inv_matrix)
           
-          call confirm_matrix(eye_matrix, ny)
-          
           !-----------------------------------------------------------
           ! +++ adaptive inflation mode
           !-----------------------------------------------------------
-          Pf = Pf*(1.0d0 + alpha*2)
+          Pf = Pf*(1.0d0 + 0.1d0)
           
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv_matrix)
           x_DA(it,:) = x_DA(it,:) + matmul(Kg, (yt_obs(it/obs_tintv,:) - matmul(H, x_DA(it,:))))
-          Pa = Pf - matmul(matmul(Kg, H), Pf)
+          Pa = matmul((I-matmul(Kg, H)), Pf)
+          call confirm_matrix(Pa, nx, nx)
         end if
       end do &
       data_assim_KF_loop
@@ -262,8 +270,8 @@ program lorenz96_main
         do imem = 1, mems
           call ting_rk4(one_loop, x_DA_mem(it-1,:, imem), x_DA_mem(it,:, imem))
         end do
-      
-        if ( mod(it, obs_tintv)==0 ) then
+        
+        if ( mod(it, obs_tintv)==0 .and. it /= 0) then
           Pf = 0.0d0
           do ix = 1, nx
             x_DA(it, ix) = sum(x_DA_mem(it,ix,1:mems))/mems
@@ -289,27 +297,36 @@ program lorenz96_main
           call dgetrf(ny, ny, obs_inv_matrix, lda, ipiv, ierr)
           call dgetri(ny, obs_inv_matrix, lda, ipiv, work, lwork, ierr)
           eye_matrix = matmul(obs_matrix, obs_inv_matrix)
-          
-          call confirm_matrix(eye_matrix, ny)
+          call confirm_matrix(Pf, nx, nx)
           
           !-----------------------------------------------------------
           ! +++ adaptive inflation mode
           !-----------------------------------------------------------
-          Pf = Pf*(1.0d0 + alpha*2)
-
+          Pf = Pf*(1.0d0 + 0.1d0)
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv_matrix)
+          
+          !-----------------------------------------------------------
+          ! +++ Pertuturbed observation method (PO)
+          !-----------------------------------------------------------
+          !do imem = 1, mems
+          !  do iy = 1, ny
+          !  call gaussian_noise(size_noise_obs, gnoise)
+          !  yt_obs_ens(iy, imem) = yt_obs(it, iy) + gnoise
+          !
+          !nd do
+
           x_DA(it,:) = x_DA(it,:) + matmul(Kg, (yt_obs(it/obs_tintv,:) - matmul(H, x_DA(it,:))))
           Pa = Pf - matmul(matmul(Kg, H), Pf)
         end if
       end do &
       data_assim_EnKF_loop
-
+      
     end if &
     DataAssim_exp_kind
   end if &
   DataAssim_exp_set
-
-
+  
+  
   !======================================================================
   !
   ! --- Sec.* Writing OUTPUT
@@ -333,7 +350,7 @@ program lorenz96_main
       else if (trim(ts_check) == 'sim' ) then
         open(2, file=trim(initial_sim_file), form='formatted', status='replace')
       end if
-
+      
       write(linebuf, trim(cfmt)) x_out(0,:)
       call del_spaces(linebuf)
       write(2,'(a)') linebuf
@@ -342,7 +359,6 @@ program lorenz96_main
       open(21, file=trim(output_true_file), form='formatted', status='replace')
       open(22, file=trim(output_DA_file), form='formatted', status='replace')
       open(23, file=trim(output_NoDA_file), form='formatted', status='replace')
-      open(24, file=trim(output_obs_file), form='formatted', status='replace')
       do it = 0, kt_oneday*normal_period
         
         write(linebuf, trim(cfmt)) x_true(it,:)
@@ -354,20 +370,20 @@ program lorenz96_main
         write(linebuf, trim(cfmt)) x_NoDA(it,:)
         call del_spaces(linebuf)
         write(23,'(a)') linebuf
-
-        if ( mod(it,obs_tintv) == 0) then 
+      end do
+      close(21)
+      close(22)
+      close(23)
+      
+      open(24, file=trim(output_obs_file), form='formatted', status='replace')
+        do it = 1, kt_oneday*normal_period/obs_tintv
           cfmt_obs = '(xx(F15.7, ","), F15.7)'
           write(cfmt_obsnum,"(I2)") ny-1
           cfmt_obs(2:3) = cfmt_obsnum
           write(linebuf, trim(cfmt_obs)) yt_obs(it, :)
           call del_spaces(linebuf)
           write(24,'(a)') linebuf
-        end if
-
-      end do
-      close(21)
-      close(22)
-      close(23)
+        end do
       close(24)
       write(6,*) ' && Successfuly output !!!        '  
     endif
@@ -410,15 +426,15 @@ contains
   
   end subroutine gaussian_noise
 
-  subroutine confirm_matrix(X,N)
+  subroutine confirm_matrix(X,N,M)
     implicit none
 
-    integer, intent(in)          :: N
-    double precision, intent(in) :: X(N,N)
+    integer, intent(in)          :: N,M
+    double precision, intent(in) :: X(N,M)
     integer                      :: i, j
     
     do i=1,n
-      do j=1,n
+      do j=1,M
         write(*,fmt='(f15.8)',advance='no') X(i,j)
       end do
       write(*,*)

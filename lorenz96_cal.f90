@@ -39,8 +39,7 @@ contains
     
     return
   end subroutine Lorenz96_core
-  
-  
+
   !----------------------------------------------------------------------
   ! +++ Runge Kutta method
 
@@ -87,6 +86,7 @@ contains
   ! --- Sec.2  Time integration of Perturbation Matrix
   !----------------------------------------------------------------------
   ! +++ M P M^T
+  !----------------------------------------------------------------------
   subroutine tinteg_rk4_ptbmtx(   &
     alpha, kt, nx,                & ! IN:  loop num
     x_in,                         & ! IN:  input score

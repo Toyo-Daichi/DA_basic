@@ -4,7 +4,7 @@
 set -ex
 CDIR=`pwd`
 tool='normal' #spinup or normal
-ts_check='+-sim' # if spinup output is 'true' or 'sim'.
+ts_check='sim' # if spinup output is 'true' or 'sim'.
 prg=lorenz96_${tool}_maintools
 today=$(date "+%Y%m%d%H%M")
 rm -rf *.mod ${prg}
@@ -27,7 +27,7 @@ mem=40
 
 # +++ making obs. info
 obs_xintv=2
-obs_tintv=2
+obs_tintv=10
 
 # +++ output info
 out_boolen='true' # write putput
@@ -81,8 +81,8 @@ SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 
     initial_true_file = '${initial_true_file}',
     initial_sim_file  = '${initial_sim_file}',
     output_true_file  = '${output_true_file}',
-    output_DA_file    = '${output_NoDA_file}',
-    output_NoDA_file  = '${output_DA_file}',
+    output_DA_file    = '${output_DA_file}',
+    output_NoDA_file  = '${output_NoDA_file}',
     output_obs_file   = '${output_obs_file}', 
     opt_veach = .${out_boolen}.
   /
