@@ -12,7 +12,7 @@ rm -rf *.mod ${prg}
 nt_asm=2500
 nt_prd=2500
 obs_interval=20
-DA_METHOD='EnKF' #'KF' or 'EnKF'
+DA_METHOD='KF' #'KF' or 'EnKF'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
 mem=5000
 
@@ -29,8 +29,8 @@ Pf_init=( 1.0d0 0.0d0 0.0d0
 
 # Observation error covariance matrix
 # In this case, two elem(x, y)
-R_init=(  0.01d0  0.00d0 
-          0.00d0  0.01d0 )
+R_init=(  1.00d0  0.00d0 
+          0.00d0  1.00d0 )
 
 # Kalman gain matrix
 K_init=(  0.0d0 0.0d0 
@@ -41,11 +41,14 @@ K_init=(  0.0d0 0.0d0
 H_init=(  1.0d0 0.0d0 0.0d0 
           0.0d0 1.0d0 0.0d0 )
 
-# +++ output info
+# Adaptive inflation mode
+alpha=0.0d0
+
+# +++ outqput info
 boolen='true' # write putput
-outputname='lorenz63_'${DA_METHOD}
-outputfile='./output/'${outputname}'.csv'
-outputfile_error_matrix='./output/'Error_matrix_${outputname}'.csv'
+outputname=${DA_METHOD}
+outputfile='./output/lorenz63/'${outputname}'.csv'
+outputfile_error_matrix='./output/lorenz63/'Error_matrix_${outputname}'.csv'
 if [ ${DA_METHOD} = 'EnKF' ]; then 
   outputfile='./output/'${outputname}_${mem}'.csv'
   outputfile_error_matrix='./output/'Error_matrix_${outputname}_${mem}'mem.csv'
@@ -63,7 +66,8 @@ gfortran -fbounds-check kinddef.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_m
     obs_interval = ${obs_interval}
   /
   &da_setting
-    da_method = '${DA_METHOD}'
+    da_method = '${DA_METHOD}',
+    alpha = ${alpha}
   /
   &intg_setting
     intg_method = '${intg_method}'
