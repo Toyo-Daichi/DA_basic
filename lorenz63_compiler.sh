@@ -12,13 +12,13 @@ rm -rf *.mod ${prg}
 nt_asm=2500
 nt_prd=2500
 obs_interval=20
-DA_METHOD='KF' #'KF' or 'EnKF'
+DA_METHOD='EnKF' #'KF' or 'EnKF'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
 mem=5000
 
 # +++ initial value
 x_tinit=0.0d0; y_tinit=10.0d0; z_tinit=20.0d0
-x_sinit=1.0d0; y_sinit=12.0d0; z_sinit=22.0d0
+x_sinit=0.1d0; y_sinit=10.1d0; z_sinit=20.1d0
 
 # +++ initial matrix
 # Forecast error covariance matrix
@@ -42,7 +42,7 @@ H_init=(  1.0d0 0.0d0 0.0d0
           0.0d0 1.0d0 0.0d0 )
 
 # Adaptive inflation mode
-alpha=0.0d0
+alpha=0.2d0
 
 # +++ outqput info
 boolen='true' # write putput
@@ -50,8 +50,8 @@ outputname=${DA_METHOD}
 outputfile='./output/lorenz63/'${outputname}'.csv'
 outputfile_error_matrix='./output/lorenz63/'Error_matrix_${outputname}'.csv'
 if [ ${DA_METHOD} = 'EnKF' ]; then 
-  outputfile='./output/'${outputname}_${mem}'.csv'
-  outputfile_error_matrix='./output/'Error_matrix_${outputname}_${mem}'mem.csv'
+  outputfile='./output/lorenz63/'${outputname}_${mem}'m_'${alpha}'infla.csv'
+  outputfile_error_matrix='./output/lorenz63/'Error_matrix_${outputname}_${mem}'mem_'${alpha}'infla.csv'
 fi
 
 #----------------------------------------------------------------------

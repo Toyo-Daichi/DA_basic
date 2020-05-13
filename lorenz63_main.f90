@@ -246,7 +246,7 @@ program lorenz63
       
       do it = 1, nt_asm
         if ( opt_veach ) then
-          call write_error_covariance_matrix(it, nt_asm, Pf)
+          call write_error_covariance_matrix(it, nt_asm, Pa)
         end if  
 
         write(6,*) 'Data assim. time step: ', it

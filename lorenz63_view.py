@@ -20,7 +20,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 class lorenz63_score:
   def __init__(self, path:str):
-    """
+    """Lorenz(1963)モデル結果の描画
 
     Args:
       path(str): 土台になるデータリストのパス。(lorenz63の並列描画を行いたいデータリスト)
@@ -116,7 +116,7 @@ class lorenz63_score:
     ax = fig.gca(projection='3d')
 
     ax.set_xlabel("X Axis"); ax.set_ylabel("Y Axis");  ax.set_zlabel("Z Axis")
-    ax.plot(self.true_list[0], self.da_list[1], self.da_list[2], lw=0.5)
+    ax.plot(self.true_list[0], self.true_list[1], self.true_list[2], lw=0.5)
 
     ax.scatter(self.true_list[0][timestep], self.true_list[1][timestep], self.true_list[2][timestep], marker='o', color='b',label='True', alpha=0.5)
     ax.scatter(self.sim_list[0][timestep], self.sim_list[1][timestep], self.sim_list[2][timestep], marker='o', color='r', label='Sim.', alpha=0.5)
@@ -130,12 +130,14 @@ class lorenz63_score:
 
     return timestep
 
-  def lorenz_rmse_draw(self, rmse_sim:list, rmse_da:list, rmse_obs:list) -> None:
+  def lorenz_rmse_draw(self, rmse_sim:list, rmse_obs:list, rmse_da:list,
+                             rmse_da_1:list, rmse_da_2:list, rmse_da_3:list, rmse_da_4:list, rmse_da_5:list
+                             ) -> None:
     """RMSEの描画
 
     Arguments:
-        rmse_da(list): 土台データのデータ同化のRMSE
         rmse_obs(list): 土台データの観測値のRMSE
+        rmse_da(list): 土台データのデータ同化のRMSE
         rmse_sim(list): 土台データリストのシミュレーション値のRMSE
         +
         *適宜、加える。(可変引数を使うことはできるか??)
@@ -145,14 +147,22 @@ class lorenz63_score:
     ax1 = fig.subplots()
     
     sns.set_style('whitegrid')
-    ax1.plot(self.time_list, rmse_da, ls="--", color='r', label='DA')
-    ax1.plot(self.time_list, rmse_sim, ls="--", color='b', label='No DA')
-    ax1.scatter(self.obs_time_list, rmse_obs, marker='o', color='g', s=20, alpha=0.5, edgecolor='k', label='Obs.')
+    #ax1.plot(self.time_list, rmse_sim, ls="--", color='b', label='No DA')
+    
+    ax1.plot(self.time_list, rmse_da, ls="--", color='r', label='KF')
+    ax1.plot(self.time_list, rmse_da_1, ls=":", alpha=0.3, label='EnKF 3mem')
+    ax1.plot(self.time_list, rmse_da_2, ls="--", label='EnKF 10mem')
+    ax1.plot(self.time_list, rmse_da_3, ls="--", label='EnKF 100mem')
+    ax1.plot(self.time_list, rmse_da_4, ls="--", label='EnKF 1000mem')
+    ax1.plot(self.time_list, rmse_da_5, ls="--", label='EnKF 5000mem')
+
+    ax1.scatter(self.obs_time_list, rmse_obs, marker='*', color='y', s=35, alpha=0.5, edgecolor='k', label='Obs.')
 
     ax1.set_xlabel('sec.')
     ax1.set_ylabel('RMSE')
     ax1.set_xlim(0, 25)
-    ax1.set_title('Lorenz(1963) RMSE', loc='left')
+    ax1.set_ylim(0, 10)
+    ax1.set_title('Lorenz(1963) RMSE inflation +0.2', loc='left')
 
     plt.grid()
     plt.legend()
@@ -174,7 +184,7 @@ class lorenz63_error_covariance_matrix:
     sns.set(style='white')
     sns.heatmap(
       data=err_data, cmap=cmap, annot=True, fmt='.6f',
-      vmax=0.1, vmin=-0.1, center=0,
+      vmax=1.0, vmin=-1.0, center=0,
       square=True, linewidths=.5, 
       cbar_kws={"shrink": .5, "extend": 'both'},
       xticklabels=['x','y','z'], yticklabels=['x','y','z']
@@ -193,19 +203,19 @@ if __name__ == "__main__":
   mem          = 5000
 
   outdir    = './output/lorenz63/'
-  da_method = 'KF'
+  da_method = 'EnKF'
   data_path = outdir + da_method + '.csv'
-  #err_path  = outdir + 'Error_matrix_' + da_method + '.csv'
-  #if da_method is 'EnKF':
-  #  data_path = outdir + 'lorenz63_' + da_method + '_' + str(mem) + 'mem_little_diff.csv'
-  #  err_path  = outdir + 'Error_matrix_lorenz63_' + da_method + '_' + str(mem) + 'mem.csv'
+  err_path  = outdir + 'Error_matrix_' + da_method + '.csv'
+  if da_method is 'EnKF':
+    data_path = outdir +  da_method + '_' + str(mem) + 'm.csv'
+    err_path  = outdir + 'Error_matrix_' + da_method + '_' + str(mem) + 'mem.csv'
 
   #---------------------------------------------------------- 
   # +++ class set
   # > lorenz63 cal. score
   score = lorenz63_score(data_path)
   # > prediction err covariance matrix
-  #e_matrix = lorenz63_error_covariance_matrix(err_path)
+  e_matrix = lorenz63_error_covariance_matrix(err_path)
   
   #---------------------------------------------------------- 
   # +++ draw func.
@@ -221,7 +231,7 @@ if __name__ == "__main__":
   elapsed_time = time_after - time_before
   print(f'time: {elapsed_time} sec.')
   """
-  
+
   # >> rmse draw
   num_sim_elem = 3
   rmse_sim = score.accuracy_rmse_func(score.true_list, score.sim_list, num_sim_elem)
@@ -229,11 +239,32 @@ if __name__ == "__main__":
   num_obs_elem = 2
   rmse_obs = score.accuracy_rmse_func(score.obs_true_list, score.obs_list, num_obs_elem)
 
-  score.lorenz_rmse_draw(rmse_sim, rmse_da, rmse_obs)
+  # Basic.
+  #score.lorenz_rmse_draw(rmse_sim, rmse_obs, rmse_da)
+
+  # >> plus. dataset rmse
+  """
+  data_path_1 = outdir + 'EnKF_3m_0.2d0infla.csv'
+  score_1 = lorenz63_score(data_path_1)
+  data_path_2 = outdir + 'EnKF_10m_0.2d0infla.csv'
+  score_2 = lorenz63_score(data_path_2)
+  data_path_3 = outdir + 'EnKF_100m_0.2d0infla.csv'
+  score_3 = lorenz63_score(data_path_3)
+  data_path_4 = outdir + 'EnKF_1000m_0.2d0infla.csv'
+  score_4 = lorenz63_score(data_path_4)
+  data_path_5 = outdir + 'EnKF_5000m_0.2d0infla.csv'
+  score_5 = lorenz63_score(data_path_5)
+
+  rmse_da_1 = score.accuracy_rmse_func(score.true_list, score_1.da_list, num_sim_elem)
+  rmse_da_2 = score.accuracy_rmse_func(score.true_list, score_2.da_list, num_sim_elem)
+  rmse_da_3 = score.accuracy_rmse_func(score.true_list, score_3.da_list, num_sim_elem)
+  rmse_da_4 = score.accuracy_rmse_func(score.true_list, score_4.da_list, num_sim_elem)
+  rmse_da_5 = score.accuracy_rmse_func(score.true_list, score_5.da_list, num_sim_elem)
+
+  score.lorenz_rmse_draw(rmse_sim, rmse_obs, rmse_da, rmse_da_1, rmse_da_2, rmse_da_3, rmse_da_4, rmse_da_5)
+  """
 
   # >> error covariance matrix
-  """
-  for i_num in tqdm(range(0, len(score.time_list), obs_interval)):
+  for i_num in tqdm(range(0, int(len(score.time_list)/2), obs_interval)):
     matrix_data = e_matrix.err_data[i_num].reshape(matrix_size, matrix_size)
     e_matrix.error_heatmap(matrix_data, i_num)
-  """
