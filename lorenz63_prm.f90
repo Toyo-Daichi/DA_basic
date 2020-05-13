@@ -7,7 +7,7 @@ module lorenz63_prm
   use kinddef
 
   ! --- matrix size
-  integer, parameter      :: nx   = 3
+  integer, parameter      :: nx = 3
   integer, parameter      :: ny = 2
 
   ! --- Lorenz parameter

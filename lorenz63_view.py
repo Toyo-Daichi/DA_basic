@@ -20,32 +20,77 @@ from mpl_toolkits.mplot3d import Axes3D
 
 class lorenz63_score:
   def __init__(self, path:str):
-    self.df = pd.read_csv(path, sep=',')
-    # sim. list
+    """
+
+    Args:
+      path(str): 土台になるデータリストのパス。(lorenz63の並列描画を行いたいデータリスト)
+    
+    Note:
+      self.df(pd.core.frame.DataFrame): 土台データフレーム
+      self.time_list(list): 時間リスト
+      self.true_list(list): 真値のリスト(OSSEの元)
+      self.sim_list(list) : シミュレーション値のリスト
+      self.da_list(list)  : データ同化サイクル値のリスト
+      
+      self.obs(pd.core.frame.DataFrame): 真値リストに乱数を与えて作成した観測値データリスト
+      self.obs_list(list): 
+      self.obs_time_list(list): 観測値様の時間リスト
+      self.obs_true_list(list): 観測値様の時間に相当するtrue_listの値
+    """
+    print('Call ..... Constract of lorenz63_score')
+    
+    # +++ common list
+    self.df  = pd.read_csv(path[0], sep=',')
+
     self.time_list = self.df2_list(self.df, ' timestep')[0]
     self.true_list = self.df2_list(self.df, ' x_true', ' y_true', ' z_true')
-    self.sim_list  = self.df2_list(self.df, ' x_sim', ' y_sim', ' z_sim')
-    self.da_list   = self.df2_list(self.df, ' x_da', ' y_da', ' z_da')
-    # obs. list
     undef = -999.e0
+    
+    # obs. list
     obs = self.df.loc[ :, [' timestep', ' x_true', ' y_true', ' x_obs', ' y_obs']]
     obs = obs[obs[' x_obs'] != undef]
     self.obs_time_list  = self.df2_list(obs, ' timestep')[0]
     self.obs_true_list = self.df2_list(obs, ' x_true', ' y_true')
     self.obs_list       = self.df2_list(obs, ' x_obs', ' y_obs')
+    
+    # sim. list
+    self.sim_list  = self.df2_list(self.df, ' x_sim', ' y_sim', ' z_sim')
+    self.da_list   = self.df2_list(self.df, ' x_da', ' y_da', ' z_da')
+    
     """
     list.shape
     list[0] = x score, list[1] = y score, list[2] = z score, 
     """
-    print('Call ..... Constract of lorenz63_score')
   
   def df2_list(self, Dataframe:pd.core.frame.DataFrame, *index_wrd:tuple) -> list:
+    """pandasフレームをリスト化
+
+    Args:
+      Dataframe(pd.core.frame.DataFrame): リスト化したいデータフレーム
+      index_wrd(tuple): 抽出したいコラム名
+
+    Returns:
+      index_list(list): pandasフレームを指定されたコラム名で抽出したリスト
+    """
     index_list = []
     for i_index in index_wrd:
       index_list.append(Dataframe[i_index].tolist())
     return index_list
 
   def accuracy_rmse_func(self, true_list:list, asses_list:list, num_elem:int) -> list:
+    """RMSEリストの作成
+
+    Args:
+        true_list(list): 今回の実験の真値
+        asses_list(list): 真値との差を図りたいリスト
+        num_elem(int): 真値との差を図りたい変数の数
+
+    Returns:
+        rmse_list(list): タイムステップ別に分けたrmse
+
+    Note:
+      シミュレーション値, データ同化値と観測値では, RMSEのタイムリストや変数の数が違うので注意。
+    """
     rmse_list  = []
     time_range = len(true_list[0])
     for i_num in range(time_range):
@@ -59,11 +104,19 @@ class lorenz63_score:
     return rmse_list
 
   def lorenz_3ddraw(self, timestep:int) -> int:
+    """土台データリストの3D描画
+
+    Args:
+        timestep(int): 描画したいタイムステップ
+
+    Returns:
+        timestep(int): 忘れた。並列化のtqdmで必要か?
+    """
     fig = plt.figure()
     ax = fig.gca(projection='3d')
 
     ax.set_xlabel("X Axis"); ax.set_ylabel("Y Axis");  ax.set_zlabel("Z Axis")
-    ax.plot(self.true_list[0], self.true_list[1], self.true_list[2], lw=0.5)
+    ax.plot(self.true_list[0], self.da_list[1], self.da_list[2], lw=0.5)
 
     ax.scatter(self.true_list[0][timestep], self.true_list[1][timestep], self.true_list[2][timestep], marker='o', color='b',label='True', alpha=0.5)
     ax.scatter(self.sim_list[0][timestep], self.sim_list[1][timestep], self.sim_list[2][timestep], marker='o', color='r', label='Sim.', alpha=0.5)
@@ -77,7 +130,17 @@ class lorenz63_score:
 
     return timestep
 
-  def lorenz_rmse_draw(self, rmse_sim:list, rmse_da:list, rmse_obs:list, da_method) -> None:
+  def lorenz_rmse_draw(self, rmse_sim:list, rmse_da:list, rmse_obs:list) -> None:
+    """RMSEの描画
+
+    Arguments:
+        rmse_da(list): 土台データのデータ同化のRMSE
+        rmse_obs(list): 土台データの観測値のRMSE
+        rmse_sim(list): 土台データリストのシミュレーション値のRMSE
+        +
+        *適宜、加える。(可変引数を使うことはできるか??)
+        rmse_da_?(list): 加えたい違う種類のデータ同化のRMSE
+    """
     fig = plt.figure()
     ax1 = fig.subplots()
     
@@ -89,13 +152,16 @@ class lorenz63_score:
     ax1.set_ylabel('RMSE')
     ax1.set_ylim(0, 1.6)
     ax1.set_xlim(0, 25)
-    ax1.set_title('Lorenz(1963) RMSE, Data assim. method: ' + da_method, loc='left')
+    ax1.set_title('Lorenz(1963) RMSE', loc='left')
 
     plt.grid()
     plt.legend()
     plt.show()
 
 class lorenz63_error_covariance_matrix:
+  """
+  一つのデータリストを誤差共分散行列の扱いを行うクラスメソッド
+  """
   def __init__(self, path:str):
     self.err_data = self.read_error_csv(path)
 
