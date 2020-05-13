@@ -40,12 +40,12 @@ program lorenz63
   real(r_size) :: x_a(nx,1)
   real(r_size) :: yt_obs(ny,1)
   
-  real(r_size) :: JM(nx,nx), JM_T(nx,nx)  ! state transient matrix and transpose matrix
-  real(r_size) :: Pf(nx,nx)               ! Forecast error convariance matrix (in KF, EnKF)
-  real(r_size) :: Pa(nx,nx)               ! Analysis error convariance matrix
-  real(r_size) ::  R(ny,ny)               ! Observation error convariance matrix
-  real(r_size) :: Kg(nx,ny)               ! Kalman gain
-  real(r_size) ::  H(ny,nx)               ! Observation operator
+  real(r_size) :: JM(nx,nx)  ! state transient matrix
+  real(r_size) :: Pf(nx,nx)  ! Forecast error convariance matrix (in KF, EnKF)
+  real(r_size) :: Pa(nx,nx)  ! Analysis error convariance matrix
+  real(r_size) ::  R(ny,ny)  ! Observation error convariance matrix
+  real(r_size) :: Kg(nx,ny)  ! Kalman gain
+  real(r_size) ::  H(ny,nx)  ! Observation operator
   
   ! --- Output control
   real(r_size), allocatable :: obs_chr(:, :)
@@ -268,17 +268,16 @@ program lorenz63
           )
         end if
 
-        ! 4.2: Kalman fileter
-        !------------------------------------------------------- 
-        ! +++ 4.2.1 State Transient Matrix
-        JM(1,1) = 1 - dt*sig;             JM(1,2) = dt*sig;         JM(1,3) = 0.0d0
-        JM(2,1) = dt*(gamm - z_da(it-1)); JM(2,2) = 1.0d0 - dt;     JM(2,3) = -dt*x_da(it-1)
-        JM(3,1) = dt*y_da(it-1);          JM(3,2) = dt*x_da(it-1);  JM(3,3) = 1.0d0 - dt*b
-        
         if (mod(it, obs_interval) == 0) then
-          JM_T = transpose(JM)
-          JM_T = matmul(Pf, JM_T)
-          Pf   = matmul(JM, JM_T)*(1.0d0 + alpha)
+          !------------------------------------------------------- 
+          ! 4.2: Kalman fileter
+          !------------------------------------------------------- 
+          ! +++ 4.2.1 State Transient Matrix
+          JM(1,1) = 1.0d0 - dt*sig;         JM(1,2) = dt*sig;         JM(1,3) = 0.0d0
+          JM(2,1) = dt*(gamm - z_da(it-1)); JM(2,2) = 1.0d0 - dt;     JM(2,3) = -dt*x_da(it-1)
+          JM(3,1) = dt*y_da(it-1);          JM(3,2) = dt*x_da(it-1);  JM(3,3) = 1.0d0 - dt*b
+        
+          Pf = matmul(JM, matmul(Pf, transpose(JM)))*(1.0d0 + alpha)
           !------------------------------------------------------- 
           ! >> 4.2.3 Kalman gain: Weighting of model result and obs.
           ! (Note) Observation in x,y ----> component 2 (x,y)
@@ -286,18 +285,16 @@ program lorenz63
           ! *** ref:
           ! http://www.rcs.arch.t.u-tokyo.ac.jp/kusuhara/tips/linux/fortran.html
           
-          HPHt = matmul(H, matmul( Pf, transpose(H)))
+          HPHt = matmul(H, matmul(Pf, transpose(H)))
           R_HPHt = R + HPHt
           
           !------------------------------------------------------- 
           ! +++ inverse matrix calculate for 2x2 on formula
-          call inverse_matrix_for2x2(       &
-          R_HPHt, inv_matrix         &
-          )
+          call inverse_matrix_for2x2(R_HPHt, inv_matrix)
           
           eye_matrix = matmul(R_HPHt, inv_matrix)
-          write(6,*) ' +++ confirm eye matrix calculate ... '
-          write(6,*) eye_matrix
+          !write(6,*) ' +++ confirm eye matrix calculate ... '
+          !write(6,*) eye_matrix
           Kg = matmul(matmul(Pf, transpose(H)), inv_matrix)
           
           !------------------------------------------------------- 
@@ -309,14 +306,15 @@ program lorenz63
           hx = matmul(H, x_a)
           hdxf = yt_obs - hx
           x_a = x_a + matmul(Kg, hdxf)
+          call confirm_matrix(Kg, nx, ny)
           x_da(it) = x_a(1,1); y_da(it) = x_a(2,1); z_da(it) = x_a(3,1)
-
+          
           ! >> 4.2.5 analysis error covariance matrix
           Pa = Pf - matmul(matmul(Kg, H), Pf)
           Pf = Pa
         end if
       end do
-    
+      
     else if ( da_method == 'EnKF' ) then
       ! +++ initial setting
       do imem = 1, mems
@@ -331,7 +329,7 @@ program lorenz63
       x_da(0) = sum(x_da_m(0, 1:mems))/mems 
       y_da(0) = sum(x_da_m(0, 1:mems))/mems 
       z_da(0) = sum(x_da_m(0, 1:mems))/mems
-
+      
       do it = 1, nt_asm
         if ( opt_veach ) then
           call write_error_covariance_matrix(it, nt_asm, Pf)
@@ -343,25 +341,25 @@ program lorenz63
           x_da_m(it-1, imem), y_da_m(it-1, imem), z_da_m(it-1, imem),   & ! IN
           x_k(1), y_k(1), z_k(1)                                        & ! OUT
           )
-        
+          
           !------------------------------------------------------- 
           ! +++ Euler method
           if ( trim(intg_method) == 'Euler' ) then
             x_da_m(it, imem) = x_da_m(it-1, imem) + dt * x_k(1)
             y_da_m(it, imem) = y_da_m(it-1, imem) + dt * y_k(1)
             z_da_m(it, imem) = z_da_m(it-1, imem) + dt * z_k(1)
-
-          !------------------------------------------------------- 
-          ! +++ Runge-Kutta method
+            
+            !------------------------------------------------------- 
+            ! +++ Runge-Kutta method
           else if ( trim(intg_method) == 'Runge-Kutta' ) then 
-
+            
             call Lorenz63_Runge_Kutta(                                     &
             x_da_m(it-1, imem), y_da_m(it-1, imem), z_da_m(it-1, imem),    & ! IN
             x_da_m(it, imem), y_da_m(it, imem), z_da_m(it, imem)           & ! OUT
             )
           end if
         end do
-
+        
         if(mod(it, obs_interval) == 0) then
           x_da(it) = sum(x_da_m(it, 1:mems))/mems
           y_da(it) = sum(y_da_m(it, 1:mems))/mems
@@ -371,7 +369,7 @@ program lorenz63
             x_prtb(imem) = x_da_m(it, imem) - x_da(it)
             y_prtb(imem) = y_da_m(it, imem) - y_da(it)
             z_prtb(imem) = z_da_m(it, imem) - z_da(it)
-
+            
             !------------------------------------------------------- 
             ! +++ Dispersion
             Pf(1,1) = Pf(1,1) + x_prtb(imem)**2/(mems-1)
@@ -386,21 +384,20 @@ program lorenz63
             Pf(2,3) = Pf(2,3) + y_prtb(imem)*z_prtb(imem)/(mems-1)
             Pf(3,2) = Pf(1,3)
           end do
-
+          
           HPHt = matmul(H, matmul(Pf, transpose(H)))
           R_HPHt = R + HPHt
-
+          
           !------------------------------------------------------- 
           ! +++ inverse matrix calculate for 2x2 on formula
-          call inverse_matrix_for2x2(       &
-          R_HPHt, inv_matrix         &
-          )
-
+          call inverse_matrix_for2x2(R_HPHt, inv_matrix)
+          
           eye_matrix = matmul(R_HPHt, inv_matrix)
-          write(6,*) ' +++ confirm eye matrix calculate ... '
-          write(6,*) eye_matrix
+          !write(6,*) ' +++ confirm eye matrix calculate ... '
+          !write(6,*) eye_matrix
           Kg = matmul(matmul(Pf, transpose(H)), inv_matrix)
-
+          call confirm_matrix(Kg, nx, ny)
+          
           do imem = 1, mems
             !------------------------------------------------------- 
             ! +++ Pertuturbed observation method (PO)
@@ -574,21 +571,21 @@ contains
         call del_spaces(linebuf)
         write(2, '(a)') trim(linebuf)
         write(6,*) '+++ err covariance matrix 1st. step'
-        write(6,*) error_covariance_matrix(:,:)
+        !write(6,*) error_covariance_matrix(:,:)
         
       else if ( it /= 1 .and. it /= last_step) then
         write(6,*) '+++ err covariance matrix 2nd. step ~'
         write(linebuf, '(8(f12.5, ","), f12.5)') error_covariance_matrix
         call del_spaces(linebuf)
         write(2, '(a)') trim(linebuf)
-        write(6,*) error_covariance_matrix(:,:)
+        !write(6,*) error_covariance_matrix(:,:)
         
       else if ( it == last_step ) then
         write(linebuf, '(8(f12.5, ","), f12.5)') error_covariance_matrix
         call del_spaces(linebuf)
         write(2, '(a)') trim(linebuf)
         write(6,*) '+++ err covariance matrix last step '
-        write(6,*) error_covariance_matrix(:,:)
+        !write(6,*) error_covariance_matrix(:,:)
       close(2)
     end if
       
@@ -631,5 +628,22 @@ contains
     end do
     space = tmp(1:j-1)
   end subroutine del_spaces
+
+  subroutine confirm_matrix(X,N,M)
+    implicit none
+
+    integer, intent(in)          :: N,M
+    double precision, intent(in) :: X(N,M)
+    integer                      :: i, j
+    
+    do i=1,n
+      do j=1,M
+        write(*,fmt='(f15.8)',advance='no') X(i,j)
+      end do
+      write(*,*)
+    end do
+    print *, "==============================="
+  end subroutine
+
 
 end program lorenz63

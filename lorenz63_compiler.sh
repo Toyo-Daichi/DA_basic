@@ -29,8 +29,8 @@ Pf_init=( 1.0d0 0.0d0 0.0d0
 
 # Observation error covariance matrix
 # In this case, two elem(x, y)
-R_init=(  0.01d0  0.00d0 
-          0.00d0  0.01d0 )
+R_init=(  1.00d0  0.00d0 
+          0.00d0  1.00d0 )
 
 # Kalman gain matrix
 K_init=(  0.0d0 0.0d0 
@@ -42,7 +42,7 @@ H_init=(  1.0d0 0.0d0 0.0d0
           0.0d0 1.0d0 0.0d0 )
 
 # Adaptive inflation mode
-alpha=0.1d0
+alpha=0.3d0
 
 # +++ output info
 boolen='true' # write putput

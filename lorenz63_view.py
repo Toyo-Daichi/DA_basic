@@ -40,7 +40,7 @@ class lorenz63_score:
     print('Call ..... Constract of lorenz63_score')
     
     # +++ common list
-    self.df  = pd.read_csv(path[0], sep=',')
+    self.df  = pd.read_csv(path, sep=',')
 
     self.time_list = self.df2_list(self.df, ' timestep')[0]
     self.true_list = self.df2_list(self.df, ' x_true', ' y_true', ' z_true')
@@ -145,13 +145,13 @@ class lorenz63_score:
     ax1 = fig.subplots()
     
     sns.set_style('whitegrid')
-    ax1.plot(self.time_list, rmse_da, ls="--", color='r', label='Data assim.')
+    ax1.plot(self.time_list, rmse_da, ls="--", color='r', label='DA')
+    ax1.plot(self.time_list, rmse_sim, ls="--", color='b', label='No DA')
     ax1.scatter(self.obs_time_list, rmse_obs, marker='o', color='g', s=20, alpha=0.5, edgecolor='k', label='Obs.')
 
     ax1.set_xlabel('sec.')
     ax1.set_ylabel('RMSE')
-    ax1.set_ylim(0, 1.6)
-    ax1.set_xlim(0, 25)
+    #ax1.set_xlim(0, 25)
     ax1.set_title('Lorenz(1963) RMSE', loc='left')
 
     plt.grid()
@@ -168,7 +168,7 @@ class lorenz63_error_covariance_matrix:
   def read_error_csv(self, path:str) -> np.ndarray:
     return np.genfromtxt(path, delimiter=",")
 
-  def error_heatmap(self, err_data:np.ndarray, timestep:int):
+  def error_heatmap(self, err_data:np.ndarray, timestep:int) -> None:
     fig, ax = plt.subplots()
     cmap = sns.diverging_palette(220, 10, as_cmap=True)
     sns.set(style='white')
@@ -192,24 +192,25 @@ if __name__ == "__main__":
   obs_interval = 20
   mem          = 5000
 
-  outdir    = './output/'
-  da_method = 'EnKF'
-  data_path = outdir + 'lorenz63_' + da_method + '_little_diff.csv'
-  err_path  = outdir + 'Error_matrix_lorenz63_' + da_method + '.csv'
-  if da_method is 'EnKF':
-    data_path = outdir + 'lorenz63_' + da_method + '_' + str(mem) + 'mem_little_diff.csv'
-    err_path  = outdir + 'Error_matrix_lorenz63_' + da_method + '_' + str(mem) + 'mem.csv'
+  outdir    = './output/lorenz63/'
+  da_method = 'KF'
+  data_path = outdir + da_method + '.csv'
+  #err_path  = outdir + 'Error_matrix_' + da_method + '.csv'
+  #if da_method is 'EnKF':
+  #  data_path = outdir + 'lorenz63_' + da_method + '_' + str(mem) + 'mem_little_diff.csv'
+  #  err_path  = outdir + 'Error_matrix_lorenz63_' + da_method + '_' + str(mem) + 'mem.csv'
 
   #---------------------------------------------------------- 
   # +++ class set
   # > lorenz63 cal. score
   score = lorenz63_score(data_path)
   # > prediction err covariance matrix
-  e_matrix = lorenz63_error_covariance_matrix(err_path)
+  #e_matrix = lorenz63_error_covariance_matrix(err_path)
   
   #---------------------------------------------------------- 
   # +++ draw func.
-  # > 3D draw
+  # >> 3D draw
+  """
   time_before = time.time()
   laststep = 2500
   viewstep = int(laststep / 3) +1
@@ -219,19 +220,20 @@ if __name__ == "__main__":
   time_after = time.time()
   elapsed_time = time_after - time_before
   print(f'time: {elapsed_time} sec.')
-  
   """
-  # > error covariance matrix
-  for i_num in tqdm(range(0, len(err_list), obs_interval)):
-    matrix_data = e_matrix.err_data[i_num].reshape(matrix_size, matrix_size)
-    e_matrix.error_heatmap(matrix_data, i_num)
-  
-  # > rmse draw
+
+  # >> rmse draw
   num_sim_elem = 3
   rmse_sim = score.accuracy_rmse_func(score.true_list, score.sim_list, num_sim_elem)
   rmse_da  = score.accuracy_rmse_func(score.true_list, score.da_list, num_sim_elem)
   num_obs_elem = 2
   rmse_obs = score.accuracy_rmse_func(score.obs_true_list, score.obs_list, num_obs_elem)
 
-  score.lorenz_rmse_draw(rmse_sim, rmse_da, rmse_obs, da_method)
+  score.lorenz_rmse_draw(rmse_sim, rmse_da, rmse_obs)
+
+  # >> error covariance matrix
+  """
+  for i_num in tqdm(range(0, len(score.time_list), obs_interval)):
+    matrix_data = e_matrix.err_data[i_num].reshape(matrix_size, matrix_size)
+    e_matrix.error_heatmap(matrix_data, i_num)
   """
