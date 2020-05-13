@@ -43,6 +43,7 @@ program lorenz63
   real(r_size) :: JM(nx,nx)  ! state transient matrix
   real(r_size) :: Pf(nx,nx)  ! Forecast error convariance matrix (in KF, EnKF)
   real(r_size) :: Pa(nx,nx)  ! Analysis error convariance matrix
+  real(r_size) ::  I(nx,nx)  ! eye_matrix
   real(r_size) ::  R(ny,ny)  ! Observation error convariance matrix
   real(r_size) :: Kg(nx,ny)  ! Kalman gain
   real(r_size) ::  H(ny,nx)  ! Observation operator
@@ -56,12 +57,13 @@ program lorenz63
   character(1096)           :: linebuf
 
   ! --- Working variable
-  integer :: it
+  integer :: it, il
   integer :: mems, imem
   integer :: ierr
   integer :: iflag
   integer :: iter
-  real(r_size) :: Gnoise ! Gaussian noise
+  real(r_dble) :: Gnoise ! Gaussian noise
+  real(r_dble) :: delta ! Gaussian noise
   real(r_size) :: alpha  ! inflation
   real(r_size), parameter:: undef = -999.e0
 
@@ -88,6 +90,7 @@ program lorenz63
   !----------------------------------------------------------------------
   real(r_size) :: x_tinit, y_tinit, z_tinit
   real(r_size) :: x_sinit, y_sinit, z_sinit
+  real(r_size) :: x_e, y_e, z_e
   real(r_size) :: Pf_init(9), B_init(9)
   real(r_size) :: R_init(4)
   real(r_size) :: Kg_init(6)
@@ -159,6 +162,9 @@ program lorenz63
 
   H(1,1) = H_init(1); H(1,2) = H_init(2); H(1,3) = H_init(3)
   H(2,1) = H_init(4); H(2,2) = H_init(5); H(2,3) = H_init(6)
+
+  I = 0.0d0
+  forall ( il=1:nx )  I(il, il) = 1.0d0
   
   ! --- Initialization of random number generator
   call random_seed()
@@ -273,11 +279,27 @@ program lorenz63
           ! 4.2: Kalman fileter
           !------------------------------------------------------- 
           ! +++ 4.2.1 State Transient Matrix
-          JM(1,1) = 1.0d0 - dt*sig;         JM(1,2) = dt*sig;         JM(1,3) = 0.0d0
-          JM(2,1) = dt*(gamm - z_da(it-1)); JM(2,2) = 1.0d0 - dt;     JM(2,3) = -dt*x_da(it-1)
-          JM(3,1) = dt*y_da(it-1);          JM(3,2) = dt*x_da(it-1);  JM(3,3) = 1.0d0 - dt*b
+          ! >> original form
+          ! JM(1,1) = 1.0d0 - dt*sig;         JM(1,2) = dt*sig;         JM(1,3) = 0.0d0
+          ! JM(2,1) = dt*(gamm - z_da(it-1)); JM(2,2) = 1.0d0 - dt;     JM(2,3) = -dt*x_da(it-1)
+          ! JM(3,1) = dt*y_da(it-1);          JM(3,2) = dt*x_da(it-1);  JM(3,3) = 1.0d0 - dt*b
         
-          Pf = matmul(JM, matmul(Pf, transpose(JM)))*(1.0d0 + alpha)
+          do il = 1, nx
+            delta = 1.0d0-3
+            call Lorenz63_Runge_Kutta( &
+              x_da(it-1)+delta, &
+              y_da(it-1)+delta, &
+              z_da(it-1)+delta, &
+              x_e, y_e, z_e     &
+            )
+            JM(1,il) = ( x_e - x_da(it) )/ delta
+            JM(2,il) = ( y_e - y_da(it) )/ delta
+            JM(3,il) = ( z_e - z_da(it) )/ delta
+          end do
+
+          call confirm_matrix(JM,nx,nx)
+
+          Pf = matmul(JM, matmul(Pa, transpose(JM)))*(1.0d0 + alpha)
           !------------------------------------------------------- 
           ! >> 4.2.3 Kalman gain: Weighting of model result and obs.
           ! (Note) Observation in x,y ----> component 2 (x,y)
@@ -297,7 +319,7 @@ program lorenz63
           !write(6,*) eye_matrix
           Kg = matmul(matmul(Pf, transpose(H)), inv_matrix)
           
-          !------------------------------------------------------- 
+          !------------------------------------------------------- q
           ! >> 4.2.4 calculate innovation and correlation
           ! +++ Kalman Filter Main equation
           x_a(1,1) = x_da(it);  x_a(2,1) = y_da(it); x_a(3,1) = z_da(it)
@@ -310,8 +332,8 @@ program lorenz63
           x_da(it) = x_a(1,1); y_da(it) = x_a(2,1); z_da(it) = x_a(3,1)
           
           ! >> 4.2.5 analysis error covariance matrix
-          Pa = Pf - matmul(matmul(Kg, H), Pf)
-          Pf = Pa
+          Pa = matmul((I - matmul(Kg, H)), Pf)
+          call confirm_matrix(Pa, nx, nx)
         end if
       end do
       
@@ -599,8 +621,8 @@ contains
     ! based on Box-Muller method
 
     implicit none
-    real(kind=r_size),intent(in)  :: size_gnoise
-    real(kind=r_size),intent(out) :: gnoise
+    real(kind=r_dble),intent(in)  :: size_gnoise
+    real(kind=r_dble),intent(out) :: gnoise
   
     ! constant
     real(kind=r_dble),parameter :: pi=3.14159265358979

@@ -151,7 +151,7 @@ class lorenz63_score:
 
     ax1.set_xlabel('sec.')
     ax1.set_ylabel('RMSE')
-    #ax1.set_xlim(0, 25)
+    ax1.set_xlim(0, 25)
     ax1.set_title('Lorenz(1963) RMSE', loc='left')
 
     plt.grid()
@@ -214,14 +214,14 @@ if __name__ == "__main__":
   time_before = time.time()
   laststep = 2500
   viewstep = int(laststep / 3) +1
-  values = [ i_num for i_num in range(0, len(score.time_list[0][0:laststep]), 3)]
+  values = [ i_num for i_num in range(0, len(score.time_list[0:laststep]), 3)]
   with Pool(4) as pool:
     sleeps = list(tqdm(pool.imap(score.lorenz_3ddraw, values), total=viewstep))
   time_after = time.time()
   elapsed_time = time_after - time_before
   print(f'time: {elapsed_time} sec.')
   """
-
+  
   # >> rmse draw
   num_sim_elem = 3
   rmse_sim = score.accuracy_rmse_func(score.true_list, score.sim_list, num_sim_elem)

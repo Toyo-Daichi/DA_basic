@@ -42,9 +42,9 @@ H_init=(  1.0d0 0.0d0 0.0d0
           0.0d0 1.0d0 0.0d0 )
 
 # Adaptive inflation mode
-alpha=0.3d0
+alpha=0.0d0
 
-# +++ output info
+# +++ outqput info
 boolen='true' # write putput
 outputname=${DA_METHOD}
 outputfile='./output/lorenz63/'${outputname}'.csv'
