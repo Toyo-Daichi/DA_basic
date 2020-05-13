@@ -14,6 +14,7 @@ import seaborn as sns
 
 import cal_statics
 
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.colors import BoundaryNorm
@@ -30,17 +31,17 @@ class lorenz96_score:
     rmse = cal_statics.rmse(true_list, asses_list)
     return rmse
 
-  def rmse_draw(self, timestep:int, rmse_da:list, rmse_obs:list, obs_tintv:int) -> None:
+  def rmse_draw(self, timestep:int, rmse_da:list, rmse_sim:list, rmse_obs:list, obs_tintv:int) -> None:
     fig = plt.figure()
     ax1 = fig.subplots()
     
     time_list = np.arange(timestep)
     obs_time_list = np.arange(obs_tintv, timestep-obs_tintv, obs_tintv)
-    print(len(obs_time_list), len(rmse_obs))
 
     sns.set_style('whitegrid')
-    ax1.plot(time_list, rmse_da, ls="--", color='r', label='Data assim.')
-    ax1.scatter(obs_time_list, rmse_obs, marker='o', color='g', s=20, alpha=0.5, edgecolor='k', label='Obs.')
+    ax1.plot(time_list, rmse_da, ls="--", color='r', label='DA')
+    ax1.plot(time_list, rmse_sim, ls="--", label='No DA')
+    ax1.scatter(obs_time_list, rmse_obs, marker='*', color='y', s=20, alpha=0.5, edgecolor='k', label='Obs.')
 
     ax1.set_xlabel('day')
     ax1.set_ylabel('RMSE')
@@ -55,43 +56,72 @@ class lorenz96_score:
     fig, ax = plt.subplots()
     xs = np.arange(1,nx+1)
     ts = np.arange(timestep)
-    levels  = np.arange(-6.0, 6.0, 0.5) 
+    levels  = np.arange(-8.0, 8.0, 0.5) 
     cmap = plt.get_cmap('PiYG')
     norm = BoundaryNorm(levels, ncolors=cmap.N, clip=True)
     cmap = plt.contourf(xs, ts, lorenz_data, levels, cmap=cmap, norm=norm, extend='both')
     ax.set_ylim(ax.get_ylim()[::-1])
     fig.colorbar(cmap, ax=ax)
-    ax.set_title('contourf with levels', loc='left')
+    ax.set_title('Lorenz(1996) NX=40, F=8.0', loc='left')
 
     plt.show()
+
+class lorenz96_errcov:
+  """
+  一つのデータリストを誤差共分散行列の扱いを行うクラスメソッド
+  """
+  def __init__(self, path:str):
+    self.err_data = self.read_error_csv(path)
+
+  def read_error_csv(self, path:str) -> np.ndarray:
+    return np.genfromtxt(path, delimiter=",")
+
+  def error_heatmap(self, err_data:np.ndarray, timestep:int) -> None:
+    fig, ax = plt.subplots()
+    cmap = sns.diverging_palette(220, 10, as_cmap=True)
+    sns.set(style='white')
+    sns.heatmap(
+      data=err_data, cmap=cmap, 
+      vmax=1.0, vmin=-1.0, center=0,
+      square=True, linewidths=.5, 
+      cbar_kws={"shrink": .5, "extend": 'both'},
+    )
+
+    time = timestep*0.1
+    ax.set_title('Back ground Error Cov. - {:.1f} tmp step.'.format(time), loc='center')
+    plt.savefig('./figure/error_heatmap_{:.1f}sec.png'.format(time))
+    plt.close('all')
 
 
 if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ info. setting
   #---------------------------------------------------------- 
-  nx = 24
+  nx = 40
   stepday = 40
   timestep = stepday*4+1
   
   # OBS
-  obs_xintv, obs_tintv = 2, 10
+  obs_xintv, obs_tintv = 2, 2
   ny = int(nx/obs_xintv)
   obs_timestep = int(timestep/obs_tintv) 
 
   outdir = './output/lorenz96'
-  da_method = 'EnKF'
+  da_method = 'KF'
 
-  data_true_path = outdir + '/normal_true_score.csv'
-  data_NoDA_path = outdir + '/normal_NoDA_score.csv'
-  data_DA_path   = outdir + '/normal_'+ da_method + '40m_DA_score.csv'
-  data_obs_path  = outdir + '/normal_obs_score.csv'
+  data_true_path = outdir + '/normal_true_score_' + str(nx) + 'n.csv'
+  data_NoDA_path = outdir + '/normal_NoDA_score_' + str(nx) + 'n.csv'
+  data_DA_path   = outdir + '/normal_'+ da_method + '_DA_score_' + str(nx) + 'n.csv'
+  data_obs_path  = outdir + '/normal_obs_score_' + str(nx) + '.csv'
+
+  data_err_path = outdir + '/Error_matrix_' + da_method + '_' + str(nx) + 'n.csv'
 
   #---------------------------------------------------------- 
   # +++ class set
   # > lorenz96 cal. score
   #---------------------------------------------------------- 
   lz = lorenz96_score()
+  err = lorenz96_errcov(data_err_path)
 
   #---------------------------------------------------------- 
   # +++ reading func.
@@ -108,24 +138,31 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ RMSE func.
   #---------------------------------------------------------- 
-  rmse_da = []
-  rmse_obs = []
+  rmse_da_list = []
+  rmse_sim_list = []
+  rmse_obs_list = []
   for it in range(timestep):
-    rmse = lz.accuracy_rmse_func(true_score[it], da_score[it])
-    rmse_da.append(rmse)
+    rmse_da = lz.accuracy_rmse_func(true_score[it], da_score[it])
+    rmse_sim = lz.accuracy_rmse_func(true_score[it], noda_score[it])
+    rmse_da_list.append(rmse_da)
+    rmse_sim_list.append(rmse_sim)
 
   for it_obs in range(1, obs_timestep):
     obs_true_score = []
     for ix_obs in range(1, nx, obs_xintv):
       obs_true_score.append(true_score[it_obs*obs_tintv][ix_obs])
-    rmse = lz.accuracy_rmse_func(obs_true_score, obs_score[it_obs-1])
-    rmse_obs.append(rmse)
+    rmse_obs = lz.accuracy_rmse_func(obs_true_score, obs_score[it_obs-1])
+    rmse_obs_list.append(rmse_obs)
 
-  print(rmse_da)
-  print(rmse_obs)
-  lz.rmse_draw(timestep, rmse_da, rmse_obs, obs_tintv)
-
-
+  lz.rmse_draw(timestep, rmse_da_list, rmse_sim_list, rmse_obs_list, obs_tintv)
   
+  #---------------------------------------------------------- 
+  # +++ err cov func.
+  #---------------------------------------------------------- 
+  """
+  for i_num in tqdm(range(0, int(timestep/obs_tintv))):
+    matrix_data = err.err_data[i_num].reshape(nx, nx)
+    err.error_heatmap(matrix_data, i_num)
+  """
 
   

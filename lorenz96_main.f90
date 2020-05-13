@@ -20,10 +20,11 @@ program lorenz96_main
   ! --- For spinup && OBS info
   real(r_size), allocatable :: x_out(:,:)
   real(r_size), allocatable :: x_tmp(:)
+  real(r_size), allocatable :: x_e(:)
   real(r_size), allocatable :: yt_obs(:,:)
   real(r_size), allocatable :: yt_obs_ens(:,:)
   ! ***
-  real(r_size), parameter   :: size_noise_obs = 0.2d0
+  real(r_size), parameter   :: size_noise_obs = 1.0d0
   integer                   :: ny, nt
   integer                   :: obs_xintv, obs_tintv
   integer                   :: mems
@@ -56,17 +57,18 @@ program lorenz96_main
   character(256)        :: output_DA_file
   character(256)        :: output_NoDA_file
   character(256)        :: output_obs_file
+  character(256)        :: output_errcov_file
   
   ! --- Working variable
-  character(1086)  :: linebuf
+  character(1086) :: linebuf
   character(36)   :: cfmt, cfmt_obs
   character(4)    :: cfmt_num, cfmt_obsnum
-  real(r_size)    :: gnoise
+  real(r_size)    :: gnoise, alpha
+  real(r_dble)    :: delta
   integer         :: spinup_period, normal_period
   integer         :: kt_oneday
   integer         :: ix, it, il, imem, ierr, lda, ipiv, lwork
 
-  real(r_size), parameter :: alpha = 0.01d0
   integer, parameter      :: one_loop = 1
 
   !======================================================================
@@ -78,15 +80,18 @@ program lorenz96_main
   
   namelist /set_parm/ nx, dt, force, oneday
   namelist /set_exp/ tool, ts_check, intg_method
-  namelist /set_da_exp/ da_veach, mems, da_method
+  namelist /set_da_exp/ da_veach, mems, da_method, alpha
   namelist /set_period/ spinup_period, normal_period
   namelist /set_mobs/ obs_xintv, obs_tintv
   namelist /output/ initial_true_file, initial_sim_file, &
-    output_true_file, output_DA_file, output_NoDA_file, output_obs_file, opt_veach
+    output_true_file, output_DA_file, output_NoDA_file, output_obs_file, output_errcov_file, opt_veach
   
   read(5, nml=set_parm, iostat=ierr)
   read(5, nml=set_exp, iostat=ierr)
   read(5, nml=set_da_exp, iostat=ierr)
+  read(5, nml=set_period, iostat=ierr)
+  read(5, nml=set_mobs, iostat=ierr)
+  read(5, nml=output, iostat=ierr)
   ! name list io check
   if (ierr < 0 ) then
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
@@ -98,9 +103,6 @@ program lorenz96_main
     write(6,*) '   Stop : lorenz63_main.f90              '
     stop
   end if
-  read(5, nml=set_period, iostat=ierr)
-  read(5, nml=set_mobs, iostat=ierr)
-  read(5, nml=output, iostat=ierr)
   
   kt_oneday = int(oneday/dt) ! Unit change for 1day
   if ( trim(tool) == 'spinup' ) then 
@@ -130,6 +132,7 @@ program lorenz96_main
         allocate(yt_obs_ens(ny, mems))
       end if
       ! covariance matrix set.
+      allocate(x_e(1:nx))
       allocate(Pf(1:nx, 1:nx))
       allocate(Pa(1:nx, 1:nx))
       allocate(JM(1:nx, 1:nx))
@@ -226,7 +229,12 @@ program lorenz96_main
         
         if ( mod(it, obs_tintv)==0 ) then
           JM = 0.0d0
-          call tinteg_rk4_ptbmtx(alpha, one_loop, nx, x_DA(it,:), Pa, JM)
+          do il = 1, nx
+            delta = 1.0d0-4
+            call ting_rk4(one_loop, x_DA(it-1,:)+delta, x_e)
+            JM(:,il) = (x_e(:) - x_DA(it,:))/delta
+          end do
+
           Pf = matmul(matmul(JM, Pa), transpose(JM))
           !-----------------------------------------------------------
           ! +++ making inverse matrix
@@ -240,12 +248,11 @@ program lorenz96_main
           !-----------------------------------------------------------
           ! +++ adaptive inflation mode
           !-----------------------------------------------------------
-          Pf = Pf*(1.0d0 + 0.1d0)
-          
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv_matrix)
           x_DA(it,:) = x_DA(it,:) + matmul(Kg, (yt_obs(it/obs_tintv,:) - matmul(H, x_DA(it,:))))
-          Pa = matmul((I-matmul(Kg, H)), Pf)
-          call confirm_matrix(Pa, nx, nx)
+          Pa = matmul((I - matmul(Kg, H)), Pf)*(1.0d0 + alpha)
+          !call confirm_matrix(Pa, nx, nx)
+          call write_errcov(nx, it/obs_tintv, kt_oneday*normal_period/obs_tintv, Pa)
         end if
       end do &
       data_assim_KF_loop
@@ -297,7 +304,7 @@ program lorenz96_main
           call dgetrf(ny, ny, obs_inv_matrix, lda, ipiv, ierr)
           call dgetri(ny, obs_inv_matrix, lda, ipiv, work, lwork, ierr)
           eye_matrix = matmul(obs_matrix, obs_inv_matrix)
-          call confirm_matrix(Pf, nx, nx)
+          !call confirm_matrix(Pf, nx, nx)
           
           !-----------------------------------------------------------
           ! +++ adaptive inflation mode
@@ -441,5 +448,45 @@ contains
     end do
     print *, "==============================="
   end subroutine
+
+  subroutine write_errcov(nx, it, last_step, error_covariance_matrix)
+    implicit none
+    integer, intent(in)       :: nx, it, last_step
+    real(r_size), intent(in)  :: error_covariance_matrix(nx,nx)
+
+    character(100000) :: linebuf
+    character(36)     :: cfmt
+    character(4)      :: cfmt_num
+
+    logical, save   :: opt_veach = .false.
+
+    cfmt = '(xxxx(F12.7, ","), F12.7)'
+    write(cfmt_num,"(I4)") nx*nx -1
+    cfmt(2:5) = cfmt_num
+
+    if ( it == 1 ) then
+      open(2, file=trim(output_errcov_file), status='replace')
+      write(6,*) cfmt
+        write(linebuf, trim(cfmt)) error_covariance_matrix(:,:)
+        call del_spaces(linebuf)
+        write(2, '(a)') trim(linebuf)
+        write(6,*) '+++ err covariance matrix 1st. step'
+        
+      else if ( it /= 0 .and. it /= last_step) then
+        write(6,*) '+++ err covariance matrix 2nd. step ~'
+        write(linebuf, trim(cfmt)) error_covariance_matrix(:,:)
+        call del_spaces(linebuf)
+        write(2, '(a)') trim(linebuf)
+        
+      else if ( it == last_step ) then
+        write(linebuf, trim(cfmt)) error_covariance_matrix(:,:)
+        call del_spaces(linebuf)
+        write(2, '(a)') trim(linebuf)
+        write(6,*) '+++ err covariance matrix last step '
+      close(2)
+    end if
+      
+  end subroutine
+
 
 end program lorenz96_main

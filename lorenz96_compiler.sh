@@ -3,7 +3,7 @@
 
 set -ex
 CDIR=`pwd`
-tool='normal' #spinup or normal
+tool='spinup' #spinup or normal
 ts_check='sim' # if spinup output is 'true' or 'sim'.
 prg=lorenz96_${tool}_maintools
 today=$(date "+%Y%m%d%H%M")
@@ -25,23 +25,28 @@ da_method='KF'
 intg_method='Runge-Kutta'
 mem=40
 
+# +++ adaptive inflation
+alpha=0.0d0
+
 # +++ making obs. info
 obs_xintv=2
-obs_tintv=10
+obs_tintv=2
 
 # +++ output info
 out_boolen='true' # write putput
 da_boolen='true'
 outputname='lorenz96'
-initial_true_file='./output/'${outputname}/'spinup_true_initial.csv'
-initial_sim_file='./output/'${outputname}/'spinup_sim_initial.csv'
-output_true_file='./output/'${outputname}/'normal_true_score.csv'
-output_NoDA_file='./output/'${outputname}/'normal_NoDA_score.csv'
-output_DA_file='./output/'${outputname}/'normal_'${da_method}'_DA_score.csv'
+initial_true_file='./output/'${outputname}/'spinup_true_initial_'${nx}'n.csv'
+initial_sim_file='./output/'${outputname}/'spinup_sim_initial_'${nx}'n.csv'
+output_true_file='./output/'${outputname}/'normal_true_score_'${nx}'n.csv'
+output_NoDA_file='./output/'${outputname}/'normal_NoDA_score_'${nx}'n.csv'
+output_DA_file='./output/'${outputname}/'normal_'${da_method}'_DA_score_'${nx}'n.csv'
+output_errcov_file='./output/'${outputname}/'Error_matrix_'${da_method}'_'${nx}'n.csv'
+
 if [ ${da_method} = 'EnKF' ]; then 
-  output_DA_file='./output/'${outputname}/${tool}'_'${da_method}${mem}'m_DA_score.csv'
+  output_DA_file='./output/'${outputname}/${tool}'_'${da_method}${mem}'m_DA_score_'${nx}'n.csv'
 fi
-output_obs_file='./output/'${outputname}/${tool}'_obs_score.csv'
+output_obs_file='./output/'${outputname}/${tool}'_obs_score_'${nx}'.csv'
 #----------------------------------------------------------------------
 # +++ Run exp.
 #----------------------------------------------------------------------
@@ -67,7 +72,8 @@ SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 
   &set_da_exp
     da_veach  = .${da_boolen}.,
     mems      = ${mem},
-    da_method = '${da_method}'
+    da_method = '${da_method}',
+    alpha = ${alpha}
   /
   &set_period
     spinup_period = ${spinup_period},
@@ -78,12 +84,13 @@ SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 
     obs_tintv = ${obs_tintv}
   /
   &output
-    initial_true_file = '${initial_true_file}',
-    initial_sim_file  = '${initial_sim_file}',
-    output_true_file  = '${output_true_file}',
-    output_DA_file    = '${output_DA_file}',
-    output_NoDA_file  = '${output_NoDA_file}',
-    output_obs_file   = '${output_obs_file}', 
+    initial_true_file  = '${initial_true_file}',
+    initial_sim_file   = '${initial_sim_file}',
+    output_true_file   = '${output_true_file}',
+    output_DA_file     = '${output_DA_file}',
+    output_NoDA_file   = '${output_NoDA_file}',
+    output_obs_file    = '${output_obs_file}', 
+    output_errcov_file = '${output_errcov_file}', 
     opt_veach = .${out_boolen}.
   /
 EOF
