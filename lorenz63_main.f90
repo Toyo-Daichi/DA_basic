@@ -37,15 +37,15 @@ program lorenz63
   !         Pyx: 0.0  Pyy: 1.0 Pyz: 0.0 
   !         Pzx: 0.0  Pzy: 0.0 Pzz: 1.0 )
 
-  real(r_size) :: Xa(Nx,1)
-  real(r_size) :: Yobs(Nobs,1)
+  real(r_size) :: x_a(nx,1)
+  real(r_size) :: yt_obs(ny,1)
   
-  real(r_size) :: M(Nx,Nx)     ! state transient matrix
-  real(r_size) :: Pf(Nx,Nx)    ! Forecast error convariance matrix (in KF, EnKF)
-  real(r_size) :: Pa(Nx,Nx)    ! Analysis error convariance matrix
-  real(r_size) :: R(Nobs,Nobs) ! Observation error convariance matrix
-  real(r_size) :: Kg(Nx,Nobs)  ! Kalman gain
-  real(r_size) :: H(Nobs,Nx)   ! Observation operator
+  real(r_size) :: JM(nx,nx), JM_T(nx,nx)  ! state transient matrix and transpose matrix
+  real(r_size) :: Pf(nx,nx)               ! Forecast error convariance matrix (in KF, EnKF)
+  real(r_size) :: Pa(nx,nx)               ! Analysis error convariance matrix
+  real(r_size) ::  R(ny,ny)               ! Observation error convariance matrix
+  real(r_size) :: Kg(nx,ny)               ! Kalman gain
+  real(r_size) ::  H(ny,nx)               ! Observation operator
   
   ! --- Output control
   real(r_size), allocatable :: obs_chr(:, :)
@@ -62,24 +62,22 @@ program lorenz63
   integer :: iflag
   integer :: iter
   real(r_size) :: Gnoise ! Gaussian noise
+  real(r_size) :: alpha  ! inflation
   real(r_size), parameter:: undef = -999.e0
 
   ! --- matrix calculation
-  real(r_size) :: Ptmp(Nx,Nx)
   ! for inverse
-  integer      :: ipiv(1:Nx), lwork
+  integer      :: ipiv(1:nx), lwork
   real(r_size) :: lwork0
-  real(r_size) :: Hx(Nobs,1)
-  real(r_size) :: Diff(Nobs,1)
+  real(r_size) :: hx(ny,1)
+  real(r_size) :: hdxf(ny,1)
   
   real(r_size), allocatable :: work_on(:)
   
   ! --- Inverse matrix formula for 2x2
-  real(r_size) :: inv_matrix(Nobs,Nobs)
-  real(r_size) :: inv_tmpmatrix(Nobs,Nobs)
-  real(r_size) :: inv_nummatrix(Nobs,Nobs)
-  real(r_size) :: Pf_HT(Nx,Nobs)
-  real(r_size) :: eye_matrix(Nobs,Nobs)
+  real(r_size) :: inv_matrix(ny,ny)
+  real(r_size) :: R_HPHt(ny,ny), HPHt(ny,ny)
+  real(r_size) :: eye_matrix(ny,ny)
 
   !======================================================================
   ! Data assimilation
@@ -96,7 +94,7 @@ program lorenz63
   real(r_size) :: H_init(6)
   
   namelist /set_parm/ nt_asm, nt_prd, obs_interval
-  namelist /da_setting/ da_method
+  namelist /da_setting/ da_method, alpha
   namelist /intg_setting/ intg_method
   namelist /ensemble_size/ mems
   namelist /initial_score/ x_tinit, y_tinit, z_tinit, x_sinit, y_sinit, z_sinit
@@ -273,57 +271,45 @@ program lorenz63
         ! 4.2: Kalman fileter
         !------------------------------------------------------- 
         ! +++ 4.2.1 State Transient Matrix
-        M(1,1) = 1 - dt*sig;             M(1,2) = dt*sig;         M(1,3) = 0.0d0
-        M(2,1) = dt*(gamm - z_da(it-1)); M(2,2) = 1.0d0 - dt;     M(2,3) = -dt*x_da(it-1)
-        M(3,1) = dt*y_da(it-1);          M(3,2) = dt*x_da(it-1);  M(3,3) = 1.0d0 - dt*b
+        JM(1,1) = 1 - dt*sig;             JM(1,2) = dt*sig;         JM(1,3) = 0.0d0
+        JM(2,1) = dt*(gamm - z_da(it-1)); JM(2,2) = 1.0d0 - dt;     JM(2,3) = -dt*x_da(it-1)
+        JM(3,1) = dt*y_da(it-1);          JM(3,2) = dt*x_da(it-1);  JM(3,3) = 1.0d0 - dt*b
         
         if (mod(it, obs_interval) == 0) then
-          Ptmp = transpose(M)
-          Ptmp = matmul(Pf, Ptmp)
-          Pf   = matmul(M, Ptmp)
+          JM_T = transpose(JM)
+          JM_T = matmul(Pf, JM_T)
+          Pf   = matmul(JM, JM_T)*(1.0d0 + alpha)
           !------------------------------------------------------- 
           ! >> 4.2.3 Kalman gain: Weighting of model result and obs.
           ! (Note) Observation in x,y ----> component 2 (x,y)
-          ! calculate inverse matrix @inv_tmpmatrix
+          ! calculate inverse matrix @R_HPHt
           ! *** ref:
           ! http://www.rcs.arch.t.u-tokyo.ac.jp/kusuhara/tips/linux/fortran.html
           
-          Pf_HT = matmul(Pf, transpose(H))
-          inv_nummatrix = matmul(H, Pf_HT)
-          inv_tmpmatrix = R + inv_nummatrix
+          HPHt = matmul(H, matmul( Pf, transpose(H)))
+          R_HPHt = R + HPHt
           
           !------------------------------------------------------- 
           ! +++ inverse matrix calculate for 2x2 on formula
           call inverse_matrix_for2x2(       &
-          inv_tmpmatrix, inv_matrix         &
+          R_HPHt, inv_matrix         &
           )
           
-          eye_matrix = matmul(inv_tmpmatrix, inv_matrix)
+          eye_matrix = matmul(R_HPHt, inv_matrix)
           write(6,*) ' +++ confirm eye matrix calculate ... '
           write(6,*) eye_matrix
-          Kg = matmul(Pf_HT, inv_matrix)
+          Kg = matmul(matmul(Pf, transpose(H)), inv_matrix)
           
-          !======================================================== 
-          ! +++ inverse matrix calculate for 2x2 on LAPACK
-          ! call dgetrf(Nx,Nx,inv_tmpmatrix,Nx,ipiv,ierr)
-          ! call dgetri(Nx,inv_tmpmatrix,Nx,ipiv,lwork0,-1,ierr)
-          ! lwork = int(lwork0)
-          ! allocate(work_on(1:lwork))
-          !
-          ! call dgetri(Nx,inv_tmpmatrix,Nx,ipiv,work_on,lwork,ierr)
-          ! deallocate(work_on)
-          ! Kg = matmul(Pf_HT, inv_tmpmatrix)
-
           !------------------------------------------------------- 
           ! >> 4.2.4 calculate innovation and correlation
           ! +++ Kalman Filter Main equation
-          Xa(1,1) = x_da(it);  Xa(2,1) = y_da(it); Xa(3,1) = z_da(it)
-          Yobs(1,1) = x_obs(it/obs_interval); Yobs(2,1) = y_obs(it/obs_interval)
+          x_a(1,1) = x_da(it);  x_a(2,1) = y_da(it); x_a(3,1) = z_da(it)
+          yt_obs(1,1) = x_obs(it/obs_interval); yt_obs(2,1) = y_obs(it/obs_interval)
 
-          Hx = matmul(H, Xa)
-          Diff = Yobs - Hx
-          Xa = Xa + matmul(Kg, Diff)
-          x_da(it) = Xa(1,1); y_da(it) = Xa(2,1); z_da(it) = Xa(3,1)
+          hx = matmul(H, x_a)
+          hdxf = yt_obs - hx
+          x_a = x_a + matmul(Kg, hdxf)
+          x_da(it) = x_a(1,1); y_da(it) = x_a(2,1); z_da(it) = x_a(3,1)
 
           ! >> 4.2.5 analysis error covariance matrix
           Pa = Pf - matmul(matmul(Kg, H), Pf)
@@ -401,20 +387,19 @@ program lorenz63
             Pf(3,2) = Pf(1,3)
           end do
 
-          Pf_HT = matmul(Pf, transpose(H))
-          inv_nummatrix = matmul(H, Pf_HT)
-          inv_tmpmatrix = R + inv_nummatrix
+          HPHt = matmul(H, matmul(Pf, transpose(H)))
+          R_HPHt = R + HPHt
 
           !------------------------------------------------------- 
           ! +++ inverse matrix calculate for 2x2 on formula
           call inverse_matrix_for2x2(       &
-          inv_tmpmatrix, inv_matrix         &
+          R_HPHt, inv_matrix         &
           )
 
-          eye_matrix = matmul(inv_tmpmatrix, inv_matrix)
+          eye_matrix = matmul(R_HPHt, inv_matrix)
           write(6,*) ' +++ confirm eye matrix calculate ... '
           write(6,*) eye_matrix
-          Kg = matmul(Pf_HT, inv_matrix)
+          Kg = matmul(matmul(Pf, transpose(H)), inv_matrix)
 
           do imem = 1, mems
             !------------------------------------------------------- 
@@ -426,13 +411,13 @@ program lorenz63
             y_innov(imem) = y_obs(it/obs_interval) + Gnoise
             obs_ens(2,imem) = y_innov(imem)
             
-            Xa(1,1) = x_da_m(it, imem); Xa(2,1) = y_da_m(it, imem); Xa(3,1) = z_da_m(it, imem)
-            Yobs(1,1) = obs_ens(1,imem); Yobs(2,1) = obs_ens(2,imem)
-            Hx = matmul(H, Xa)
-            Diff = Yobs - Hx
+            x_a(1,1) = x_da_m(it, imem); x_a(2,1) = y_da_m(it, imem); x_a(3,1) = z_da_m(it, imem)
+            yt_obs(1,1) = obs_ens(1,imem); yt_obs(2,1) = obs_ens(2,imem)
+            hx = matmul(H, x_a)
+            hdxf = yt_obs - hx
 
-            Xa = Xa + matmul(Kg, Diff)
-            x_da_m(it, imem) = Xa(1,1); y_da_m(it, imem) = Xa(2,1); z_da_m(it, imem) = Xa(3,1)
+            x_a = x_a + matmul(Kg, hdxf)
+            x_da_m(it, imem) = x_a(1,1); y_da_m(it, imem) = x_a(2,1); z_da_m(it, imem) = x_a(3,1)
           end do
 
         end if
