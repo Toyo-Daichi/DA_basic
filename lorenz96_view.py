@@ -126,6 +126,7 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ reading func.
   #---------------------------------------------------------- 
+  """
   true_score = lz.csv2list(data_true_path).reshape(timestep, nx)
   noda_score = lz.csv2list(data_NoDA_path).reshape(timestep, nx)
   da_score   = lz.csv2list(data_DA_path).reshape(timestep, nx)
@@ -155,14 +156,13 @@ if __name__ == "__main__":
     rmse_obs_list.append(rmse_obs)
 
   lz.rmse_draw(timestep, rmse_da_list, rmse_sim_list, rmse_obs_list, obs_tintv)
-  
+  """
+
   #---------------------------------------------------------- 
   # +++ err cov func.
   #---------------------------------------------------------- 
-  """
   for i_num in tqdm(range(0, int(timestep/obs_tintv))):
     matrix_data = err.err_data[i_num].reshape(nx, nx)
     err.error_heatmap(matrix_data, i_num)
-  """
 
   
