@@ -21,25 +21,8 @@ x_tinit=1.0d0; y_tinit=2.0d0; z_tinit=3.0d0
 x_sinit=1.1d0; y_sinit=2.1d0; z_sinit=3.1d0
 
 # +++ initial matrix
-# Forecast error covariance matrix
-# Background error covariance matrix (= same matrix in this case)
-Pf_init=( 1.0d0 0.0d0 0.0d0
-          0.0d0 1.0d0 0.0d0
-          0.0d0 0.0d0 1.0d0 )
-
-# Observation error covariance matrix
-# In this case, two elem(x, y)
-R_init=(  1.00d0  0.00d0 
-          0.00d0  1.00d0 )
-
-# Kalman gain matrix
-K_init=(  0.0d0 0.0d0 
-          0.0d0 0.0d0
-          0.0d0 0.0d0 )
-
-# Observation　operator
-H_init=(  1.0d0 0.0d0 0.0d0 
-          0.0d0 1.0d0 0.0d0 )
+# forecast var & obs size
+nx=3; ny=3
 
 # Adaptive inflation mode
 alpha=0.0d0
@@ -79,26 +62,6 @@ gfortran -fbounds-check kinddef.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_m
     x_tinit = ${x_tinit},  y_tinit = ${y_tinit}, z_tinit = ${z_tinit}
     x_sinit = ${x_sinit},  y_sinit = ${y_sinit}, z_sinit = ${z_sinit}
   /
-  &initial_matrix
-    Pf_init = ${Pf_init[0]}, ${Pf_init[1]}, ${Pf_init[2]},
-              ${Pf_init[3]}, ${Pf_init[4]}, ${Pf_init[5]},
-              ${Pf_init[6]}, ${Pf_init[7]}, ${Pf_init[8]}
-
-    B_init  = ${Pf_init[0]}, ${Pf_init[1]}, ${Pf_init[2]},
-              ${Pf_init[3]}, ${Pf_init[4]}, ${Pf_init[5]},
-              ${Pf_init[6]}, ${Pf_init[7]}, ${Pf_init[8]}
-
-    R_init  = ${R_init[0]}, ${R_init[1]},
-              ${R_init[2]}, ${R_init[3]}
-
-    Kg_init = ${Kg_init[0]}, ${Kg_init[1]},
-              ${Kg_init[2]}, ${Kg_init[3]},
-              ${Kg_init[4]}, ${Kg_init[5]}
-
-    H_init =  ${H_init[0]}, ${H_init[1]},
-              ${H_init[2]}, ${H_init[3]},
-              ${H_init[4]}, ${H_init[5]}
-  /
   &output
     output_file  = '${outputfile}',
     output_file_error_covariance = '${outputfile_error_matrix}'
@@ -108,4 +71,34 @@ EOF
 
 rm -rf *.mod ${prg}
 echo 'Normal END'
+
 exit
+
+#----------------------------------------------------------------------
+# +++ matrix memo
+#  The following cases are for 
+#  three predictor var and two observation var.
+#----------------------------------------------------------------------
+# 
+# Forecast error covariance matrix
+# Background error covariance matrix
+# Pf = (nx, nx)
+Pf_init=( 1.0d0 0.0d0 0.0d0
+          0.0d0 1.0d0 0.0d0
+          0.0d0 0.0d0 1.0d0 )
+
+# Observation error covariance matrix
+# R = (ny, ny)
+R_init=(  1.0d0 0.0d0 
+          0.0d0 1.0d0 )
+
+# Kalman gain matrix
+# K = (nx, ny)
+K_init=(  0.0d0 0.0d0 
+          0.0d0 0.0d0 
+          0.0d0 0.0d0 )
+
+# Observation　operator
+# H = (ny, nx)
+H_init=(  1.0d0 0.0d0 0.0d0 
+          0.0d0 1.0d0 0.0d0 )

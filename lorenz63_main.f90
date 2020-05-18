@@ -22,14 +22,14 @@ program lorenz63
   real(r_size), allocatable :: x_true(:), y_true(:), z_true(:)
   real(r_size), allocatable :: x_sim(:), y_sim(:), z_sim(:)
   
-  real(r_size), allocatable :: x_da(:), y_da(:), z_da(:)
-  real(r_size), allocatable :: x_obs(:), y_obs(:)
+  real(r_size), allocatable :: x_anl(:), y_anl(:), z_anl(:)
+  real(r_size), allocatable :: x_obs(:), y_obs(:), z_obs(:)
 
-  real(r_size), allocatable :: x_da_m(:, :), y_da_m(:, :), z_da_m(:, :)
+  real(r_size), allocatable :: x_anl_m(:,:), y_anl_m(:,:), z_anl_m(:,:)
   real(r_size), allocatable :: x_prtb(:), y_prtb(:), z_prtb(:)
   
   real(r_size), allocatable :: obs_ens(:,:)
-  real(r_size), allocatable :: x_innov(:), y_innov(:)
+  real(r_size), allocatable :: x_innov(:), y_innov(:), z_innov(:)
 
   ! --- Matrix(element 1:x, 2:y, 3:z)
   ! +++ default setting
@@ -37,16 +37,16 @@ program lorenz63
   !         Pyx: 0.0  Pyy: 1.0 Pyz: 0.0 
   !         Pzx: 0.0  Pzy: 0.0 Pzz: 1.0 )
 
-  real(r_size) :: x_a(nx,1)
-  real(r_size) :: yt_obs(ny,1)
+  real(r_size) :: xt_anl(:,:)
+  real(r_size) :: yt_obs(:,:)
   
-  real(r_size) :: JM(nx,nx)  ! state transient matrix
-  real(r_size) :: Pf(nx,nx)  ! Forecast error convariance matrix (in KF, EnKF)
-  real(r_size) :: Pa(nx,nx)  ! Analysis error convariance matrix
-  real(r_size) ::  I(nx,nx)  ! eye_matrix
-  real(r_size) ::  R(ny,ny)  ! Observation error convariance matrix
-  real(r_size) :: Kg(nx,ny)  ! Kalman gain
-  real(r_size) ::  H(ny,nx)  ! Observation operator
+  real(r_size) :: JM(:,:)  ! state transient matrix
+  real(r_size) :: Pf(:,:)  ! Forecast error convariance matrix (in KF, EnKF)
+  real(r_size) :: Pa(:,:)  ! Analysis error convariance matrix
+  real(r_size) ::  I(:,:)  ! eye_matrix
+  real(r_size) ::  R(:,:)  ! Observation error convariance matrix
+  real(r_size) :: Kg(:,:)  ! Kalman gain
+  real(r_size) ::  H(:,:)  ! Observation operator
   
   ! --- Output control
   real(r_size), allocatable :: obs_chr(:, :)
@@ -69,17 +69,17 @@ program lorenz63
 
   ! --- matrix calculation
   ! for inverse
-  integer      :: ipiv(1:nx), lwork
+  integer      :: ipiv(:), lwork
   real(r_size) :: lwork0
-  real(r_size) :: hx(ny,1)
-  real(r_size) :: hdxf(ny,1)
+  real(r_size) :: hx(:,:)
+  real(r_size) :: hdxf(:,:)
   
   real(r_size), allocatable :: work_on(:)
   
-  ! --- Inverse matrix formula for 2x2
-  real(r_size) :: inv_matrix(ny,ny)
-  real(r_size) :: R_HPHt(ny,ny), HPHt(ny,ny)
-  real(r_size) :: eye_matrix(ny,ny)
+  ! --- Inverse matrix
+  real(r_size) :: inv_matrix(:,:)
+  real(r_size) :: R_HPHt(:,:), HPHt(:,:)
+  real(r_size) :: eye_matrix(:,:)
 
   !======================================================================
   ! Data assimilation
@@ -91,19 +91,16 @@ program lorenz63
   real(r_size) :: x_tinit, y_tinit, z_tinit
   real(r_size) :: x_sinit, y_sinit, z_sinit
   real(r_size) :: x_e, y_e, z_e
-  real(r_size) :: Pf_init(9), B_init(9)
-  real(r_size) :: R_init(4)
-  real(r_size) :: Kg_init(6)
-  real(r_size) :: H_init(6)
   
+  namelist /set_dim/ nx, ny
   namelist /set_parm/ nt_asm, nt_prd, obs_interval
   namelist /da_setting/ da_method, alpha
   namelist /intg_setting/ intg_method
   namelist /ensemble_size/ mems
   namelist /initial_score/ x_tinit, y_tinit, z_tinit, x_sinit, y_sinit, z_sinit
-  namelist /initial_matrix/ Pf_init, B_init, R_init, Kg_init, H_init
   namelist /output/ output_file, output_file_error_covariance, opt_veach
 
+  read(5, nml=set_dim, iostat = ierr)
   read(5, nml=set_parm, iostat = ierr)
   read(5, nml=da_setting, iostat = ierr)
   read(5, nml=intg_setting, iostat = ierr)
@@ -132,8 +129,8 @@ program lorenz63
 
   allocate(x_true(0:nt_asm+nt_prd), y_true(0:nt_asm+nt_prd), z_true(0:nt_asm+nt_prd))
   allocate(x_sim(0:nt_asm+nt_prd), y_sim(0:nt_asm+nt_prd), z_sim(0:nt_asm+nt_prd))
-  allocate(x_da(0:nt_asm+nt_prd), y_da(0:nt_asm+nt_prd), z_da(0:nt_asm+nt_prd))
-  allocate(x_da_m(0:nt_asm, mems), y_da_m(0:nt_asm, mems), z_da_m(0:nt_asm, mems))
+  allocate(x_anl(0:nt_asm+nt_prd), y_anl(0:nt_asm+nt_prd), z_anl(0:nt_asm+nt_prd))
+  allocate(x_anl_m(0:nt_asm, mems), y_anl_m(0:nt_asm, mems), z_anl_m(0:nt_asm, mems))
   allocate(x_prtb(mems), y_prtb(mems), z_prtb(mems))
 
   allocate(x_obs(0:nt_asm/obs_interval), y_obs(0:nt_asm/obs_interval))
@@ -143,25 +140,6 @@ program lorenz63
 
   !----------------------------------------------------------------------
   ! +++ initial setting
-  
-  x_true(0) = x_tinit; y_true(0) = y_tinit; z_true(0) = z_tinit
-  x_sim(0)  = x_sinit; y_sim(0)  = y_sinit; z_sim(0)  = z_sinit
-  
-  Pf(1,1) = Pf_init(1); Pf(1,2) = Pf_init(2); Pf(1,3) = Pf_init(3)
-  Pf(2,1) = Pf_init(4); Pf(2,2) = Pf_init(5); Pf(2,3) = Pf_init(6)
-  Pf(3,1) = Pf_init(7); Pf(3,2) = Pf_init(8); Pf(3,3) = Pf_init(9)
-  
-  Pa = Pf
-  
-  R(1,1) = R_init(1); R(1,2) = R_init(2)
-  R(2,1) = R_init(3); R(2,2) = R_init(4)
-  
-  Kg(1,1) = Kg_init(1); Kg(1,2) = Kg_init(2)
-  Kg(2,1) = Kg_init(3); Kg(2,2) = Kg_init(4)
-  Kg(3,1) = Kg_init(5); Kg(3,2) = Kg_init(6)
-
-  H(1,1) = H_init(1); H(1,2) = H_init(2); H(1,3) = H_init(3)
-  H(2,1) = H_init(4); H(2,2) = H_init(5); H(2,3) = H_init(6)
 
   I = 0.0d0
   forall ( il=1:nx )  I(il, il) = 1.0d0
@@ -240,9 +218,9 @@ program lorenz63
     
     ! --- Sec4. Data assimilation
     if ( da_method == 'KF' ) then
-      x_da(0) = x_sim(0)
-      y_da(0) = y_sim(0)
-      z_da(0) = z_sim(0)
+      x_anl(0) = x_sim(0)
+      y_anl(0) = y_sim(0)
+      z_anl(0) = z_sim(0)
       
       do it = 1, nt_asm
         if ( opt_veach ) then
@@ -253,24 +231,24 @@ program lorenz63
         
         ! 4.1: Time integration
         call cal_Lorenz(                         &
-        x_da(it-1), y_da(it-1), z_da(it-1),      & ! IN
+        x_anl(it-1), y_anl(it-1), z_anl(it-1),      & ! IN
         x_k(1), y_k(1), z_k(1)                   & ! OUT
         )
         
         !------------------------------------------------------- 
         ! +++ Euler method
         if ( trim(intg_method) == 'Euler' ) then
-          x_da(it) = x_da(it-1) + dt * x_k(1)
-          y_da(it) = y_da(it-1) + dt * y_k(1)
-          z_da(it) = z_da(it-1) + dt * z_k(1)
+          x_anl(it) = x_anl(it-1) + dt * x_k(1)
+          y_anl(it) = y_anl(it-1) + dt * y_k(1)
+          z_anl(it) = z_anl(it-1) + dt * z_k(1)
 
           !------------------------------------------------------- 
           ! +++ Runge-Kutta method
         else if ( trim(intg_method) == 'Runge-Kutta' ) then 
 
           call Lorenz63_Runge_Kutta(             &
-          x_da(it-1), y_da(it-1), z_da(it-1),    & ! IN
-          x_da(it), y_da(it), z_da(it)           & ! OUT
+          x_anl(it-1), y_anl(it-1), z_anl(it-1),    & ! IN
+          x_anl(it), y_anl(it), z_anl(it)           & ! OUT
           )
         end if
 
@@ -281,20 +259,20 @@ program lorenz63
           ! +++ 4.2.1 State Transient Matrix
           ! >> original form
           JM(1,1) = -sig; JM(1,2) = sig; JM(1,3) = 0.0d0
-          JM(2,1) = gamm - z_da(it-1); JM(2,2) = -1.0; JM(2,3) = -x_da(it-1)
-          JM(3,1) = y_da(it-1); JM(3,2) = x_da(it-1);  JM(3,3) = -b
+          JM(2,1) = gamm -z_anl(it-1); JM(2,2) = -1.0; JM(2,3) = -x_anl(it-1)
+          JM(3,1) = y_anl(it-1); JM(3,2) = x_anl(it-1);  JM(3,3) = -b
         
           !do il = 1, nx
           !  delta = 1.0d0-3
           !  call Lorenz63_Runge_Kutta( &
-          !    x_da(it-1)+delta, &
-          !    y_da(it-1)+delta, &
-          !    z_da(it-1)+delta, &
+          !    x_anl(it-1)+delta, &
+          !    y_anl(it-1)+delta, &
+          !    z_anl(it-1)+delta, &
           !    x_e, y_e, z_e     &
           !  )
-          !  JM(1,il) = ( x_e - x_da(it) )/ delta
-          !  JM(2,il) = ( y_e - y_da(it) )/ delta
-          !  JM(3,il) = ( z_e - z_da(it) )/ delta
+          !  JM(1,il) = ( x_e - x_anl(it) )/ delta
+          !  JM(2,il) = ( y_e - y_anl(it) )/ delta
+          !  JM(3,il) = ( z_e - z_anl(it) )/ delta
           !end do
 
           call confirm_matrix(JM,nx,nx)
@@ -322,14 +300,14 @@ program lorenz63
           !------------------------------------------------------- q
           ! >> 4.2.4 calculate innovation and correlation
           ! +++ Kalman Filter Main equation
-          x_a(1,1) = x_da(it);  x_a(2,1) = y_da(it); x_a(3,1) = z_da(it)
+          x_a(1,1) = x_anl(it);  x_a(2,1) = y_anl(it); x_a(3,1) = z_anl(it)
           yt_obs(1,1) = x_obs(it/obs_interval); yt_obs(2,1) = y_obs(it/obs_interval)
 
           hx = matmul(H, x_a)
           hdxf = yt_obs - hx
           x_a = x_a + matmul(Kg, hdxf)
           call confirm_matrix(Kg, nx, ny)
-          x_da(it) = x_a(1,1); y_da(it) = x_a(2,1); z_da(it) = x_a(3,1)
+          x_anl(it) = x_a(1,1); y_anl(it) = x_a(2,1); z_anl(it) = x_a(3,1)
           
           ! >> 4.2.5 analysis error covariance matrix
           Pa = matmul((I - matmul(Kg, H)), Pf)
@@ -341,16 +319,16 @@ program lorenz63
       ! +++ initial setting
       do imem = 1, mems
         call gaussian_noise(sqrt(Pa(1,1)), Gnoise)
-        x_da_m(0, imem) = x_sim(0) + Gnoise
+        x_anl_m(0, imem) = x_sim(0) + Gnoise
         call gaussian_noise(sqrt(Pa(2,2)), Gnoise)
-        y_da_m(0, imem) = y_sim(0) + Gnoise
+        y_anl_m(0, imem) = y_sim(0) + Gnoise
         call gaussian_noise(sqrt(Pa(3,3)), Gnoise)
-        z_da_m(0, imem) = z_sim(0) + Gnoise
+        z_anl_m(0, imem) = z_sim(0) + Gnoise
       end do
       
-      x_da(0) = sum(x_da_m(0, 1:mems))/mems 
-      y_da(0) = sum(x_da_m(0, 1:mems))/mems 
-      z_da(0) = sum(x_da_m(0, 1:mems))/mems
+      x_anl(0) = sum(x_anl_m(0, 1:mems))/mems 
+      y_anl(0) = sum(x_anl_m(0, 1:mems))/mems 
+      z_anl(0) = sum(x_anl_m(0, 1:mems))/mems
       
       do it = 1, nt_asm
         if ( opt_veach ) then
@@ -360,37 +338,37 @@ program lorenz63
         do imem = 1, mems
           ! 4.1: Time integration
           call cal_Lorenz(                                              &
-          x_da_m(it-1, imem), y_da_m(it-1, imem), z_da_m(it-1, imem),   & ! IN
+          x_anl_m(it-1, imem), y_anl_m(it-1, imem), z_anl_m(it-1, imem),   & ! IN
           x_k(1), y_k(1), z_k(1)                                        & ! OUT
           )
           
           !------------------------------------------------------- 
           ! +++ Euler method
           if ( trim(intg_method) == 'Euler' ) then
-            x_da_m(it, imem) = x_da_m(it-1, imem) + dt * x_k(1)
-            y_da_m(it, imem) = y_da_m(it-1, imem) + dt * y_k(1)
-            z_da_m(it, imem) = z_da_m(it-1, imem) + dt * z_k(1)
+            x_anl_m(it, imem) = x_anl_m(it-1, imem) + dt * x_k(1)
+            y_anl_m(it, imem) = y_anl_m(it-1, imem) + dt * y_k(1)
+            z_anl_m(it, imem) = z_anl_m(it-1, imem) + dt * z_k(1)
             
             !------------------------------------------------------- 
             ! +++ Runge-Kutta method
           else if ( trim(intg_method) == 'Runge-Kutta' ) then 
             
             call Lorenz63_Runge_Kutta(                                     &
-            x_da_m(it-1, imem), y_da_m(it-1, imem), z_da_m(it-1, imem),    & ! IN
-            x_da_m(it, imem), y_da_m(it, imem), z_da_m(it, imem)           & ! OUT
+            x_anl_m(it-1, imem), y_anl_m(it-1, imem), z_anl_m(it-1, imem),    & ! IN
+            x_anl_m(it, imem), y_anl_m(it, imem), z_anl_m(it, imem)           & ! OUT
             )
           end if
         end do
         
         if(mod(it, obs_interval) == 0) then
-          x_da(it) = sum(x_da_m(it, 1:mems))/mems
-          y_da(it) = sum(y_da_m(it, 1:mems))/mems
-          z_da(it) = sum(z_da_m(it, 1:mems))/mems
+          x_anl(it) = sum(x_anl_m(it, 1:mems))/mems
+          y_anl(it) = sum(y_anl_m(it, 1:mems))/mems
+          z_anl(it) = sum(z_anl_m(it, 1:mems))/mems
           Pf = 0.0d0
           do imem = 1, mems
-            x_prtb(imem) = x_da_m(it, imem) - x_da(it)
-            y_prtb(imem) = y_da_m(it, imem) - y_da(it)
-            z_prtb(imem) = z_da_m(it, imem) - z_da(it)
+            x_prtb(imem) = x_anl_m(it, imem) - x_anl(it)
+            y_prtb(imem) = y_anl_m(it, imem) - y_anl(it)
+            z_prtb(imem) = z_anl_m(it, imem) - z_anl(it)
             
             !------------------------------------------------------- 
             ! +++ Dispersion
@@ -430,20 +408,20 @@ program lorenz63
             y_innov(imem) = y_obs(it/obs_interval) + Gnoise
             obs_ens(2,imem) = y_innov(imem)
             
-            x_a(1,1) = x_da_m(it, imem); x_a(2,1) = y_da_m(it, imem); x_a(3,1) = z_da_m(it, imem)
+            x_a(1,1) = x_anl_m(it, imem); x_a(2,1) = y_anl_m(it, imem); x_a(3,1) = z_anl_m(it, imem)
             yt_obs(1,1) = obs_ens(1,imem); yt_obs(2,1) = obs_ens(2,imem)
             hx = matmul(H, x_a)
             hdxf = yt_obs - hx
 
             x_a = x_a + matmul(Kg, hdxf)
-            x_da_m(it, imem) = x_a(1,1); y_da_m(it, imem) = x_a(2,1); z_da_m(it, imem) = x_a(3,1)
+            x_anl_m(it, imem) = x_a(1,1); y_anl_m(it, imem) = x_a(2,1); z_anl_m(it, imem) = x_a(3,1)
           end do
 
         end if
         
-        x_da(it) = sum(x_da_m(it, 1:mems))/mems
-        y_da(it) = sum(y_da_m(it, 1:mems))/mems
-        z_da(it) = sum(z_da_m(it, 1:mems))/mems
+        x_anl(it) = sum(x_anl_m(it, 1:mems))/mems
+        y_anl(it) = sum(y_anl_m(it, 1:mems))/mems
+        z_anl(it) = sum(z_anl_m(it, 1:mems))/mems
 
         ! >> 4.2.5 analysis error covariance matrix
         Pa = Pf - matmul(matmul(Kg, H), Pf)
@@ -458,24 +436,24 @@ program lorenz63
       ! forward time step
       
       call cal_Lorenz(                           &
-      x_da(it-1), y_da(it-1), z_da(it-1),        & ! IN
+      x_anl(it-1), y_anl(it-1), z_anl(it-1),        & ! IN
       x_k(1), y_k(1), z_k(1)                     & ! OUT
       )
       
       !------------------------------------------------------- 
       ! +++ Euler method
       if ( trim(intg_method) == 'Euler' ) then
-        x_da(it) = x_da(it-1) + dt * x_k(1)
-        y_da(it) = y_da(it-1) + dt * y_k(1)
-        z_da(it) = z_da(it-1) + dt * z_k(1)
+        x_anl(it) = x_anl(it-1) + dt * x_k(1)
+        y_anl(it) = y_anl(it-1) + dt * y_k(1)
+        z_anl(it) = z_anl(it-1) + dt * z_k(1)
         
         !------------------------------------------------------- 
         ! +++ Runge-Kutta method
       else if ( trim(intg_method) == 'Runge-Kutta' ) then 
         
         call Lorenz63_Runge_Kutta(               &
-        x_da(it-1), y_da(it-1), z_da(it-1),    & ! IN
-        x_da(it), y_da(it), z_da(it)           & ! OUT
+        x_anl(it-1), y_anl(it-1), z_anl(it-1),    & ! IN
+        x_anl(it), y_anl(it), z_anl(it)           & ! OUT
         )
         
       end if
@@ -492,14 +470,14 @@ program lorenz63
       end do
       
       open (1, file=trim(output_file), status='replace')
-      write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_da, y_da, z_da, x_obs, y_obs'
+      write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_anl, y_anl, z_anl, x_obs, y_obs'
       do it = 0, nt_asm+nt_prd
         if (mod(it, output_interval) == 0) then
           write(linebuf, '(f5.2, ",", 9(f12.7, ","), F7.2, ",", F7.2)')  & 
             dt*it,                                      &
             x_true(it), y_true(it), z_true(it),         &
             x_sim(it), y_sim(it), z_sim(it),            &
-            x_da(it), y_da(it), z_da(it),               &
+            x_anl(it), y_anl(it), z_anl(it),               &
             obs_chr(1, it), obs_chr(2, it)
           call del_spaces(linebuf)
           write(1, '(a)') trim(linebuf)
