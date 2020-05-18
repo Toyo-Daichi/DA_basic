@@ -131,7 +131,7 @@ class lorenz63_score:
     return timestep
 
   def lorenz_rmse_draw(self, rmse_sim:list, rmse_obs:list, rmse_da:list,
-                             rmse_da_1:list, rmse_da_2:list, rmse_da_3:list, rmse_da_4:list, rmse_da_5:list
+                             #rmse_da_1:list, rmse_da_2:list, rmse_da_3:list, rmse_da_4:list, rmse_da_5:list
                              ) -> None:
     """RMSEの描画
 
@@ -147,14 +147,14 @@ class lorenz63_score:
     ax1 = fig.subplots()
     
     sns.set_style('whitegrid')
-    #ax1.plot(self.time_list, rmse_sim, ls="--", color='b', label='No DA')
-    
+    ax1.plot(self.time_list, rmse_sim, ls="--", color='b', label='No DA')
     ax1.plot(self.time_list, rmse_da, ls="--", color='r', label='KF')
-    ax1.plot(self.time_list, rmse_da_1, ls=":", alpha=0.3, label='EnKF 3mem')
-    ax1.plot(self.time_list, rmse_da_2, ls="--", label='EnKF 10mem')
-    ax1.plot(self.time_list, rmse_da_3, ls="--", label='EnKF 100mem')
-    ax1.plot(self.time_list, rmse_da_4, ls="--", label='EnKF 1000mem')
-    ax1.plot(self.time_list, rmse_da_5, ls="--", label='EnKF 5000mem')
+    
+    #ax1.plot(self.time_list, rmse_da_1, ls=":", alpha=0.3, label='EnKF 3mem')
+    #ax1.plot(self.time_list, rmse_da_2, ls="--", label='EnKF 10mem')
+    #ax1.plot(self.time_list, rmse_da_3, ls="--", label='EnKF 100mem')
+    #ax1.plot(self.time_list, rmse_da_4, ls="--", label='EnKF 1000mem')
+    #ax1.plot(self.time_list, rmse_da_5, ls="--", label='EnKF 5000mem')
 
     ax1.scatter(self.obs_time_list, rmse_obs, marker='*', color='y', s=35, alpha=0.5, edgecolor='k', label='Obs.')
 
@@ -203,7 +203,7 @@ if __name__ == "__main__":
   mem          = 5000
 
   outdir    = './output/lorenz63/'
-  da_method = 'EnKF'
+  da_method = 'KF'
   data_path = outdir + da_method + '.csv'
   err_path  = outdir + 'Error_matrix_' + da_method + '.csv'
   if da_method is 'EnKF':
@@ -240,7 +240,7 @@ if __name__ == "__main__":
   rmse_obs = score.accuracy_rmse_func(score.obs_true_list, score.obs_list, num_obs_elem)
 
   # Basic.
-  #score.lorenz_rmse_draw(rmse_sim, rmse_obs, rmse_da)
+  score.lorenz_rmse_draw(rmse_sim, rmse_obs, rmse_da)
 
   # >> plus. dataset rmse
   """
@@ -265,6 +265,8 @@ if __name__ == "__main__":
   """
 
   # >> error covariance matrix
+  """
   for i_num in tqdm(range(0, int(len(score.time_list)/2), obs_interval)):
     matrix_data = e_matrix.err_data[i_num].reshape(matrix_size, matrix_size)
     e_matrix.error_heatmap(matrix_data, i_num)
+  """

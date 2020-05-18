@@ -280,22 +280,22 @@ program lorenz63
           !------------------------------------------------------- 
           ! +++ 4.2.1 State Transient Matrix
           ! >> original form
-          ! JM(1,1) = 1.0d0 - dt*sig;         JM(1,2) = dt*sig;         JM(1,3) = 0.0d0
-          ! JM(2,1) = dt*(gamm - z_da(it-1)); JM(2,2) = 1.0d0 - dt;     JM(2,3) = -dt*x_da(it-1)
-          ! JM(3,1) = dt*y_da(it-1);          JM(3,2) = dt*x_da(it-1);  JM(3,3) = 1.0d0 - dt*b
+          JM(1,1) = -sig; JM(1,2) = sig; JM(1,3) = 0.0d0
+          JM(2,1) = gamm - z_da(it-1); JM(2,2) = -1.0; JM(2,3) = -x_da(it-1)
+          JM(3,1) = y_da(it-1); JM(3,2) = x_da(it-1);  JM(3,3) = -b
         
-          do il = 1, nx
-            delta = 1.0d0-3
-            call Lorenz63_Runge_Kutta( &
-              x_da(it-1)+delta, &
-              y_da(it-1)+delta, &
-              z_da(it-1)+delta, &
-              x_e, y_e, z_e     &
-            )
-            JM(1,il) = ( x_e - x_da(it) )/ delta
-            JM(2,il) = ( y_e - y_da(it) )/ delta
-            JM(3,il) = ( z_e - z_da(it) )/ delta
-          end do
+          !do il = 1, nx
+          !  delta = 1.0d0-3
+          !  call Lorenz63_Runge_Kutta( &
+          !    x_da(it-1)+delta, &
+          !    y_da(it-1)+delta, &
+          !    z_da(it-1)+delta, &
+          !    x_e, y_e, z_e     &
+          !  )
+          !  JM(1,il) = ( x_e - x_da(it) )/ delta
+          !  JM(2,il) = ( y_e - y_da(it) )/ delta
+          !  JM(3,il) = ( z_e - z_da(it) )/ delta
+          !end do
 
           call confirm_matrix(JM,nx,nx)
 
