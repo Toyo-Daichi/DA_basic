@@ -25,7 +25,7 @@ x_sinit=1.1d0; y_sinit=2.1d0; z_sinit=3.1d0
 nx=3; ny=3
 
 # Adaptive inflation mode
-alpha=0.0d0
+alpha=0.1d0
 
 # +++ outqput info
 boolen='true' # write putput

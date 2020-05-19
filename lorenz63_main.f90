@@ -14,7 +14,7 @@ program lorenz63
   integer :: obs_interval ! Interval of observation
   
   real(r_size), parameter  :: dt = 1.0d-2 ! Time step
-  real(r_size), parameter  :: size_noise_obs = 0.01d0
+  real(r_size), parameter  :: size_noise_obs = 0.1d0
 
   character(8)  :: da_method
   character(12) :: intg_method
@@ -333,7 +333,7 @@ program lorenz63
           ! +++ making inverse matrix
           !------------------------------------------------------- 
           
-          obs_mtx = R + matmul(H, matmul(Pf, transpose(H)))
+          obs_mtx = matmul(H, matmul(Pf, transpose(H))) + R
           obs_inv = obs_mtx
           
           call dgetrf(ny, ny, obs_inv, lda, ipiv, ierr)
@@ -405,9 +405,9 @@ program lorenz63
             
             !------------------------------------------------------- 
             ! +++ Runge-Kutta method
-          else if ( trim(intg_method) == 'Runge-Kutta' ) then 
+          else if ( trim(intg_method) == 'Runge-Kutta' ) then
             
-            call Lorenz63_Runge_Kutta(                                     &
+            call Lorenz63_Runge_Kutta(                                        &
             x_anl_m(it-1, imem), y_anl_m(it-1, imem), z_anl_m(it-1, imem),    & ! IN
             x_anl_m(it, imem), y_anl_m(it, imem), z_anl_m(it, imem)           & ! OUT
             )
@@ -438,7 +438,6 @@ program lorenz63
             Pf(2,3) = Pf(2,3) + y_prtb(imem)*z_prtb(imem)/(mems-1)
             Pf(3,2) = Pf(1,3)
           end do
-          
           
           obs_mtx = R + matmul(H, matmul(Pf, transpose(H)))
           obs_inv = obs_mtx
@@ -488,7 +487,7 @@ program lorenz63
       ! forward time step
       
       call cal_Lorenz(                           &
-      x_anl(it-1), y_anl(it-1), z_anl(it-1),        & ! IN
+      x_anl(it-1), y_anl(it-1), z_anl(it-1),     & ! IN
       x_k(1), y_k(1), z_k(1)                     & ! OUT
       )
       
@@ -503,7 +502,7 @@ program lorenz63
         ! +++ Runge-Kutta method
       else if ( trim(intg_method) == 'Runge-Kutta' ) then 
         
-        call Lorenz63_Runge_Kutta(               &
+        call Lorenz63_Runge_Kutta(                &
         x_anl(it-1), y_anl(it-1), z_anl(it-1),    & ! IN
         x_anl(it), y_anl(it), z_anl(it)           & ! OUT
         )

@@ -47,15 +47,15 @@ class lorenz63_score:
     undef = -999.e0
     
     # obs. list
-    obs = self.df.loc[ :, [' timestep', ' x_true', ' y_true', 'z_true', ' x_obs', ' y_obs', 'z_obs']]
+    obs = self.df.loc[ :, [' timestep', ' x_true', ' y_true', ' z_true', ' x_obs', ' y_obs', ' z_obs']]
     obs = obs[obs[' x_obs'] != undef]
-    self.obs_time_list  = self.df2_list(obs, ' timestep')[0]
+    self.obs_time_list = self.df2_list(obs, ' timestep')[0]
     self.obs_true_list = self.df2_list(obs, ' x_true', ' y_true', ' z_true')
-    self.obs_list       = self.df2_list(obs, ' x_obs', ' y_obs', ' z_obs')
+    self.obs_list      = self.df2_list(obs, ' x_obs', ' y_obs', ' z_obs')
     
     # sim. list
     self.sim_list  = self.df2_list(self.df, ' x_sim', ' y_sim', ' z_sim')
-    self.da_list   = self.df2_list(self.df, ' x_da', ' y_da', ' z_da')
+    self.da_list   = self.df2_list(self.df, ' x_anl', ' y_anl', ' z_anl')
     
     """
     list.shape
