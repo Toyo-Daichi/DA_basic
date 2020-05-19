@@ -28,7 +28,7 @@ nx=3; ny=3
 alpha=0.0d0
 
 # +++ outqput info
-boolen='true' # write putput
+boolen='false' # write putput
 outputname=${DA_METHOD}
 outputfile='./output/lorenz63/'${outputname}'.csv'
 outputfile_error_matrix='./output/lorenz63/'Error_matrix_${outputname}'.csv'
@@ -44,6 +44,10 @@ fi
 gfortran -fbounds-check kinddef.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_main.f90 -o ${prg} -I/usr/local/include -llapack -lblas
 
 ./${prg} > ./log/${today}_${prg}_${DA_METHOD}.log << EOF
+  &set_dim
+    nx = ${nx},
+    ny = ${ny}
+  /
   &set_parm
     nt_asm = ${nt_asm}, nt_prd = ${nt_prd},
     obs_interval = ${obs_interval}

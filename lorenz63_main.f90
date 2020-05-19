@@ -12,8 +12,9 @@ program lorenz63
   integer :: nt_asm       ! Period of data assimilation
   integer :: nt_prd       ! Period of prediction
   integer :: obs_interval ! Interval of observation
-
+  
   real(r_size), parameter  :: dt = 1.0d-2 ! Time step
+  real(r_size), parameter  :: size_noise_obs = 1.0d0
 
   character(8)  :: da_method
   character(12) :: intg_method
@@ -21,7 +22,6 @@ program lorenz63
   ! --- Physical variable
   real(r_size), allocatable :: x_true(:), y_true(:), z_true(:)
   real(r_size), allocatable :: x_sim(:), y_sim(:), z_sim(:)
-  
   real(r_size), allocatable :: x_anl(:), y_anl(:), z_anl(:)
   real(r_size), allocatable :: x_obs(:), y_obs(:), z_obs(:)
 
@@ -33,20 +33,27 @@ program lorenz63
 
   ! --- Matrix(element 1:x, 2:y, 3:z)
   ! +++ default setting
-  ! Pf = (  Pxx: 1.0  Pxy: 0.0 Pxz: 0.0
-  !         Pyx: 0.0  Pyy: 1.0 Pyz: 0.0 
-  !         Pzx: 0.0  Pzy: 0.0 Pzz: 1.0 )
+  ! Pf = ( Pxx: 1.0  Pxy: 0.0 Pxz: 0.0
+  !        Pyx: 0.0  Pyy: 1.0 Pyz: 0.0 
+  !        Pzx: 0.0  Pzy: 0.0 Pzz: 1.0 )
 
-  real(r_size) :: xt_anl(:,:)
-  real(r_size) :: yt_obs(:,:)
+  real(r_size), allocatable :: xt_anl(:,:)
+  real(r_size), allocatable :: yt_obs(:,:)
+
+  real(r_size), allocatable :: JM(:,:)  ! state transient matrix
+  real(r_size), allocatable :: Pf(:,:)  ! Forecast error convariance matrix (in KF, EnKF)
+  real(r_size), allocatable :: Pa(:,:)  ! Analysis error convariance matrix
+  real(r_size), allocatable ::  I(:,:)  ! eye_matrix
+  real(r_size), allocatable ::  R(:,:)  ! Observation error convariance matrix
+  real(r_size), allocatable :: Kg(:,:)  ! Kalman gain
+  real(r_size), allocatable ::  H(:,:)  ! Observation operator
+
+  real(r_size), allocatable ::  obs_mtx(:,:)
+  real(r_size), allocatable ::  obs_inv(:,:)
   
-  real(r_size) :: JM(:,:)  ! state transient matrix
-  real(r_size) :: Pf(:,:)  ! Forecast error convariance matrix (in KF, EnKF)
-  real(r_size) :: Pa(:,:)  ! Analysis error convariance matrix
-  real(r_size) ::  I(:,:)  ! eye_matrix
-  real(r_size) ::  R(:,:)  ! Observation error convariance matrix
-  real(r_size) :: Kg(:,:)  ! Kalman gain
-  real(r_size) ::  H(:,:)  ! Observation operator
+  real(r_size), allocatable :: hx(:,:)
+  real(r_size), allocatable :: hdxf(:,:)
+  real(r_size), allocatable :: work(:)
   
   ! --- Output control
   real(r_size), allocatable :: obs_chr(:, :)
@@ -61,26 +68,18 @@ program lorenz63
   integer :: mems, imem
   integer :: ierr
   integer :: iflag
+  integer :: lda
   integer :: iter
+  real(r_size) :: x_a(3,1)
   real(r_dble) :: Gnoise ! Gaussian noise
-  real(r_dble) :: delta ! Gaussian noise
+  real(r_dble) :: delta  ! Gaussian noise
   real(r_size) :: alpha  ! inflation
   real(r_size), parameter:: undef = -999.e0
 
-  ! --- matrix calculation
-  ! for inverse
-  integer      :: ipiv(:), lwork
+  ! --- for matrix calculation consistent
+  integer      :: ipiv, lwork
   real(r_size) :: lwork0
-  real(r_size) :: hx(:,:)
-  real(r_size) :: hdxf(:,:)
   
-  real(r_size), allocatable :: work_on(:)
-  
-  ! --- Inverse matrix
-  real(r_size) :: inv_matrix(:,:)
-  real(r_size) :: R_HPHt(:,:), HPHt(:,:)
-  real(r_size) :: eye_matrix(:,:)
-
   !======================================================================
   ! Data assimilation
   !
@@ -108,7 +107,6 @@ program lorenz63
     read(5, nml=ensemble_size, iostat = ierr)
   end if 
   read(5, nml=initial_score, iostat = ierr)
-  read(5, nml=initial_matrix, iostat = ierr)
   read(5, nml=output, iostat = ierr)
   ! name list io check
   if (ierr < 0 ) then
@@ -128,21 +126,46 @@ program lorenz63
   write(6,*) 'Integral method         :: ', intg_method
 
   allocate(x_true(0:nt_asm+nt_prd), y_true(0:nt_asm+nt_prd), z_true(0:nt_asm+nt_prd))
-  allocate(x_sim(0:nt_asm+nt_prd), y_sim(0:nt_asm+nt_prd), z_sim(0:nt_asm+nt_prd))
+
   allocate(x_anl(0:nt_asm+nt_prd), y_anl(0:nt_asm+nt_prd), z_anl(0:nt_asm+nt_prd))
+  allocate(x_sim(0:nt_asm+nt_prd), y_sim(0:nt_asm+nt_prd), z_sim(0:nt_asm+nt_prd))
   allocate(x_anl_m(0:nt_asm, mems), y_anl_m(0:nt_asm, mems), z_anl_m(0:nt_asm, mems))
   allocate(x_prtb(mems), y_prtb(mems), z_prtb(mems))
+  allocate(x_obs(0:nt_asm/obs_interval), y_obs(0:nt_asm/obs_interval), z_obs(0:nt_asm/obs_interval))
 
-  allocate(x_obs(0:nt_asm/obs_interval), y_obs(0:nt_asm/obs_interval))
-  allocate(obs_ens(2, mems))
-  allocate(x_innov(mems), y_innov(mems))
-  allocate(obs_chr(2, 0:nt_asm+nt_prd))
+  allocate(yt_obs(ny,1))
+  allocate(obs_ens(ny, mems))
+  allocate(x_innov(mems), y_innov(mems), z_innov(mems))
+  allocate(obs_chr(ny, 0:nt_asm+nt_prd))
+
+  ! covariance matrix set.
+  allocate(Pf(1:nx, 1:nx))
+  allocate(Pa(1:nx, 1:nx))
+  allocate(JM(1:nx, 1:nx))
+  allocate( I(1:nx, 1:nx))
+  allocate(Kg(1:nx, 1:ny))
+  allocate( H(1:ny, 1:nx))
+  allocate( R(1:ny, 1:ny))
+
+  allocate(obs_mtx(1:ny, 1:ny))
+  allocate(obs_inv(1:ny, 1:ny))
+  allocate(hx(1:ny, 1:nx))
+  allocate(hdxf(1:ny, 1:ny))
+
+  lda = ny; lwork = ny
+  allocate(work(1:ny))
 
   !----------------------------------------------------------------------
   ! +++ initial setting
 
-  I = 0.0d0
-  forall ( il=1:nx )  I(il, il) = 1.0d0
+  Pf = 0.d0; Pa = 0.d0; I = 0.d0
+  Kg = 0.d0;  H = 0.d0; R = 0.d0
+
+  forall ( il=1:nx )  Pf(il, il) = 1.0d0
+  forall ( il=1:nx )  Pa(il, il) = 1.0d0
+  forall ( il=1:ny )   R(il, il) = size_noise_obs
+  forall ( il=1:ny )   H(il, il) = 1.0d0
+  forall ( il=1:nx )   I(il, il) = 1.0d0
   
   ! --- Initialization of random number generator
   call random_seed()
@@ -159,9 +182,9 @@ program lorenz63
     !------------------------------------------------------- 
     ! +++ Euler method
     if ( trim(intg_method) == 'Euler' ) then
-      x_true(it) = x_true(it-1) + dt * x_k(1)
-      y_true(it) = y_true(it-1) + dt * y_k(1)
-      z_true(it) = z_true(it-1) + dt * z_k(1)
+      x_true(it) = x_true(it-1) + dt*x_k(1)
+      y_true(it) = y_true(it-1) + dt*y_k(1)
+      z_true(it) = z_true(it-1) + dt*z_k(1)
       
       !------------------------------------------------------- 
       ! +++ Runge-Kutta method
@@ -183,8 +206,12 @@ program lorenz63
       
       call gaussian_noise(sqrt(R(2,2)), Gnoise)
       y_obs(it/obs_interval) = y_true(it) + Gnoise
+
+      call gaussian_noise(sqrt(R(3,3)), Gnoise)
+      z_obs(it/obs_interval) = z_true(it) + Gnoise
       
-      write(6,*) 'time_step, x_obs, y_obs', it, x_obs(it/obs_interval), y_obs(it/obs_interval)
+      write(6,*) 'time_step, x_obs, y_obs, z_obs', &
+      it, x_obs(it/obs_interval), y_obs(it/obs_interval), z_obs(it/obs_interval)
     end if
   end do
   
@@ -231,7 +258,7 @@ program lorenz63
         
         ! 4.1: Time integration
         call cal_Lorenz(                         &
-        x_anl(it-1), y_anl(it-1), z_anl(it-1),      & ! IN
+        x_anl(it-1), y_anl(it-1), z_anl(it-1),   & ! IN
         x_k(1), y_k(1), z_k(1)                   & ! OUT
         )
         
@@ -246,7 +273,7 @@ program lorenz63
           ! +++ Runge-Kutta method
         else if ( trim(intg_method) == 'Runge-Kutta' ) then 
 
-          call Lorenz63_Runge_Kutta(             &
+          call Lorenz63_Runge_Kutta(                &
           x_anl(it-1), y_anl(it-1), z_anl(it-1),    & ! IN
           x_anl(it), y_anl(it), z_anl(it)           & ! OUT
           )
@@ -258,10 +285,11 @@ program lorenz63
           !------------------------------------------------------- 
           ! +++ 4.2.1 State Transient Matrix
           ! >> original form
-          JM(1,1) = -sig; JM(1,2) = sig; JM(1,3) = 0.0d0
-          JM(2,1) = gamm -z_anl(it-1); JM(2,2) = -1.0; JM(2,3) = -x_anl(it-1)
-          JM(3,1) = y_anl(it-1); JM(3,2) = x_anl(it-1);  JM(3,3) = -b
-        
+          JM(1,1) = -sig              ;JM(1,2) = sig         ;JM(1,3) = 0.0d0
+          JM(2,1) = gamm -z_anl(it-1) ;JM(2,2) = -1.d0       ;JM(2,3) = -x_anl(it-1)
+          JM(3,1) = y_anl(it-1)       ;JM(3,2) = x_anl(it-1) ;JM(3,3) = -b
+          
+          !------------------------------------------------------- 
           !do il = 1, nx
           !  delta = 1.0d0-3
           !  call Lorenz63_Runge_Kutta( &
@@ -275,43 +303,61 @@ program lorenz63
           !  JM(3,il) = ( z_e - z_anl(it) )/ delta
           !end do
 
-          call confirm_matrix(JM,nx,nx)
-
-          Pf = matmul(JM, matmul(Pa, transpose(JM)))*(1.0d0 + alpha)
+          call confirm_matrix(JM, nx, nx)
+          call confirm_matrix(Pa, nx, nx)
+          call confirm_matrix(transpose(JM), nx, nx)
+          
+          Pf = matmul(JM, matmul(Pa, transpose(JM)))
+          call confirm_matrix(Pf, nx, nx)
+          
           !------------------------------------------------------- 
           ! >> 4.2.3 Kalman gain: Weighting of model result and obs.
-          ! (Note) Observation in x,y ----> component 2 (x,y)
-          ! calculate inverse matrix @R_HPHt
-          ! *** ref:
-          ! http://www.rcs.arch.t.u-tokyo.ac.jp/kusuhara/tips/linux/fortran.html
+          !
+          ! +++ making inverse matrix
+          !------------------------------------------------------- 
           
-          HPHt = matmul(H, matmul(Pf, transpose(H)))
-          R_HPHt = R + HPHt
+          obs_mtx = R + matmul(H, matmul(Pf, transpose(H)))
+          obs_inv = obs_mtx
           
+          call dgetrf(ny, ny, obs_inv, lda, ipiv, ierr)
+          call dgetri(ny, obs_inv, lda, ipiv, work, lwork, ierr)
+          
+          if (ierr < 0 ) then
+            write(6,*) '   Use default values.        '
+          else if (ierr > 0) then
+            write(6,*) '   *** Warning : Not appropriate inpout info. !! Check !!'
+            write(6,*) '   Stop : lorenz63_main.f90              '
+            stop
+          end if
+
+          I = matmul(obs_mtx, obs_inv)
+
           !------------------------------------------------------- 
           ! +++ inverse matrix calculate for 2x2 on formula
-          call inverse_matrix_for2x2(R_HPHt, inv_matrix)
-          
-          eye_matrix = matmul(R_HPHt, inv_matrix)
-          !write(6,*) ' +++ confirm eye matrix calculate ... '
-          !write(6,*) eye_matrix
-          Kg = matmul(matmul(Pf, transpose(H)), inv_matrix)
-          
-          !------------------------------------------------------- q
+          ! >> call inverse_matrix_for2x2(obs_mtx, obs_inv)
+          !------------------------------------------------------- 
+
+          Kg = matmul(matmul(Pf, transpose(H)), obs_inv)
+          !-------------------------------------------------------
           ! >> 4.2.4 calculate innovation and correlation
           ! +++ Kalman Filter Main equation
-          x_a(1,1) = x_anl(it);  x_a(2,1) = y_anl(it); x_a(3,1) = z_anl(it)
-          yt_obs(1,1) = x_obs(it/obs_interval); yt_obs(2,1) = y_obs(it/obs_interval)
+          x_a(1,1) = x_anl(it)
+          x_a(2,1) = y_anl(it)
+          x_a(3,1) = z_anl(it)
+
+          yt_obs(1,1) = x_obs(it/obs_interval)
+          yt_obs(2,1) = y_obs(it/obs_interval)
+          yt_obs(3,1) = z_obs(it/obs_interval)
 
           hx = matmul(H, x_a)
           hdxf = yt_obs - hx
           x_a = x_a + matmul(Kg, hdxf)
+
           call confirm_matrix(Kg, nx, ny)
           x_anl(it) = x_a(1,1); y_anl(it) = x_a(2,1); z_anl(it) = x_a(3,1)
           
           ! >> 4.2.5 analysis error covariance matrix
           Pa = matmul((I - matmul(Kg, H)), Pf)
-          call confirm_matrix(Pa, nx, nx)
         end if
       end do
       
@@ -385,17 +431,15 @@ program lorenz63
             Pf(3,2) = Pf(1,3)
           end do
           
-          HPHt = matmul(H, matmul(Pf, transpose(H)))
-          R_HPHt = R + HPHt
           
+          obs_mtx = R + matmul(H, matmul(Pf, transpose(H)))
+          obs_inv = obs_mtx
+
           !------------------------------------------------------- 
           ! +++ inverse matrix calculate for 2x2 on formula
-          call inverse_matrix_for2x2(R_HPHt, inv_matrix)
+          call inverse_matrix_for2x2(obs_mtx, obs_inv)
           
-          eye_matrix = matmul(R_HPHt, inv_matrix)
-          !write(6,*) ' +++ confirm eye matrix calculate ... '
-          !write(6,*) eye_matrix
-          Kg = matmul(matmul(Pf, transpose(H)), inv_matrix)
+          Kg = matmul(matmul(Pf, transpose(H)), obs_inv)
           call confirm_matrix(Kg, nx, ny)
           
           do imem = 1, mems
@@ -409,7 +453,7 @@ program lorenz63
             obs_ens(2,imem) = y_innov(imem)
             
             x_a(1,1) = x_anl_m(it, imem); x_a(2,1) = y_anl_m(it, imem); x_a(3,1) = z_anl_m(it, imem)
-            yt_obs(1,1) = obs_ens(1,imem); yt_obs(2,1) = obs_ens(2,imem)
+            yt_obs(1,1) = obs_ens(1,imem); yt_obs(2,1) = obs_ens(2,imem); yt_obs = obs_ens(3,imem)
             hx = matmul(H, x_a)
             hdxf = yt_obs - hx
 
@@ -470,15 +514,15 @@ program lorenz63
       end do
       
       open (1, file=trim(output_file), status='replace')
-      write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_anl, y_anl, z_anl, x_obs, y_obs'
+      write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_anl, y_anl, z_anl, x_obs, y_obs, z_obs'
       do it = 0, nt_asm+nt_prd
         if (mod(it, output_interval) == 0) then
-          write(linebuf, '(f5.2, ",", 9(f12.7, ","), F7.2, ",", F7.2)')  & 
+          write(linebuf, '(f5.2, ",", 9(f12.7, ","), 2F7.2, ",", F7.2)')  & 
             dt*it,                                      &
             x_true(it), y_true(it), z_true(it),         &
             x_sim(it), y_sim(it), z_sim(it),            &
-            x_anl(it), y_anl(it), z_anl(it),               &
-            obs_chr(1, it), obs_chr(2, it)
+            x_anl(it), y_anl(it), z_anl(it),            &
+            obs_chr(1, it), obs_chr(2, it), obs_chr(3,it)
           call del_spaces(linebuf)
           write(1, '(a)') trim(linebuf)
         end if
