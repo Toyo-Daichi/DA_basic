@@ -47,11 +47,11 @@ class lorenz63_score:
     undef = -999.e0
     
     # obs. list
-    obs = self.df.loc[ :, [' timestep', ' x_true', ' y_true', ' x_obs', ' y_obs']]
+    obs = self.df.loc[ :, [' timestep', ' x_true', ' y_true', 'z_true', ' x_obs', ' y_obs', 'z_obs']]
     obs = obs[obs[' x_obs'] != undef]
     self.obs_time_list  = self.df2_list(obs, ' timestep')[0]
-    self.obs_true_list = self.df2_list(obs, ' x_true', ' y_true')
-    self.obs_list       = self.df2_list(obs, ' x_obs', ' y_obs')
+    self.obs_true_list = self.df2_list(obs, ' x_true', ' y_true', ' z_true')
+    self.obs_list       = self.df2_list(obs, ' x_obs', ' y_obs', ' z_obs')
     
     # sim. list
     self.sim_list  = self.df2_list(self.df, ' x_sim', ' y_sim', ' z_sim')
@@ -236,7 +236,7 @@ if __name__ == "__main__":
   num_sim_elem = 3
   rmse_sim = score.accuracy_rmse_func(score.true_list, score.sim_list, num_sim_elem)
   rmse_da  = score.accuracy_rmse_func(score.true_list, score.da_list, num_sim_elem)
-  num_obs_elem = 2
+  num_obs_elem = 3
   rmse_obs = score.accuracy_rmse_func(score.obs_true_list, score.obs_list, num_obs_elem)
 
   # Basic.

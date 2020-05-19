@@ -28,7 +28,7 @@ nx=3; ny=3
 alpha=0.0d0
 
 # +++ outqput info
-boolen='false' # write putput
+boolen='true' # write putput
 outputname=${DA_METHOD}
 outputfile='./output/lorenz63/'${outputname}'.csv'
 outputfile_error_matrix='./output/lorenz63/'Error_matrix_${outputname}'.csv'

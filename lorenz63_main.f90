@@ -14,7 +14,7 @@ program lorenz63
   integer :: obs_interval ! Interval of observation
   
   real(r_size), parameter  :: dt = 1.0d-2 ! Time step
-  real(r_size), parameter  :: size_noise_obs = 1.0d0
+  real(r_size), parameter  :: size_noise_obs = 0.01d0
 
   character(8)  :: da_method
   character(12) :: intg_method
@@ -157,6 +157,9 @@ program lorenz63
 
   !----------------------------------------------------------------------
   ! +++ initial setting
+  
+  x_true(0) = x_tinit; y_true(0) = y_tinit; z_true(0) = z_tinit
+  x_sim(0)  = x_sinit; y_sim(0)  = y_sinit; z_sim(0)  = z_sinit
 
   Pf = 0.d0; Pa = 0.d0; I = 0.d0
   Kg = 0.d0;  H = 0.d0; R = 0.d0
@@ -253,32 +256,46 @@ program lorenz63
         if ( opt_veach ) then
           call write_error_covariance_matrix(it, nt_asm, Pa)
         end if  
-
+        
         write(6,*) 'Data assim. time step: ', it
+        write(6,*) trim(intg_method)
         
         ! 4.1: Time integration
-        call cal_Lorenz(                         &
-        x_anl(it-1), y_anl(it-1), z_anl(it-1),   & ! IN
-        x_k(1), y_k(1), z_k(1)                   & ! OUT
-        )
-        
-        !------------------------------------------------------- 
-        ! +++ Euler method
         if ( trim(intg_method) == 'Euler' ) then
+          !------------------------------------------------------- 
+          ! +++ Euler method
+          
+          call cal_Lorenz(                           &
+          x_anl(it-1), y_anl(it-1), z_anl(it-1),   & ! IN
+          x_k(1), y_k(1), z_k(1)                   & ! OUT
+          )
+          
           x_anl(it) = x_anl(it-1) + dt * x_k(1)
           y_anl(it) = y_anl(it-1) + dt * y_k(1)
           z_anl(it) = z_anl(it-1) + dt * z_k(1)
-
+          
+        else if ( trim(intg_method) == 'Runge-Kutta' ) then 
           !------------------------------------------------------- 
           ! +++ Runge-Kutta method
-        else if ( trim(intg_method) == 'Runge-Kutta' ) then 
-
+          
+          write(6,*) it-1
+          write(6,*) it, x_sim(it-1), x_anl(it-1)
+          write(6,*) it, y_sim(it-1), y_anl(it-1)
+          write(6,*) it, z_sim(it-1), z_anl(it-1)
+          
           call Lorenz63_Runge_Kutta(                &
           x_anl(it-1), y_anl(it-1), z_anl(it-1),    & ! IN
           x_anl(it), y_anl(it), z_anl(it)           & ! OUT
           )
         end if
-
+        
+        write(6,*) it, x_sim(it-1), x_anl(it-1)
+        write(6,*) it, y_sim(it-1), y_anl(it-1)
+        write(6,*) it, z_sim(it-1), z_anl(it-1)
+        write(6,*) it, x_sim(it), x_anl(it)
+        write(6,*) it, y_sim(it), y_anl(it)
+        write(6,*) it, z_sim(it), z_anl(it)
+        
         if (mod(it, obs_interval) == 0) then
           !------------------------------------------------------- 
           ! 4.2: Kalman fileter
@@ -302,7 +319,7 @@ program lorenz63
           !  JM(2,il) = ( y_e - y_anl(it) )/ delta
           !  JM(3,il) = ( z_e - z_anl(it) )/ delta
           !end do
-
+          
           call confirm_matrix(JM, nx, nx)
           call confirm_matrix(Pa, nx, nx)
           call confirm_matrix(transpose(JM), nx, nx)
@@ -322,21 +339,11 @@ program lorenz63
           call dgetrf(ny, ny, obs_inv, lda, ipiv, ierr)
           call dgetri(ny, obs_inv, lda, ipiv, work, lwork, ierr)
           
-          if (ierr < 0 ) then
-            write(6,*) '   Use default values.        '
-          else if (ierr > 0) then
-            write(6,*) '   *** Warning : Not appropriate inpout info. !! Check !!'
-            write(6,*) '   Stop : lorenz63_main.f90              '
-            stop
-          end if
-
-          I = matmul(obs_mtx, obs_inv)
-
           !------------------------------------------------------- 
           ! +++ inverse matrix calculate for 2x2 on formula
           ! >> call inverse_matrix_for2x2(obs_mtx, obs_inv)
           !------------------------------------------------------- 
-
+          
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv)
           !-------------------------------------------------------
           ! >> 4.2.4 calculate innovation and correlation
@@ -344,20 +351,21 @@ program lorenz63
           x_a(1,1) = x_anl(it)
           x_a(2,1) = y_anl(it)
           x_a(3,1) = z_anl(it)
-
+          
           yt_obs(1,1) = x_obs(it/obs_interval)
           yt_obs(2,1) = y_obs(it/obs_interval)
           yt_obs(3,1) = z_obs(it/obs_interval)
-
+          
           hx = matmul(H, x_a)
           hdxf = yt_obs - hx
           x_a = x_a + matmul(Kg, hdxf)
-
+          
           call confirm_matrix(Kg, nx, ny)
           x_anl(it) = x_a(1,1); y_anl(it) = x_a(2,1); z_anl(it) = x_a(3,1)
           
           ! >> 4.2.5 analysis error covariance matrix
           Pa = matmul((I - matmul(Kg, H)), Pf)
+          intg_method = 'Runge-Kutta'
         end if
       end do
       
@@ -383,9 +391,9 @@ program lorenz63
         ! 4.1: Time integration
         do imem = 1, mems
           ! 4.1: Time integration
-          call cal_Lorenz(                                              &
+          call cal_Lorenz(                                                 &
           x_anl_m(it-1, imem), y_anl_m(it-1, imem), z_anl_m(it-1, imem),   & ! IN
-          x_k(1), y_k(1), z_k(1)                                        & ! OUT
+          x_k(1), y_k(1), z_k(1)                                           & ! OUT
           )
           
           !------------------------------------------------------- 
@@ -510,6 +518,7 @@ program lorenz63
         if (mod(it, obs_interval) == 0) then
           obs_chr(1, it) = x_obs(it/obs_interval)
           obs_chr(2, it) = y_obs(it/obs_interval)
+          obs_chr(3, it) = z_obs(it/obs_interval)
         end if
       end do
       
@@ -517,7 +526,7 @@ program lorenz63
       write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_anl, y_anl, z_anl, x_obs, y_obs, z_obs'
       do it = 0, nt_asm+nt_prd
         if (mod(it, output_interval) == 0) then
-          write(linebuf, '(f5.2, ",", 9(f12.7, ","), 2F7.2, ",", F7.2)')  & 
+          write(linebuf, '(f5.2, ",", 9(f12.7, ","), 2(F7.2, ","), F7.2)')  & 
             dt*it,                                      &
             x_true(it), y_true(it), z_true(it),         &
             x_sim(it), y_sim(it), z_sim(it),            &
@@ -551,6 +560,11 @@ contains
     
     real(r_size), intent(in)    :: x_in, y_in, z_in
     real(r_size), intent(out)   :: x_out, y_out, z_out
+    
+    call cal_Lorenz(                           &
+      x_in, y_in, z_in,                        & ! IN
+      x_k(1), y_k(1), z_k(1)                   & ! OUT
+    )
     
     x_cal(1) = x_in + 0.5*x_k(1)*dt
     y_cal(1) = y_in + 0.5*y_k(1)*dt
