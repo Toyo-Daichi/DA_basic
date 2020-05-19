@@ -251,7 +251,8 @@ program lorenz96_main
           JM(nx,nx-1) = x_anl(it-1,1)-x_anl(it-1,nx-2)
           JM(nx,nx) = -1.0d0
 
-          Pf = matmul(matmul(JM, Pa), transpose(JM))
+          call confirm_matrix(JM, nx, nx)
+          Pf = matmul(matmul(JM, Pa), transpose(JM))*(1.0d0 + alpha)
           !-----------------------------------------------------------
           ! +++ making inverse matrix
           !-----------------------------------------------------------
@@ -266,8 +267,8 @@ program lorenz96_main
           !-----------------------------------------------------------
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv_matrix)
           x_anl(it,:) = x_anl(it,:) + matmul(Kg, (yt_obs(it/obs_tintv,:) - matmul(H, x_anl(it,:))))
-          Pa = matmul((I - matmul(Kg, H)), Pf)*(1.0d0 + alpha)
-          !call confirm_matrix(Pa, nx, nx)
+          Pa = matmul((I - matmul(Kg, H)), Pf)
+          call confirm_matrix(Pa, nx, nx)
           call write_errcov(nx, it/obs_tintv, kt_oneday*normal_period/obs_tintv, Pa)
         end if
       end do &
