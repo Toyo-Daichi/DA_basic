@@ -12,7 +12,7 @@ rm -rf *.mod ${prg}
 nt_asm=2500
 nt_prd=2500
 obs_interval=20
-DA_METHOD='KF' #'KF' or 'EnKF'
+DA_METHOD='EnKF' #'KF' or 'EnKF'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
 mem=5000
 
@@ -25,7 +25,7 @@ x_sinit=1.1d0; y_sinit=2.1d0; z_sinit=3.1d0
 nx=3; ny=3
 
 # Adaptive inflation mode
-alpha=0.1d0
+alpha=0.0d0
 
 # +++ outqput info
 boolen='true' # write putput

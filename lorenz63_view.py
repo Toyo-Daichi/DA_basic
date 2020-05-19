@@ -203,11 +203,11 @@ if __name__ == "__main__":
   mem          = 5000
 
   outdir    = './output/lorenz63/'
-  da_method = 'KF'
+  da_method = 'EnKF'
   data_path = outdir + da_method + '.csv'
   err_path  = outdir + 'Error_matrix_' + da_method + '.csv'
   if da_method is 'EnKF':
-    data_path = outdir +  da_method + '_' + str(mem) + 'm.csv'
+    data_path = outdir +  da_method + '_' + str(mem) + 'm_0.0d0infla.csv'
     err_path  = outdir + 'Error_matrix_' + da_method + '_' + str(mem) + 'mem.csv'
 
   #---------------------------------------------------------- 

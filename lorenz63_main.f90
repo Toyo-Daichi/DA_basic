@@ -441,10 +441,21 @@ program lorenz63
           
           obs_mtx = R + matmul(H, matmul(Pf, transpose(H)))
           obs_inv = obs_mtx
-
+          
           !------------------------------------------------------- 
-          ! +++ inverse matrix calculate for 2x2 on formula
-          call inverse_matrix_for2x2(obs_mtx, obs_inv)
+          ! >>  Kalman gain: Weighting of model result and obs.
+          ! +++ making inverse matrix
+          !
+          ! ( +++ inverse matrix calculate for 2x2 on formula )
+          ! >> call inverse_matrix_for2x2(obs_mtx, obs_inv)
+          !------------------------------------------------------- 
+          
+          obs_mtx = matmul(H, matmul(Pf, transpose(H))) + R
+          obs_inv = obs_mtx
+          
+          call dgetrf(ny, ny, obs_inv, lda, ipiv, ierr)
+          call dgetri(ny, obs_inv, lda, ipiv, work, lwork, ierr)
+          intg_method = 'Runge-Kutta'
           
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv)
           call confirm_matrix(Kg, nx, ny)
@@ -452,15 +463,25 @@ program lorenz63
           do imem = 1, mems
             !------------------------------------------------------- 
             ! +++ Pertuturbed observation method (PO)
+            !------------------------------------------------------- 
             call gaussian_noise(sqrt(R(1,1)), Gnoise)
             x_innov(imem) = x_obs(it/obs_interval) + Gnoise
             obs_ens(1,imem) = x_innov(imem)
             call gaussian_noise(sqrt(R(2,2)), Gnoise)
             y_innov(imem) = y_obs(it/obs_interval) + Gnoise
             obs_ens(2,imem) = y_innov(imem)
+            call gaussian_noise(sqrt(R(3,3)), Gnoise)
+            z_innov(imem) = z_obs(it/obs_interval) + Gnoise
+            obs_ens(3,imem) = z_innov(imem)
+
+            x_a(1,1) = x_anl_m(it, imem)
+            x_a(2,1) = y_anl_m(it, imem)
+            x_a(3,1) = z_anl_m(it, imem)
             
-            x_a(1,1) = x_anl_m(it, imem); x_a(2,1) = y_anl_m(it, imem); x_a(3,1) = z_anl_m(it, imem)
-            yt_obs(1,1) = obs_ens(1,imem); yt_obs(2,1) = obs_ens(2,imem); yt_obs = obs_ens(3,imem)
+            yt_obs(1,1) = obs_ens(1,imem)
+            yt_obs(2,1) = obs_ens(2,imem)
+            yt_obs(3,1) = obs_ens(3,imem)
+            
             hx = matmul(H, x_a)
             hdxf = yt_obs - hx
 
@@ -474,11 +495,7 @@ program lorenz63
         y_anl(it) = sum(y_anl_m(it, 1:mems))/mems
         z_anl(it) = sum(z_anl_m(it, 1:mems))/mems
 
-        ! >> 4.2.5 analysis error covariance matrix
-        Pa = Pf - matmul(matmul(Kg, H), Pf)
-        Pf = Pa
       end do
- 
     end if
   
   ! --- Sec5. Prediction after Data assimilation
