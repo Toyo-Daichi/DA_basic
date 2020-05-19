@@ -11,10 +11,10 @@ program lorenz96_main
   ! --- setting parameter
   ! *** x(timescale, nx)
   real(r_size), allocatable :: x_true(:,:)
-  real(r_size), allocatable :: x_DA(:,:)
-  real(r_size), allocatable :: x_NoDA(:,:)
+  real(r_size), allocatable :: x_anl(:,:)
+  real(r_size), allocatable :: x_sim(:,:)
   ! *** x_mem(timescale, nx, member), x_prtb(nx, member)
-  real(r_size), allocatable :: x_DA_mem(:,:,:)
+  real(r_size), allocatable :: x_anl_mem(:,:,:)
   real(r_size), allocatable :: x_prtb(:,:)
 
   ! --- For spinup && OBS info
@@ -54,8 +54,8 @@ program lorenz96_main
   character(256)        :: initial_true_file
   character(256)        :: initial_sim_file
   character(256)        :: output_true_file
-  character(256)        :: output_DA_file
-  character(256)        :: output_NoDA_file
+  character(256)        :: output_anl_file
+  character(256)        :: output_sim_file
   character(256)        :: output_obs_file
   character(256)        :: output_errcov_file
   
@@ -69,7 +69,7 @@ program lorenz96_main
   integer         :: kt_oneday
   integer         :: ix, it, il, imem, ierr, lda, ipiv, lwork
 
-  integer, parameter      :: one_loop = 1
+  integer, parameter :: one_loop = 1
 
   !======================================================================
   !
@@ -84,7 +84,7 @@ program lorenz96_main
   namelist /set_period/ spinup_period, normal_period
   namelist /set_mobs/ obs_xintv, obs_tintv
   namelist /output/ initial_true_file, initial_sim_file, &
-    output_true_file, output_DA_file, output_NoDA_file, output_obs_file, output_errcov_file, opt_veach
+    output_true_file, output_anl_file, output_sim_file, output_obs_file, output_errcov_file, opt_veach
   
   read(5, nml=set_parm, iostat=ierr)
   read(5, nml=set_exp, iostat=ierr)
@@ -124,10 +124,10 @@ program lorenz96_main
     ! +++ Data assim. set 
     !----------------------------------------------------------------------
     if ( da_veach ) then
-      allocate(x_DA(0:kt_oneday*normal_period, nx))
-      allocate(x_NoDA(0:kt_oneday*normal_period, nx))
+      allocate(x_anl(0:kt_oneday*normal_period, nx))
+      allocate(x_sim(0:kt_oneday*normal_period, nx))
       if ( da_method == 'EnKF' ) then
-        allocate(x_DA_mem(0:kt_oneday*normal_period, nx, mems))
+        allocate(x_anl_mem(0:kt_oneday*normal_period, nx, mems))
         allocate(x_prtb(nx, mems))
         allocate(yt_obs_ens(ny, mems))
       end if
@@ -202,7 +202,7 @@ program lorenz96_main
     forall ( il=1:nx ) Pa(il, il) = 1.0d0
     forall ( il=1:nx )  I(il, il) = 1.0d0
     forall ( il=1:ny )  R(il, il) = size_noise_obs
-    forall ( il=1:ny )  H(il, il) = 1.0d0   ! not regular matrix
+    forall ( il=1:ny )  H(il, il) = 1.0d0 ! not regular matrix
     
     !-------------------------------------------------------------------
     ! +++ making NoDA score
@@ -210,9 +210,9 @@ program lorenz96_main
     open(2, file=trim(initial_sim_file), form='formatted', status='old')
     read(2,*) x_tmp
     close(2)
-    x_NoDA(0,:) = x_tmp
+    x_sim(0,:) = x_tmp
     do it = 1, kt_oneday*normal_period
-      call ting_rk4(one_loop, x_NoDA(it-1,:), x_NoDA(it,:))
+      call ting_rk4(one_loop, x_sim(it-1,:), x_sim(it,:))
     end do
     
     !-------------------------------------------------------------------
@@ -220,20 +220,36 @@ program lorenz96_main
     DataAssim_exp_kind :&
     if ( trim(da_method) == 'KF' ) then
       ! --- initialize
-      x_DA(0,:) = x_NoDA(0,:)
+      x_anl(0,:) = x_sim(0,:)
       
       data_assim_KF_loop :&
       do it = 1, kt_oneday*normal_period
         write(6,*) 'Data assim. time step: ', it
-        call ting_rk4(one_loop, x_DA(it-1,:), x_DA(it,:))
+        call ting_rk4(one_loop, x_anl(it-1,:), x_anl(it,:))
         
         if ( mod(it, obs_tintv)==0 ) then
           JM = 0.0d0
-          do il = 1, nx
-            delta = 1.0d0-4
-            call ting_rk4(one_loop, x_DA(it-1,:)+delta, x_e)
-            JM(:,il) = (x_e(:) - x_DA(it,:))/delta
+          JM(1,1)     =-1.0d0
+          JM(1,2)     =x_anl(it-1,nx)
+          JM(1,nx-1)  =-x_anl(it-1,nx) 
+          JM(1,nx)    =x_anl(it-1,2)-x_anl(it-1,nx-1)
+          
+          JM(2,1)     =x_anl(it-1,3)-x_anl(it-1,nx)
+          JM(2,2)     =-1.0d0
+          JM(2,3)     =x_anl(it-1,1)
+          JM(2,nx)    =x_anl(it-1,nx)
+
+          do il = 3, nx-1
+            JM(il,il-2) = -x_anl(it-1,il-1)
+            JM(il,il-1) = x_anl(it-1,il+1)-x_anl(it-1,il-2)
+            JM(il,il)   = -1.0d0
+            JM(il,il+1) = x_anl(it-1,il-1)
           end do
+
+          JM(nx,1) = x_anl(it-1,nx-1)
+          JM(nx,nx-2) = -x_anl(it-1,nx-1)
+          JM(nx,nx-1) = x_anl(it-1,1)-x_anl(it-1,nx-2)
+          JM(nx,nx) = -1.0d0
 
           Pf = matmul(matmul(JM, Pa), transpose(JM))
           !-----------------------------------------------------------
@@ -249,7 +265,7 @@ program lorenz96_main
           ! +++ adaptive inflation mode
           !-----------------------------------------------------------
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv_matrix)
-          x_DA(it,:) = x_DA(it,:) + matmul(Kg, (yt_obs(it/obs_tintv,:) - matmul(H, x_DA(it,:))))
+          x_anl(it,:) = x_anl(it,:) + matmul(Kg, (yt_obs(it/obs_tintv,:) - matmul(H, x_anl(it,:))))
           Pa = matmul((I - matmul(Kg, H)), Pf)*(1.0d0 + alpha)
           !call confirm_matrix(Pa, nx, nx)
           call write_errcov(nx, it/obs_tintv, kt_oneday*normal_period/obs_tintv, Pa)
@@ -263,10 +279,10 @@ program lorenz96_main
       !-----------------------------------------------------------
       do imem = 1, mems
         call gaussian_noise(size_noise_obs, gnoise)
-        x_DA_mem(0, :, imem) = x_NoDA(0, :) + gnoise
+        x_anl_mem(0, :, imem) = x_sim(0, :) + gnoise
       end do
       do ix = 1, nx
-        x_DA(0, ix) = sum(x_DA_mem(0,ix,1:mems))/mems
+        x_anl(0, ix) = sum(x_anl_mem(0,ix,1:mems))/mems
       end do
       
       !-----------------------------------------------------------
@@ -275,16 +291,16 @@ program lorenz96_main
       do it = 1, kt_oneday*normal_period
         write(6,*) 'Data assim. time step: ', it
         do imem = 1, mems
-          call ting_rk4(one_loop, x_DA_mem(it-1,:, imem), x_DA_mem(it,:, imem))
+          call ting_rk4(one_loop, x_anl_mem(it-1,:, imem), x_anl_mem(it,:, imem))
         end do
         
         if ( mod(it, obs_tintv)==0 .and. it /= 0) then
           Pf = 0.0d0
           do ix = 1, nx
-            x_DA(it, ix) = sum(x_DA_mem(it,ix,1:mems))/mems
+            x_anl(it, ix) = sum(x_anl_mem(it,ix,1:mems))/mems
           end do
           do imem = 1, mems
-            x_prtb(:, imem) = x_DA_mem(it, :, imem) - x_DA(it, :)
+            x_prtb(:, imem) = x_anl_mem(it, :, imem) - x_anl(it, :)
             !------------------------------------------------------- 
             ! +++ making ptbmtx
             !------------------------------------------------------- 
@@ -322,7 +338,7 @@ program lorenz96_main
           !
           !nd do
 
-          x_DA(it,:) = x_DA(it,:) + matmul(Kg, (yt_obs(it/obs_tintv,:) - matmul(H, x_DA(it,:))))
+          x_anl(it,:) = x_anl(it,:) + matmul(Kg, (yt_obs(it/obs_tintv,:) - matmul(H, x_anl(it,:))))
           Pa = Pf - matmul(matmul(Kg, H), Pf)
         end if
       end do &
@@ -364,17 +380,17 @@ program lorenz96_main
       
     else if ( trim(tool) == 'normal' ) then
       open(21, file=trim(output_true_file), form='formatted', status='replace')
-      open(22, file=trim(output_DA_file), form='formatted', status='replace')
-      open(23, file=trim(output_NoDA_file), form='formatted', status='replace')
+      open(22, file=trim(output_anl_file), form='formatted', status='replace')
+      open(23, file=trim(output_sim_file), form='formatted', status='replace')
       do it = 0, kt_oneday*normal_period
         
         write(linebuf, trim(cfmt)) x_true(it,:)
         call del_spaces(linebuf)
         write(21,'(a)') linebuf
-        write(linebuf, trim(cfmt)) x_DA(it,:)
+        write(linebuf, trim(cfmt)) x_anl(it,:)
         call del_spaces(linebuf)
         write(22,'(a)') linebuf
-        write(linebuf, trim(cfmt)) x_NoDA(it,:)
+        write(linebuf, trim(cfmt)) x_sim(it,:)
         call del_spaces(linebuf)
         write(23,'(a)') linebuf
       end do
