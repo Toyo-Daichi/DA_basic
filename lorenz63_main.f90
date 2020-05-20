@@ -14,7 +14,7 @@ program lorenz63
   integer :: obs_interval ! Interval of observation
   
   real(r_size), parameter  :: dt = 1.0d-2 ! Time step
-  real(r_size), parameter  :: size_noise_obs = 0.1d0
+  real(r_size), parameter  :: size_noise_obs = 1.0d0
 
   character(8)  :: da_method
   character(12) :: intg_method
@@ -165,7 +165,7 @@ program lorenz63
   Kg = 0.d0;  H = 0.d0; R = 0.d0
 
   forall ( il=1:nx )  Pf(il, il) = 1.0d0
-  forall ( il=1:nx )  Pa(il, il) = 1.0d0
+  forall ( il=1:nx )  Pa(il, il) = 0.1d0
   forall ( il=1:ny )   R(il, il) = size_noise_obs
   forall ( il=1:ny )   H(il, il) = 1.0d0
   forall ( il=1:nx )   I(il, il) = 1.0d0
@@ -438,6 +438,8 @@ program lorenz63
             Pf(2,3) = Pf(2,3) + y_prtb(imem)*z_prtb(imem)/(mems-1)
             Pf(3,2) = Pf(1,3)
           end do
+
+          Pf = Pf*(1.0d0 + alpha)
           
           obs_mtx = R + matmul(H, matmul(Pf, transpose(H)))
           obs_inv = obs_mtx
@@ -456,7 +458,7 @@ program lorenz63
           call dgetrf(ny, ny, obs_inv, lda, ipiv, ierr)
           call dgetri(ny, obs_inv, lda, ipiv, work, lwork, ierr)
           intg_method = 'Runge-Kutta'
-          
+
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv)
           call confirm_matrix(Kg, nx, ny)
           
