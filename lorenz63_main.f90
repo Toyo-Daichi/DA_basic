@@ -13,7 +13,6 @@ program lorenz63
   integer :: nt_prd       ! Period of prediction
   integer :: obs_interval ! Interval of observation
   
-  real(r_size), parameter  :: dt = 1.0d-2 ! Time step
   real(r_size), parameter  :: size_noise_obs = 1.0d0
 
   character(8)  :: da_method
@@ -71,10 +70,16 @@ program lorenz63
   integer :: lda
   integer :: iter
   real(r_size) :: x_a(3,1)
+  real(r_size) :: x_trend, y_trend, z_trend
   real(r_dble) :: Gnoise ! Gaussian noise
   real(r_dble) :: delta  ! Gaussian noise
   real(r_size) :: alpha  ! inflation
   real(r_size), parameter:: undef = -999.e0
+
+  ! -- woking matrix
+  real(r_size), allocatable :: PaxJMt(:,:)
+  real(r_size), allocatable :: PfxHt(:,:)
+  real(r_size), allocatable :: KgxH(:,:)
 
   ! --- for matrix calculation consistent
   integer      :: ipiv, lwork
@@ -149,8 +154,15 @@ program lorenz63
 
   allocate(obs_mtx(1:ny, 1:ny))
   allocate(obs_inv(1:ny, 1:ny))
-  allocate(hx(1:ny, 1:nx))
-  allocate(hdxf(1:ny, 1:ny))
+
+
+  ! working matrix set.
+  allocate(PaxJMt(1:nx, 1:nx))
+  allocate(PfxHt(1:nx, 1:ny))
+  allocate(KgxH(1:nx, 1:nx))
+
+  allocate(hx(ny, 1))
+  allocate(hdxf(ny, 1))
 
   lda = ny; lwork = ny
   allocate(work(1:ny))
@@ -164,8 +176,8 @@ program lorenz63
   Pf = 0.d0; Pa = 0.d0; I = 0.d0
   Kg = 0.d0;  H = 0.d0; R = 0.d0
 
-  forall ( il=1:nx )  Pf(il, il) = 1.0d0
-  forall ( il=1:nx )  Pa(il, il) = 0.1d0
+  forall ( il=1:nx )  Pf(il, il) = 4.0d0
+  forall ( il=1:nx )  Pa(il, il) = 4.0d0
   forall ( il=1:ny )   R(il, il) = size_noise_obs
   forall ( il=1:ny )   H(il, il) = 1.0d0
   forall ( il=1:nx )   I(il, il) = 1.0d0
@@ -213,8 +225,9 @@ program lorenz63
       call gaussian_noise(sqrt(R(3,3)), Gnoise)
       z_obs(it/obs_interval) = z_true(it) + Gnoise
       
-      write(6,*) 'time_step, x_obs, y_obs, z_obs', &
-      it, x_obs(it/obs_interval), y_obs(it/obs_interval), z_obs(it/obs_interval)
+      ! +++ for debug
+      !write(6,*) 'time_step, x_obs, y_obs, z_obs', &
+      !it, x_obs(it/obs_interval), y_obs(it/obs_interval), z_obs(it/obs_interval)
     end if
   end do
   
@@ -257,9 +270,6 @@ program lorenz63
           call write_error_covariance_matrix(it, nt_asm, Pa)
         end if  
         
-        write(6,*) 'Data assim. time step: ', it
-        write(6,*) trim(intg_method)
-        
         ! 4.1: Time integration
         if ( trim(intg_method) == 'Euler' ) then
           !------------------------------------------------------- 
@@ -278,73 +288,74 @@ program lorenz63
           !------------------------------------------------------- 
           ! +++ Runge-Kutta method
           
-          write(6,*) it-1
-          write(6,*) it, x_sim(it-1), x_anl(it-1)
-          write(6,*) it, y_sim(it-1), y_anl(it-1)
-          write(6,*) it, z_sim(it-1), z_anl(it-1)
-          
           call Lorenz63_Runge_Kutta(                &
           x_anl(it-1), y_anl(it-1), z_anl(it-1),    & ! IN
           x_anl(it), y_anl(it), z_anl(it)           & ! OUT
           )
         end if
         
-        write(6,*) it, x_sim(it-1), x_anl(it-1)
-        write(6,*) it, y_sim(it-1), y_anl(it-1)
-        write(6,*) it, z_sim(it-1), z_anl(it-1)
-        write(6,*) it, x_sim(it), x_anl(it)
-        write(6,*) it, y_sim(it), y_anl(it)
-        write(6,*) it, z_sim(it), z_anl(it)
-        
         if (mod(it, obs_interval) == 0) then
+          write(6,*) 'Data assim. time == ', it*dt, 'sec.'
+          write(6,*) ''
+          write(6,*) '  TRUTH   = ', x_true(it), y_true(it), z_true(it)
+          write(6,*) '  PREDICT = ', x_sim(it), y_sim(it), z_sim(it)
+          write(6,*) '  OBSERVE = ', x_obs(it/obs_interval), y_obs(it/obs_interval), z_obs(it/obs_interval)
+          write(6,*) ''
+
           !------------------------------------------------------- 
           ! 4.2: Kalman fileter
           !------------------------------------------------------- 
           ! +++ 4.2.1 State Transient Matrix
           ! >> original form
-          JM(1,1) = -sig              ;JM(1,2) = sig         ;JM(1,3) = 0.0d0
-          JM(2,1) = gamm -z_anl(it-1) ;JM(2,2) = -1.d0       ;JM(2,3) = -x_anl(it-1)
-          JM(3,1) = y_anl(it-1)       ;JM(3,2) = x_anl(it-1) ;JM(3,3) = -b
+          JM(1,1) = -sig              ;JM(1,2) = sig             ;JM(1,3) = 0.0d0
+          JM(2,1) = gamm -z_anl(it-1) ;JM(2,2) = -1.d0           ;JM(2,3) = -x_anl(it-1)
+          JM(3,1) = y_anl(it-1)       ;JM(3,2) = x_anl(it-1)     ;JM(3,3) = -b
+         
+          ! >> solve from TL function
+          !call TL_Lorez63_Runge_Kutta(             &
+          !  x_anl(it-1), y_anl(it-1), z_sim(it-1), & ! IN:  state
+          !  Pa(1,1), Pa(2,2), Pa(3,3),             & ! IN:  dX
+          !  x_trend, y_trend, z_trend              & ! OUT: trend
+          !)
+          !
+          ! +++ for check
+          ! write(6,*) x_trend, y_trend, z_trend
           
-          !------------------------------------------------------- 
-          !do il = 1, nx
-          !  delta = 1.0d0-3
-          !  call Lorenz63_Runge_Kutta( &
-          !    x_anl(it-1)+delta, &
-          !    y_anl(it-1)+delta, &
-          !    z_anl(it-1)+delta, &
-          !    x_e, y_e, z_e     &
-          !  )
-          !  JM(1,il) = ( x_e - x_anl(it) )/ delta
-          !  JM(2,il) = ( y_e - y_anl(it) )/ delta
-          !  JM(3,il) = ( z_e - z_anl(it) )/ delta
-          !end do
-          
-          call confirm_matrix(JM, nx, nx)
+          write(6,*) '  ANALYSIS ERROR COVARIANCE before one step.'
           call confirm_matrix(Pa, nx, nx)
-          call confirm_matrix(transpose(JM), nx, nx)
-          
-          Pf = matmul(JM, matmul(Pa, transpose(JM)))
+
+          PaxJMt = matmul(Pa, transpose(JM))
+          Pf = matmul(JM, PaxJMt)
+         
+          write(6,*) '  PREDICTION ERROR COVARIANCE on present step'
           call confirm_matrix(Pf, nx, nx)
           
+          
+          write(6,*) ''
+          
+
           !------------------------------------------------------- 
           ! >> 4.2.3 Kalman gain: Weighting of model result and obs.
           !
           ! +++ making inverse matrix
           !------------------------------------------------------- 
           
-          obs_mtx = matmul(H, matmul(Pf, transpose(H))) + R
+          PfxHt = matmul(Pf, transpose(H))
+          obs_mtx = matmul(H, PfxHt) + R
           obs_inv = obs_mtx
           
           call dgetrf(ny, ny, obs_inv, lda, ipiv, ierr)
           call dgetri(ny, obs_inv, lda, ipiv, work, lwork, ierr)
-          
+          ! It will be changed for some reason, so support.
+          intg_method = 'Runge-Kutta'
+
           !------------------------------------------------------- 
           ! +++ inverse matrix calculate for 2x2 on formula
           ! >> call inverse_matrix_for2x2(obs_mtx, obs_inv)
           !------------------------------------------------------- 
           
-          Kg = matmul(matmul(Pf, transpose(H)), obs_inv)
+          Kg = matmul(PfxHt, obs_inv)
+
           !-------------------------------------------------------
           ! >> 4.2.4 calculate innovation and correlation
           ! +++ Kalman Filter Main equation
@@ -358,14 +369,13 @@ program lorenz63
           
           hx = matmul(H, x_a)
           hdxf = yt_obs - hx
+
           x_a = x_a + matmul(Kg, hdxf)
-          
-          call confirm_matrix(Kg, nx, ny)
           x_anl(it) = x_a(1,1); y_anl(it) = x_a(2,1); z_anl(it) = x_a(3,1)
           
           ! >> 4.2.5 analysis error covariance matrix
-          Pa = matmul((I - matmul(Kg, H)), Pf)
-          intg_method = 'Runge-Kutta'
+          KgxH = matmul(Kg,H)
+          Pa = matmul(I - KgxH, Pf)
         end if
       end do
       
@@ -568,56 +578,6 @@ program lorenz63
 
 contains
 
-  subroutine Lorenz63_Runge_Kutta(  &
-    x_in, y_in, z_in,               & ! IN: previous step score 
-    x_out, y_out, z_out             & ! OUT: Runge-Kutta method score 
-  )
-    
-    use lorenz63_prm
-    implicit none
-    
-    real(r_size), intent(in)    :: x_in, y_in, z_in
-    real(r_size), intent(out)   :: x_out, y_out, z_out
-    
-    call cal_Lorenz(                           &
-      x_in, y_in, z_in,                        & ! IN
-      x_k(1), y_k(1), z_k(1)                   & ! OUT
-    )
-    
-    x_cal(1) = x_in + 0.5*x_k(1)*dt
-    y_cal(1) = y_in + 0.5*y_k(1)*dt
-    z_cal(1) = z_in + 0.5*z_k(1)*dt
-    
-    call cal_Lorenz(                         &
-    x_cal(1), y_cal(1), z_cal(1),            & ! IN
-    x_k(2), y_k(2), z_k(2)                   & ! OUT
-    )
-    
-    x_cal(2) = x_in + 0.5*x_k(2)*dt 
-    y_cal(2) = y_in + 0.5*y_k(2)*dt 
-    z_cal(2) = z_in + 0.5*z_k(2)*dt
-    
-    call cal_Lorenz(                         &
-    x_cal(2), y_cal(2), z_cal(2),            & ! IN
-    x_k(3), y_k(3), z_k(3)                   & ! OUT
-    )
-    
-    x_cal(3) = x_in + x_k(3)*dt
-    y_cal(3) = y_in + y_k(3)*dt
-    z_cal(3) = z_in + z_k(3)*dt
-    
-    call cal_Lorenz(                         &
-    x_cal(3), y_cal(3), z_cal(3),            & ! IN
-    x_k(4), y_k(4), z_k(4)                   & ! OUT
-    )
-    
-    x_out = x_in + dt * (x_k(1) + 2*x_k(2) + 2*x_k(3) + x_k(4)) / 6.0d0
-    y_out = y_in + dt * (y_k(1) + 2*y_k(2) + 2*y_k(3) + y_k(4)) / 6.0d0
-    z_out = z_in + dt * (z_k(1) + 2*z_k(2) + 2*z_k(3) + z_k(4)) / 6.0d0
-    
-    return
-  end subroutine Lorenz63_Runge_Kutta
-  
   subroutine inverse_matrix_for2x2(         &
     matrix,                                 & ! IN:  input matrix
     inv_matrix                              & ! OUT: inverse matrix
@@ -646,21 +606,24 @@ contains
       write(linebuf, '(8(f12.5, ","), f12.5)') error_covariance_matrix
         call del_spaces(linebuf)
         write(2, '(a)') trim(linebuf)
-        write(6,*) '+++ err covariance matrix 1st. step'
+        ! +++ for debug
+        !write(6,*) '+++ err covariance matrix 1st. step'
         !write(6,*) error_covariance_matrix(:,:)
         
       else if ( it /= 1 .and. it /= last_step) then
-        write(6,*) '+++ err covariance matrix 2nd. step ~'
         write(linebuf, '(8(f12.5, ","), f12.5)') error_covariance_matrix
         call del_spaces(linebuf)
         write(2, '(a)') trim(linebuf)
+        ! +++ for debug
+        !write(6,*) '+++ err covariance matrix 2nd. step ~'
         !write(6,*) error_covariance_matrix(:,:)
         
       else if ( it == last_step ) then
         write(linebuf, '(8(f12.5, ","), f12.5)') error_covariance_matrix
         call del_spaces(linebuf)
         write(2, '(a)') trim(linebuf)
-        write(6,*) '+++ err covariance matrix last step '
+        ! +++ for debug
+        !write(6,*) '+++ err covariance matrix last step '
         !write(6,*) error_covariance_matrix(:,:)
       close(2)
     end if
@@ -718,7 +681,7 @@ contains
       end do
       write(*,*)
     end do
-    print *, "==============================="
+    !print *, "==============================="
   end subroutine
 
 

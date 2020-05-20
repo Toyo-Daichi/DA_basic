@@ -11,21 +11,21 @@ rm -rf *.mod ${prg}
 #----------------------------------------------------------------------
 nt_asm=2500
 nt_prd=2500
-obs_interval=20
-DA_METHOD='EnKF' #'KF' or 'EnKF'
+obs_interval=50
+DA_METHOD='KF' #'KF' or 'EnKF'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
 mem=5000
 
 # +++ initial value
-x_tinit=1.0d0; y_tinit=2.0d0; z_tinit=3.0d0
-x_sinit=1.1d0; y_sinit=2.1d0; z_sinit=3.1d0
+x_tinit=1.508870; y_tinit=-1.531271; z_tinit=25.46091
+x_sinit=0.01d0;   y_sinit=0.001d0;   z_sinit=22.0d0
 
 # +++ initial matrix
 # forecast var & obs size
 nx=3; ny=3
 
 # Adaptive inflation mode
-alpha=0.1d0
+alpha=0.0d0
 
 # +++ outqput info
 boolen='true' # write putput
