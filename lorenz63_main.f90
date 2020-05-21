@@ -13,7 +13,7 @@ program lorenz63
   integer :: nt_prd       ! Period of prediction
   integer :: obs_interval ! Interval of observation
   
-  real(r_size), parameter  :: size_noise_obs = 3.0d0
+  real(r_size), parameter  :: size_noise_obs = 0.1d0
 
   character(8)  :: da_method
   character(12) :: intg_method
@@ -71,6 +71,7 @@ program lorenz63
   integer :: iter
   real(r_size) :: x_a(3,1)
   real(r_size) :: x_trend, y_trend, z_trend
+  real(r_size) :: dt_obs
   real(r_dble) :: Gnoise ! Gaussian noise
   real(r_dble) :: delta  ! Gaussian noise
   real(r_size) :: alpha  ! inflation
@@ -328,24 +329,19 @@ program lorenz63
           !JM(3,1) = y_anl(it-1)       ;JM(3,2) = x_anl(it-1)     ;JM(3,3) = -b
           
           ! >> Jacobian　matrix with time evolution
-          JM(1,1) = 1.0d0 -dt*sig          ;JM(1,2) = dt*sig         ;JM(1,3) = 0.0d0
-          JM(2,1) = dt*(gamm -z_anl(it-1)) ;JM(2,2) = 1.d0 - dt      ;JM(2,3) = -dt*x_anl(it-1)
-          JM(3,1) = dt*y_anl(it-1)         ;JM(3,2) = dt*x_anl(it-1) ;JM(3,3) = 1.0d0 -dt*b
+          dt_obs = dt*obs_interval
+          JM(1,1) = 1.0d0 -dt_obs*sig          ;JM(1,2) = dt_obs*sig          ;JM(1,3) = 0.0d0
+          JM(2,1) = dt_obs*(gamm -z_anl(it-1)) ;JM(2,2) = 1.d0 - dt_obs       ;JM(2,3) = -dt_obs*x_anl(it-1)
+          JM(3,1) = dt_obs*y_anl(it-1)         ;JM(3,2) = dt_obs*x_anl(it-1) ;JM(3,3) = 1.0d0 -dt_obs*b
          
-
-          
           write(6,*) '  ANALYSIS ERROR COVARIANCE before one step.'
           call confirm_matrix(Pa, nx, nx)
           
           PaxJMt = matmul(Pa, transpose(JM))
-          write(6,*) '  ANALYSIS ERROR COVARIANCE and JACOBIAN MATRIX.'
-          call confirm_matrix(PaxJMt, nx, nx)
-
           Pf = matmul(JM, PaxJMt)
           
           write(6,*) '  PREDICTION ERROR COVARIANCE on present step'
           call confirm_matrix(Pf, nx, nx)
-          
           write(6,*) ''
           
           !------------------------------------------------------- 
@@ -388,7 +384,7 @@ program lorenz63
           x_anl(it) = x_a(1,1); y_anl(it) = x_a(2,1); z_anl(it) = x_a(3,1)
           
           ! >> 4.2.5 analysis error covariance matrix
-          KgxH = matmul(Kg,H)
+          KgxH = matmul(Kg, H)
           Pa = matmul(I - KgxH, Pf)
         end if
       end do

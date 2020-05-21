@@ -11,14 +11,14 @@ rm -rf *.mod ${prg}
 #----------------------------------------------------------------------
 nt_asm=2500
 nt_prd=2500
-obs_interval=2
+obs_interval=1
 DA_METHOD='KF' #'KF' or 'EnKF'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
 mem=100
 
 # +++ initial value
 x_tinit=1.50880d0; y_tinit=-1.531271d0; z_tinit=25.46091d0
-x_sinit=5.71000d0; y_sinit=-4.721271d0; z_sinit=20.46091d0
+x_sinit=7.71000d0; y_sinit=-7.721271d0; z_sinit=20.46091d0
 
 # +++ initial matrix
 # forecast var & obs size

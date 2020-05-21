@@ -199,7 +199,7 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ info. setting
   matrix_size  = 3
-  obs_interval = 2
+  obs_interval = 3
   mem          = 100 #5000
   alpha        = '0.0d0'
 
