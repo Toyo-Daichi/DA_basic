@@ -13,7 +13,7 @@ program lorenz63
   integer :: nt_prd       ! Period of prediction
   integer :: obs_interval ! Interval of observation
   
-  real(r_size), parameter  :: size_noise_obs = 1.0d0
+  real(r_size), parameter  :: size_noise_obs = 3.0d0
 
   character(8)  :: da_method
   character(12) :: intg_method
@@ -155,7 +155,6 @@ program lorenz63
   allocate(obs_mtx(1:ny, 1:ny))
   allocate(obs_inv(1:ny, 1:ny))
 
-
   ! working matrix set.
   allocate(PaxJMt(1:nx, 1:nx))
   allocate(PfxHt(1:nx, 1:ny))
@@ -169,19 +168,27 @@ program lorenz63
 
   !----------------------------------------------------------------------
   ! +++ initial setting
+  !----------------------------------------------------------------------
   
   x_true(0) = x_tinit; y_true(0) = y_tinit; z_true(0) = z_tinit
   x_sim(0)  = x_sinit; y_sim(0)  = y_sinit; z_sim(0)  = z_sinit
-
+  
   Pf = 0.d0; Pa = 0.d0; I = 0.d0
   Kg = 0.d0;  H = 0.d0; R = 0.d0
-
-  forall ( il=1:nx )  Pf(il, il) = 4.0d0
-  forall ( il=1:nx )  Pa(il, il) = 4.0d0
+  
+  forall ( il=1:nx )  Pf(il, il) = 1.0d0
+  forall ( il=1:nx )  Pa(il, il) = 1.0d0
   forall ( il=1:ny )   R(il, il) = size_noise_obs
   forall ( il=1:ny )   H(il, il) = 1.0d0
   forall ( il=1:nx )   I(il, il) = 1.0d0
   
+  !----------------------------------------------------------------------
+  ! +++ if 3D var method ...
+  !Pf(1,1) = 0.01; Pf(1,2) = 0.01; Pf(1,3) = 0.01
+  !Pf(2,1) = 0.01; Pf(2,2) = 0.01; Pf(2,3) = 0.01
+  !Pf(3,1) = 0.01; Pf(3,2) = 0.01; Pf(3,3) = 0.01
+  !----------------------------------------------------------------------
+
   ! --- Initialization of random number generator
   call random_seed()
   
@@ -255,7 +262,7 @@ program lorenz63
         x_sim(it-1), y_sim(it-1), z_sim(it-1), & ! IN
         x_sim(it), y_sim(it), z_sim(it)        & ! OUT
         )
-        
+
       end if
     end do
     
@@ -275,7 +282,7 @@ program lorenz63
           !------------------------------------------------------- 
           ! +++ Euler method
           
-          call cal_Lorenz(                           &
+          call cal_Lorenz(                         &
           x_anl(it-1), y_anl(it-1), z_anl(it-1),   & ! IN
           x_k(1), y_k(1), z_k(1)                   & ! OUT
           )
@@ -306,34 +313,41 @@ program lorenz63
           ! 4.2: Kalman fileter
           !------------------------------------------------------- 
           ! +++ 4.2.1 State Transient Matrix
-          ! >> original form
-          JM(1,1) = -sig              ;JM(1,2) = sig             ;JM(1,3) = 0.0d0
-          JM(2,1) = gamm -z_anl(it-1) ;JM(2,2) = -1.d0           ;JM(2,3) = -x_anl(it-1)
-          JM(3,1) = y_anl(it-1)       ;JM(3,2) = x_anl(it-1)     ;JM(3,3) = -b
-         
           ! >> solve from TL function
-          !call TL_Lorez63_Runge_Kutta(             &
-          !  x_anl(it-1), y_anl(it-1), z_sim(it-1), & ! IN:  state
-          !  Pa(1,1), Pa(2,2), Pa(3,3),             & ! IN:  dX
-          !  x_trend, y_trend, z_trend              & ! OUT: trend
-          !)
-          !
+          call TL_Lorez63_Runge_Kutta(             &
+            x_anl(it-1), y_anl(it-1), z_sim(it-1), & ! IN:  state
+            Pa(1,1), Pa(2,2), Pa(3,3),             & ! IN:  dX
+            x_trend, y_trend, z_trend              & ! OUT: trend
+          )
           ! +++ for check
           ! write(6,*) x_trend, y_trend, z_trend
           
+          ! >> Jacobian　matrix
+          !JM(1,1) = -sig              ;JM(1,2) = sig             ;JM(1,3) = 0.0d0
+          !JM(2,1) = gamm -z_anl(it-1) ;JM(2,2) = -1.d0           ;JM(2,3) = -x_anl(it-1)
+          !JM(3,1) = y_anl(it-1)       ;JM(3,2) = x_anl(it-1)     ;JM(3,3) = -b
+          
+          ! >> Jacobian　matrix with time evolution
+          JM(1,1) = 1.0d0 -dt*sig          ;JM(1,2) = dt*sig         ;JM(1,3) = 0.0d0
+          JM(2,1) = dt*(gamm -z_anl(it-1)) ;JM(2,2) = 1.d0 - dt      ;JM(2,3) = -dt*x_anl(it-1)
+          JM(3,1) = dt*y_anl(it-1)         ;JM(3,2) = dt*x_anl(it-1) ;JM(3,3) = 1.0d0 -dt*b
+         
+
+          
           write(6,*) '  ANALYSIS ERROR COVARIANCE before one step.'
           call confirm_matrix(Pa, nx, nx)
-
+          
           PaxJMt = matmul(Pa, transpose(JM))
+          write(6,*) '  ANALYSIS ERROR COVARIANCE and JACOBIAN MATRIX.'
+          call confirm_matrix(PaxJMt, nx, nx)
+
           Pf = matmul(JM, PaxJMt)
-         
+          
           write(6,*) '  PREDICTION ERROR COVARIANCE on present step'
           call confirm_matrix(Pf, nx, nx)
           
-          
           write(6,*) ''
           
-
           !------------------------------------------------------- 
           ! >> 4.2.3 Kalman gain: Weighting of model result and obs.
           !
@@ -348,14 +362,14 @@ program lorenz63
           call dgetri(ny, obs_inv, lda, ipiv, work, lwork, ierr)
           ! It will be changed for some reason, so support.
           intg_method = 'Runge-Kutta'
-
+          
           !------------------------------------------------------- 
           ! +++ inverse matrix calculate for 2x2 on formula
           ! >> call inverse_matrix_for2x2(obs_mtx, obs_inv)
           !------------------------------------------------------- 
           
           Kg = matmul(PfxHt, obs_inv)
-
+          
           !-------------------------------------------------------
           ! >> 4.2.4 calculate innovation and correlation
           ! +++ Kalman Filter Main equation
@@ -369,7 +383,7 @@ program lorenz63
           
           hx = matmul(H, x_a)
           hdxf = yt_obs - hx
-
+          
           x_a = x_a + matmul(Kg, hdxf)
           x_anl(it) = x_a(1,1); y_anl(it) = x_a(2,1); z_anl(it) = x_a(3,1)
           
@@ -391,13 +405,15 @@ program lorenz63
       end do
       
       x_anl(0) = sum(x_anl_m(0, 1:mems))/mems 
-      y_anl(0) = sum(x_anl_m(0, 1:mems))/mems 
-      z_anl(0) = sum(x_anl_m(0, 1:mems))/mems
+      y_anl(0) = sum(y_anl_m(0, 1:mems))/mems 
+      z_anl(0) = sum(z_anl_m(0, 1:mems))/mems
       
       do it = 1, nt_asm
+        
         if ( opt_veach ) then
           call write_error_covariance_matrix(it, nt_asm, Pf)
         end if 
+        
         ! 4.1: Time integration
         do imem = 1, mems
           ! 4.1: Time integration
@@ -425,6 +441,12 @@ program lorenz63
         end do
         
         if(mod(it, obs_interval) == 0) then
+          write(6,*) 'Data assim. time == ', it*dt, 'sec.'
+          write(6,*) ''
+          write(6,*) '  TRUTH   = ', x_true(it), y_true(it), z_true(it)
+          write(6,*) '  PREDICT = ', x_sim(it), y_sim(it), z_sim(it)
+          write(6,*) '  OBSERVE = ', x_obs(it/obs_interval), y_obs(it/obs_interval), z_obs(it/obs_interval)
+          write(6,*) ''
           x_anl(it) = sum(x_anl_m(it, 1:mems))/mems
           y_anl(it) = sum(y_anl_m(it, 1:mems))/mems
           z_anl(it) = sum(z_anl_m(it, 1:mems))/mems
@@ -448,8 +470,12 @@ program lorenz63
             Pf(2,3) = Pf(2,3) + y_prtb(imem)*z_prtb(imem)/(mems-1)
             Pf(3,2) = Pf(1,3)
           end do
-
+          
           Pf = Pf*(1.0d0 + alpha)
+          
+          write(6,*) ' PREDICTION ERROR COVARIANCE on present step'
+          call confirm_matrix(Pf, nx, nx)
+          write(6,*) ''
           
           obs_mtx = R + matmul(H, matmul(Pf, transpose(H)))
           obs_inv = obs_mtx
@@ -469,9 +495,12 @@ program lorenz63
           call dgetri(ny, obs_inv, lda, ipiv, work, lwork, ierr)
           intg_method = 'Runge-Kutta'
 
+          write(6,*) ' KALMAN GAIN WEIGHTING MATRIX '
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv)
-          call confirm_matrix(Kg, nx, ny)
           
+          call confirm_matrix(Kg, nx, ny)
+          write(6,*) ''
+
           do imem = 1, mems
             !------------------------------------------------------- 
             ! +++ Pertuturbed observation method (PO)
@@ -506,6 +535,7 @@ program lorenz63
         x_anl(it) = sum(x_anl_m(it, 1:mems))/mems
         y_anl(it) = sum(y_anl_m(it, 1:mems))/mems
         z_anl(it) = sum(z_anl_m(it, 1:mems))/mems
+
 
       end do
     end if

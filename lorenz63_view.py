@@ -162,7 +162,7 @@ class lorenz63_score:
     ax1.set_ylabel('RMSE')
     ax1.set_xlim(0, 25)
     ax1.set_ylim(0, 10)
-    ax1.set_title('Lorenz(1963) RMSE inflation +0.2', loc='left')
+    ax1.set_title('Lorenz(1963) RMSE infla. ***', loc='left')
 
     plt.grid()
     plt.legend()
@@ -199,24 +199,24 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ info. setting
   matrix_size  = 3
-  obs_interval = 20
-  mem          = 5000 #5000
-  alpha        = '0.1d0'
+  obs_interval = 2
+  mem          = 100 #5000
+  alpha        = '0.0d0'
 
   outdir    = './output/lorenz63/'
-  da_method = 'EnKF'
+  da_method = 'KF'
   data_path = outdir + da_method + '.csv'
   err_path  = outdir + 'Error_matrix_' + da_method + '.csv'
   if da_method is 'EnKF':
     data_path = outdir +  da_method + '_' + str(mem) + 'm_' + alpha + 'infla.csv'
-    err_path  = outdir + 'Error_matrix_' + da_method + '_' + str(mem) + 'mem.csv'
+    #err_path  = outdir + 'Error_matrix_' + da_method + '_' + str(mem) + 'mem.csv'
 
   #---------------------------------------------------------- 
   # +++ class set
   # > lorenz63 cal. score
   score = lorenz63_score(data_path)
   # > prediction err covariance matrix
-  e_matrix = lorenz63_error_covariance_matrix(err_path)
+  #e_matrix = lorenz63_error_covariance_matrix(err_path)
   
   #---------------------------------------------------------- 
   # +++ draw func.
