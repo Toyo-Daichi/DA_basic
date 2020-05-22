@@ -13,7 +13,7 @@ program lorenz63
   integer :: nt_prd       ! Period of prediction
   integer :: obs_interval ! Interval of observation
   
-  real(r_size), parameter  :: size_noise_obs = 0.1d0
+  real(r_size), parameter  :: size_noise_obs = 0.5d0
 
   character(8)  :: da_method
   character(12) :: intg_method
@@ -77,11 +77,6 @@ program lorenz63
   real(r_size) :: alpha  ! inflation
   real(r_size), parameter:: undef = -999.e0
 
-  ! -- woking matrix
-  real(r_size), allocatable :: PaxJMt(:,:)
-  real(r_size), allocatable :: PfxHt(:,:)
-  real(r_size), allocatable :: KgxH(:,:)
-
   ! --- for matrix calculation consistent
   integer      :: ipiv, lwork
   real(r_size) :: lwork0
@@ -132,7 +127,6 @@ program lorenz63
   write(6,*) 'Integral method         :: ', intg_method
 
   allocate(x_true(0:nt_asm+nt_prd), y_true(0:nt_asm+nt_prd), z_true(0:nt_asm+nt_prd))
-
   allocate(x_anl(0:nt_asm+nt_prd), y_anl(0:nt_asm+nt_prd), z_anl(0:nt_asm+nt_prd))
   allocate(x_sim(0:nt_asm+nt_prd), y_sim(0:nt_asm+nt_prd), z_sim(0:nt_asm+nt_prd))
   allocate(x_anl_m(0:nt_asm, mems), y_anl_m(0:nt_asm, mems), z_anl_m(0:nt_asm, mems))
@@ -148,18 +142,13 @@ program lorenz63
   allocate(Pf(1:nx, 1:nx))
   allocate(Pa(1:nx, 1:nx))
   allocate(JM(1:nx, 1:nx))
-  allocate( I(1:nx, 1:nx))
+  allocate(I(1:nx, 1:nx))
   allocate(Kg(1:nx, 1:ny))
-  allocate( H(1:ny, 1:nx))
-  allocate( R(1:ny, 1:ny))
+  allocate(H(1:ny, 1:nx))
+  allocate(R(1:ny, 1:ny))
 
   allocate(obs_mtx(1:ny, 1:ny))
   allocate(obs_inv(1:ny, 1:ny))
-
-  ! working matrix set.
-  allocate(PaxJMt(1:nx, 1:nx))
-  allocate(PfxHt(1:nx, 1:ny))
-  allocate(KgxH(1:nx, 1:nx))
 
   allocate(hx(ny, 1))
   allocate(hdxf(ny, 1))
@@ -315,11 +304,11 @@ program lorenz63
           !------------------------------------------------------- 
           ! +++ 4.2.1 State Transient Matrix
           ! >> solve from TL function
-          call TL_Lorez63_Runge_Kutta(             &
-            x_anl(it-1), y_anl(it-1), z_sim(it-1), & ! IN:  state
-            Pa(1,1), Pa(2,2), Pa(3,3),             & ! IN:  dX
-            x_trend, y_trend, z_trend              & ! OUT: trend
-          )
+          !call TL_Lorez63_Runge_Kutta(             &
+          !  x_anl(it-1), y_anl(it-1), z_sim(it-1), & ! IN:  state
+          !  Pa(1,1), Pa(2,2), Pa(3,3),             & ! IN:  dX
+          !  x_trend, y_trend, z_trend              & ! OUT: trend
+          !)
           ! +++ for check
           ! write(6,*) x_trend, y_trend, z_trend
           
@@ -337,8 +326,7 @@ program lorenz63
           write(6,*) '  ANALYSIS ERROR COVARIANCE before one step.'
           call confirm_matrix(Pa, nx, nx)
           
-          PaxJMt = matmul(Pa, transpose(JM))
-          Pf = matmul(JM, PaxJMt)
+          Pf = matmul(JM, matmul(Pa, transpose(JM)))
           
           write(6,*) '  PREDICTION ERROR COVARIANCE on present step'
           call confirm_matrix(Pf, nx, nx)
@@ -350,8 +338,7 @@ program lorenz63
           ! +++ making inverse matrix
           !------------------------------------------------------- 
           
-          PfxHt = matmul(Pf, transpose(H))
-          obs_mtx = matmul(H, PfxHt) + R
+          obs_mtx = matmul(H, matmul(Pf, transpose(H))) + R
           obs_inv = obs_mtx
           
           call dgetrf(ny, ny, obs_inv, lda, ipiv, ierr)
@@ -364,7 +351,7 @@ program lorenz63
           ! >> call inverse_matrix_for2x2(obs_mtx, obs_inv)
           !------------------------------------------------------- 
           
-          Kg = matmul(PfxHt, obs_inv)
+          Kg = matmul(matmul(Pf, transpose(H)), obs_inv)
           
           !-------------------------------------------------------
           ! >> 4.2.4 calculate innovation and correlation
@@ -384,8 +371,8 @@ program lorenz63
           x_anl(it) = x_a(1,1); y_anl(it) = x_a(2,1); z_anl(it) = x_a(3,1)
           
           ! >> 4.2.5 analysis error covariance matrix
-          KgxH = matmul(Kg, H)
-          Pa = matmul(I - KgxH, Pf)
+          ! a little bit
+          Pa = matmul(I - matmul(Kg, H), Pf)
         end if
       end do
       
