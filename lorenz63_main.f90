@@ -371,7 +371,6 @@ program lorenz63
           x_anl(it) = x_a(1,1); y_anl(it) = x_a(2,1); z_anl(it) = x_a(3,1)
           
           ! >> 4.2.5 analysis error covariance matrix
-          ! a little bit
           Pa = matmul(I - matmul(Kg, H), Pf)
         end if
       end do
