@@ -228,28 +228,29 @@ program lorenz96_main
         call ting_rk4(one_loop, x_anl(it-1,:), x_anl(it,:))
         
         if ( mod(it, obs_tintv)==0 ) then
+          delta = dt*obs_tintv
           JM = 0.0d0
-          JM(1,1)     =-1.0d0
-          JM(1,2)     =x_anl(it-1,nx)
-          JM(1,nx-1)  =-x_anl(it-1,nx) 
-          JM(1,nx)    =x_anl(it-1,2)-x_anl(it-1,nx-1)
+          JM(1,1)     = 1.0d0 - delta
+          JM(1,2)     = x_anl(it-1,nx)*delta
+          JM(1,nx-1)  = -x_anl(it-1,nx)*delta
+          JM(1,nx)    = (x_anl(it-1,2)-x_anl(it-1,nx-1))*delta
           
-          JM(2,1)     =x_anl(it-1,3)-x_anl(it-1,nx)
-          JM(2,2)     =-1.0d0
-          JM(2,3)     =x_anl(it-1,1)
-          JM(2,nx)    =x_anl(it-1,nx)
+          JM(2,1)     = (x_anl(it-1,3)-x_anl(it-1,nx))*delta
+          JM(2,2)     = 1.0d0 - delta
+          JM(2,3)     = x_anl(it-1,1)*delta
+          JM(2,nx)    = -x_anl(it-1,1)*delta 
 
           do il = 3, nx-1
-            JM(il,il-2) = -x_anl(it-1,il-1)
-            JM(il,il-1) = x_anl(it-1,il+1)-x_anl(it-1,il-2)
-            JM(il,il)   = -1.0d0
-            JM(il,il+1) = x_anl(it-1,il-1)
+            JM(il,il-2) = -x_anl(it-1,il-1)*delta
+            JM(il,il-1) = (x_anl(it-1,il+1)-x_anl(it-1,il-2))*delta
+            JM(il,il)   = 1.0d0 - delta
+            JM(il,il+1) = x_anl(it-1,il-1)*delta
           end do
 
-          JM(nx,1) = x_anl(it-1,nx-1)
-          JM(nx,nx-2) = -x_anl(it-1,nx-1)
-          JM(nx,nx-1) = x_anl(it-1,1)-x_anl(it-1,nx-2)
-          JM(nx,nx) = -1.0d0
+          JM(nx,1) = x_anl(it-1,nx-1)*delta
+          JM(nx,nx-2) = -x_anl(it-1,nx-1)*delta
+          JM(nx,nx-1) = (x_anl(it-1,1)-x_anl(it-1,nx-2))*delta
+          JM(nx,nx) = 1.0d0 - delta
 
           call confirm_matrix(JM, nx, nx)
           Pf = matmul(matmul(JM, Pa), transpose(JM))*(1.0d0 + alpha)

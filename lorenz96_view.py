@@ -102,7 +102,7 @@ if __name__ == "__main__":
   timestep = stepday*4+1
   
   # OBS
-  obs_xintv, obs_tintv = 1, 20
+  obs_xintv, obs_tintv = 1, 2
   ny = int(nx/obs_xintv)
   obs_timestep = int(timestep/obs_tintv) 
 

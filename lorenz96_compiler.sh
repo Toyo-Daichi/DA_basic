@@ -30,7 +30,7 @@ alpha=0.0d0
 
 # +++ making obs. info
 obs_xintv=1
-obs_tintv=1
+obs_tintv=2
 
 # +++ output info
 out_boolen='true' # write putput
