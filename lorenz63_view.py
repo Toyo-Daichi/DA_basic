@@ -47,15 +47,15 @@ class lorenz63_score:
     undef = -999.e0
     
     # obs. list
-    obs = self.df.loc[ :, [' timestep', ' x_true', ' y_true', ' x_obs', ' y_obs']]
+    obs = self.df.loc[ :, [' timestep', ' x_true', ' y_true', ' z_true', ' x_obs', ' y_obs', ' z_obs']]
     obs = obs[obs[' x_obs'] != undef]
-    self.obs_time_list  = self.df2_list(obs, ' timestep')[0]
-    self.obs_true_list = self.df2_list(obs, ' x_true', ' y_true')
-    self.obs_list       = self.df2_list(obs, ' x_obs', ' y_obs')
+    self.obs_time_list = self.df2_list(obs, ' timestep')[0]
+    self.obs_true_list = self.df2_list(obs, ' x_true', ' y_true', ' z_true')
+    self.obs_list      = self.df2_list(obs, ' x_obs', ' y_obs', ' z_obs')
     
     # sim. list
     self.sim_list  = self.df2_list(self.df, ' x_sim', ' y_sim', ' z_sim')
-    self.da_list   = self.df2_list(self.df, ' x_da', ' y_da', ' z_da')
+    self.da_list   = self.df2_list(self.df, ' x_anl', ' y_anl', ' z_anl')
     
     """
     list.shape
@@ -162,7 +162,7 @@ class lorenz63_score:
     ax1.set_ylabel('RMSE')
     ax1.set_xlim(0, 25)
     ax1.set_ylim(0, 10)
-    ax1.set_title('Lorenz(1963) RMSE inflation +0.2', loc='left')
+    ax1.set_title('Lorenz(1963) RMSE infla. ***', loc='left')
 
     plt.grid()
     plt.legend()
@@ -199,23 +199,24 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ info. setting
   matrix_size  = 3
-  obs_interval = 20
-  mem          = 5000
+  obs_interval = 3
+  mem          = 100 #5000
+  alpha        = '0.0d0'
 
   outdir    = './output/lorenz63/'
   da_method = 'KF'
   data_path = outdir + da_method + '.csv'
   err_path  = outdir + 'Error_matrix_' + da_method + '.csv'
   if da_method is 'EnKF':
-    data_path = outdir +  da_method + '_' + str(mem) + 'm.csv'
-    err_path  = outdir + 'Error_matrix_' + da_method + '_' + str(mem) + 'mem.csv'
+    data_path = outdir +  da_method + '_' + str(mem) + 'm_' + alpha + 'infla.csv'
+    #err_path  = outdir + 'Error_matrix_' + da_method + '_' + str(mem) + 'mem.csv'
 
   #---------------------------------------------------------- 
   # +++ class set
   # > lorenz63 cal. score
   score = lorenz63_score(data_path)
   # > prediction err covariance matrix
-  e_matrix = lorenz63_error_covariance_matrix(err_path)
+  #e_matrix = lorenz63_error_covariance_matrix(err_path)
   
   #---------------------------------------------------------- 
   # +++ draw func.
@@ -236,7 +237,7 @@ if __name__ == "__main__":
   num_sim_elem = 3
   rmse_sim = score.accuracy_rmse_func(score.true_list, score.sim_list, num_sim_elem)
   rmse_da  = score.accuracy_rmse_func(score.true_list, score.da_list, num_sim_elem)
-  num_obs_elem = 2
+  num_obs_elem = 3
   rmse_obs = score.accuracy_rmse_func(score.obs_true_list, score.obs_list, num_obs_elem)
 
   # Basic.
