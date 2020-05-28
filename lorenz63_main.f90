@@ -327,6 +327,7 @@ program lorenz63
           call confirm_matrix(Pa, nx, nx)
           
           Pf = matmul(JM, matmul(Pa, transpose(JM)))
+          Pf = Pf*(1.0d0 + alpha)
           
           write(6,*) '  PREDICTION ERROR COVARIANCE on present step'
           call confirm_matrix(Pf, nx, nx)

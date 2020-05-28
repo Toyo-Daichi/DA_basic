@@ -200,11 +200,11 @@ if __name__ == "__main__":
   # +++ info. setting
   matrix_size  = 3
   obs_interval = 3
-  mem          = 100 #5000
-  alpha        = '0.0d0'
+  mem          = 2 #5000
+  alpha        = '1.0d0'
 
   outdir    = './output/lorenz63/'
-  da_method = 'KF'
+  da_method = 'EnKF'
   data_path = outdir + da_method + '.csv'
   err_path  = outdir + 'Error_matrix_' + da_method + '.csv'
   if da_method is 'EnKF':
