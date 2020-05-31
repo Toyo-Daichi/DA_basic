@@ -1,7 +1,8 @@
 #!/bin/bash
 # attached by lorenz63.f90
 
-set -ex
+#set -ex
+CDIR=`pwd`
 prg=lorenz_maintools
 today=$(date "+%Y%m%d%H%M")
 rm -rf *.mod ${prg}
@@ -45,13 +46,16 @@ fi
 #----------------------------------------------------------------------
 # +++ Run exp.
 #----------------------------------------------------------------------
-cp ./common/common_mtx.f90 common_mtx_mod.f90
+cp ${CDIR}/common/common.f90 common_mod.f90
+cp ${CDIR}/common/common_mtx.f90 common_mtx_mod.f90
+cp ${CDIR}/common/SFMT.f90 SFMT_mod.f90
+cp ${CDIR}/common/netlib.f netlib_mod.f
 
+# +++ compile
 gfortran -fbounds-check \
-  kinddef.f90 common_mtx_mod.f90 \
-  lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_main.f90 
-  -o ${prg} \
-  -I/usr/local/include -llapack -lblas
+  SFMT_mod.f90 common_mod.f90 netlib_mod.f common_mtx_mod.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_main.f90 \
+  -o ${prg} -I/usr/local/include -llapack -lblas \
+  -w # error message Suppression
 
 ./${prg} > ./log/${today}_${prg}_${da_method}.log << EOF
   &set_dim

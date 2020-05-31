@@ -11,7 +11,7 @@ subroutine cal_Lorenz( &
     r_x, r_y, r_z      & ! OUT: Lorenz63 score  
 )
   
-  use kinddef
+  use common
   use lorenz63_prm
   
   implicit none
@@ -80,7 +80,7 @@ subroutine cal_TL_Lorenz(   &
   fx, fy, fz                & ! OUT
   )
   
-  use kinddef
+  use common
   use lorenz63_prm
   
   implicit none
@@ -101,7 +101,7 @@ subroutine TL_Lorez63_Runge_Kutta( &
   x_trend, y_trend, z_trend        & ! OUT
 )
 
-  use kinddef
+  use common
   use lorenz63_prm
 
   implicit none

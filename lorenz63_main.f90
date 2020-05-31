@@ -2,8 +2,9 @@
 ! @author: Toyo_Daichi
 
 program lorenz63
-
-  use kinddef
+  
+  use common
+  use common_mtx
   use lorenz63_prm
 
   implicit none
@@ -80,7 +81,8 @@ program lorenz63
   real(r_size) :: dt_obs
   real(r_dble) :: Gnoise ! Gaussian noise
   real(r_size) :: alpha  ! inflation
-  real(r_size), parameter:: undef = -999.e0
+  
+  !real(r_size), parameter:: undef = -999.e0
   
   ! --- for matrix calculation consistent
   integer      :: ipiv, lwork
@@ -155,8 +157,8 @@ program lorenz63
   allocate(obs_srf_mtx_v1(1:ny, 1:ny), obs_srf_mtx_v2(1:ny, 1:ny))
   allocate(obs_srf_inv_v1(1:ny, 1:ny), obs_srf_inv_v2(1:ny, 1:ny))
   
-  allocate(hx(ny, 1))
-  allocate(hdxf(ny, 1))
+  allocate(hx(ny,1))
+  allocate(hdxf(ny,1))
   
   lda = ny; lwork = ny
   allocate(work(1:ny))
@@ -302,13 +304,14 @@ program lorenz63
         x_anl(it), y_anl(it), z_anl(it)           & ! OUT
         )
       end if
-        
+      
       if (mod(it, obs_interval) == 0) then
         write(6,*) 'Data assim. time == ', it*dt, 'sec.'
         write(6,*) ''
-        write(6,*) '  TRUTH   = ', x_true(it), y_true(it), z_true(it)
-        write(6,*) '  PREDICT = ', x_sim(it), y_sim(it), z_sim(it)
-        write(6,*) '  OBSERVE = ', x_obs(it/obs_interval), y_obs(it/obs_interval), z_obs(it/obs_interval)
+        write(6,*) '  TRUTH    = ', x_true(it), y_true(it), z_true(it)
+        write(6,*) '  PREDICT  = ', x_sim(it), y_sim(it), z_sim(it)
+        write(6,*) '  OBSERVE  = ', x_obs(it/obs_interval), y_obs(it/obs_interval), z_obs(it/obs_interval)
+        write(6,*) '  ANALYSIS = ', x_anl(it), y_anl(it), z_anl(it)
         write(6,*) ''
 
         !--------------------------------------------------------------------------------
@@ -413,7 +416,7 @@ program lorenz63
         
       ! 4.1: Time integration
       do imem = 1, mems
-        ! 4.1: Time integration
+        
         call cal_Lorenz(                                                   &
           x_anl_m(it-1, imem), y_anl_m(it-1, imem), z_anl_m(it-1, imem),   & ! IN
           x_k(1), y_k(1), z_k(1)                                           & ! OUT
@@ -426,8 +429,8 @@ program lorenz63
           y_anl_m(it, imem) = y_anl_m(it-1, imem) + dt * y_k(1)
           z_anl_m(it, imem) = z_anl_m(it-1, imem) + dt * z_k(1)
           
-          !------------------------------------------------------- 
-          ! +++ Runge-Kutta method
+        !------------------------------------------------------- 
+        ! +++ Runge-Kutta method
         else if ( trim(intg_method) == 'Runge-Kutta' ) then
           
           call Lorenz63_Runge_Kutta(                                          &
@@ -440,13 +443,14 @@ program lorenz63
       if(mod(it, obs_interval) == 0) then
         write(6,*) 'Data assim. time == ', it*dt, 'sec.'
         write(6,*) ''
-        write(6,*) '  TRUTH   = ', x_true(it), y_true(it), z_true(it)
-        write(6,*) '  PREDICT = ', x_sim(it), y_sim(it), z_sim(it)
-        write(6,*) '  OBSERVE = ', x_obs(it/obs_interval), y_obs(it/obs_interval), z_obs(it/obs_interval)
-        write(6,*) ''
+        write(6,*) '  TRUTH    = ', x_true(it), y_true(it), z_true(it)
+        write(6,*) '  PREDICT  = ', x_sim(it), y_sim(it), z_sim(it)
+        write(6,*) '  OBSERVE  = ', x_obs(it/obs_interval), y_obs(it/obs_interval), z_obs(it/obs_interval)
         x_anl(it) = sum(x_anl_m(it, 1:mems))/mems
         y_anl(it) = sum(y_anl_m(it, 1:mems))/mems
         z_anl(it) = sum(z_anl_m(it, 1:mems))/mems
+        write(6,*) '  ANALYSIS = ', x_anl(it/obs_interval), y_anl(it/obs_interval), z_anl(it/obs_interval)
+        write(6,*) ''
         Pf = 0.0d0
         do imem = 1, mems
           x_prtb(imem) = x_anl_m(it, imem) - x_anl(it)
@@ -540,19 +544,13 @@ program lorenz63
           Ef(3, :) = z_prtb(:)
           
           obs_srf_mtx_v1 = matmul(H, matmul(Pf, transpose(H))) + R
-          call f01epf(ny, obs_srf_mtx_v1, lda, ierr)
-          obs_srf_inv_v1 = obs_srf_mtx_v1
-
-          write(6,*) ' OBS INVERSE MATRIX '
-          call confirm_matrix(obs_srf_mtx_v1, ny, ny)
-          write(6,*) ''
-          call confirm_matrix(obs_srf_inv_v1, ny, ny)
-          write(6,*) ''
+          call mtx_sqrt(ny, obs_srf_mtx_v1, obs_srf_inv_v1)
           
           call dgetrf(ny, ny, obs_srf_inv_v1, lda, ipiv, ierr)
           call dgetri(ny, obs_srf_inv_v1, lda, ipiv, work, lwork, ierr)
           
-          obs_srf_mtx_v2 = sqrt(obs_srf_mtx_v1) + sqrt(R)
+          obs_srf_mtx_v2 = obs_srf_mtx_v1 + R
+          call mtx_sqrt(ny, obs_srf_mtx_v2, obs_srf_inv_v2)
           obs_srf_inv_v2 = obs_srf_mtx_v2
           
           call dgetrf(ny, ny, obs_srf_inv_v2, lda, ipiv, ierr)
@@ -564,15 +562,23 @@ program lorenz63
           write(6,*) ' KALMAN GAIN HAT WEIGHTING MATRIX '
           call confirm_matrix(Kh, nx, ny)
           write(6,*) ''
-          Ea = matmul(I - matmul(Kh, H), Ef)
+          
+          write(6,*) ' ANALYSIS ENSEMBLE VECTOR '
+          Ea = matmul(I - matmul(Kh,H), Ef)
+          call confirm_matrix(Ea, nx, mems)
+          write(6,*) ''
+          
+          x_anl(it) = xt_vec(1,1) + sum(Ea(1,:))/mems
+          y_anl(it) = xt_vec(2,1) + sum(Ea(2,:))/mems
+          z_anl(it) = xt_vec(3,1) + sum(Ea(3,:))/mems
+          
+          write(6,*) ' ANALYSIS VECTOR '
+          write(6,*) x_anl(it), y_anl(it), z_anl(it)
+          write(6,*) ''
 
-          xt_vec(1,1) = xt_vec(1,1) + sum(Ea(1,:))/mems
-          xt_vec(2,1) = xt_vec(2,1) + sum(Ea(2,:))/mems
-          xt_vec(3,1) = xt_vec(3,1) + sum(Ea(3,:))/mems
-
-          x_anl(it) = xt_vec(1,1)
-          y_anl(it) = xt_vec(2,1)
-          z_anl(it) = xt_vec(3,1)
+          ! initiallize
+          obs_srf_mtx_v1 = 0.0d0; obs_srf_mtx_v2 = 0.0d0
+          obs_srf_inv_v1 = 0.0d0; obs_srf_inv_v2 = 0.0d0
 
         end if
       end if

@@ -4,7 +4,7 @@
 
 module lorenz63_prm
   
-  use kinddef
+  use common
 
   ! --- matrix size
   integer, public   :: nx, ny
