@@ -12,9 +12,14 @@ rm -rf *.mod ${prg}
 nt_asm=2500
 nt_prd=2500
 obs_interval=1
-DA_METHOD='EnKF' #'KF' or 'EnKF'
+da_method='EnKF' #'KF' or 'EnKF'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
-mem=2
+mem=0
+enkf_method='none'
+if [ ${da_method} = 'EnKF' ]; then 
+  mem=50
+  enkf_method='PO' # 'PO' or "SRF"
+fi
 
 # +++ initial value
 x_tinit=1.50880d0; y_tinit=-1.531271d0; z_tinit=25.46091d0
@@ -25,14 +30,14 @@ x_sinit=7.71000d0; y_sinit=-7.721271d0; z_sinit=20.46091d0
 nx=3; ny=3
 
 # Adaptive inflation mode
-alpha=1.0d0
+alpha=0.0d0
 
 # +++ outqput info
 boolen='true' # write putput
-outputname=${DA_METHOD}
+outputname=${da_method}
 outputfile='./output/lorenz63/'${outputname}'.csv'
 outputfile_error_matrix='./output/lorenz63/'Error_matrix_${outputname}'.csv'
-if [ ${DA_METHOD} = 'EnKF' ]; then 
+if [ ${da_method} = 'EnKF' ]; then 
   outputfile='./output/lorenz63/'${outputname}_${mem}'m_'${alpha}'infla.csv'
   outputfile_error_matrix='./output/lorenz63/'Error_matrix_${outputname}_${mem}'mem_'${alpha}'infla.csv'
 fi
@@ -43,7 +48,7 @@ fi
 
 gfortran -fbounds-check kinddef.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_main.f90 -o ${prg} -I/usr/local/include -llapack -lblas
 
-./${prg} > ./log/${today}_${prg}_${DA_METHOD}.log << EOF
+./${prg} > ./log/${today}_${prg}_${da_method}.log << EOF
   &set_dim
     nx = ${nx},
     ny = ${ny}
@@ -53,14 +58,15 @@ gfortran -fbounds-check kinddef.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_m
     obs_interval = ${obs_interval}
   /
   &da_setting
-    da_method = '${DA_METHOD}',
+    da_method = '${da_method}',
     alpha = ${alpha}
   /
   &intg_setting
     intg_method = '${intg_method}'
   /
-  &ensemble_size
-    mems = ${mem}
+  &enkf_setting
+    mems = ${mem},
+    enkf_method = ${enkf_method}
   /
   &initial_score
     x_tinit = ${x_tinit},  y_tinit = ${y_tinit}, z_tinit = ${z_tinit}

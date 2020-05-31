@@ -13,10 +13,12 @@ program lorenz63
   integer :: nt_prd       ! Period of prediction
   integer :: obs_interval ! Interval of observation
   
-  real(r_size), parameter  :: size_noise_obs = 0.5d0
+  real(r_size), parameter  :: size_noise_obs = 1.0d0
 
   character(8)  :: da_method
+  character(8)  :: enkf_method
   character(12) :: intg_method
+  
   
   ! --- Physical variable
   real(r_size), allocatable :: x_true(:), y_true(:), z_true(:)
@@ -39,7 +41,7 @@ program lorenz63
   real(r_size), allocatable :: xt_anl(:,:)
   real(r_size), allocatable :: yt_obs(:,:)
 
-  real(r_size), allocatable :: JM(:,:)  ! state transient matrix
+  real(r_size), allocatable :: JM(:,:)  ! state transient matrix (=Jacobean　matrix)
   real(r_size), allocatable :: Pf(:,:)  ! Forecast error convariance matrix (in KF, EnKF)
   real(r_size), allocatable :: Pa(:,:)  ! Analysis error convariance matrix
   real(r_size), allocatable ::  I(:,:)  ! eye_matrix
@@ -47,8 +49,8 @@ program lorenz63
   real(r_size), allocatable :: Kg(:,:)  ! Kalman gain
   real(r_size), allocatable ::  H(:,:)  ! Observation operator
 
-  real(r_size), allocatable ::  obs_mtx(:,:)
-  real(r_size), allocatable ::  obs_inv(:,:)
+  real(r_size), allocatable :: obs_mtx(:,:)
+  real(r_size), allocatable :: obs_inv(:,:)
   
   real(r_size), allocatable :: hx(:,:)
   real(r_size), allocatable :: hdxf(:,:)
@@ -96,7 +98,7 @@ program lorenz63
   namelist /set_parm/ nt_asm, nt_prd, obs_interval
   namelist /da_setting/ da_method, alpha
   namelist /intg_setting/ intg_method
-  namelist /ensemble_size/ mems
+  namelist /enkf_setting/ mems, enkf_method
   namelist /initial_score/ x_tinit, y_tinit, z_tinit, x_sinit, y_sinit, z_sinit
   namelist /output/ output_file, output_file_error_covariance, opt_veach
 
@@ -104,9 +106,7 @@ program lorenz63
   read(5, nml=set_parm, iostat = ierr)
   read(5, nml=da_setting, iostat = ierr)
   read(5, nml=intg_setting, iostat = ierr)
-  if ( trim(da_method) == 'EnKF' ) then
-    read(5, nml=ensemble_size, iostat = ierr)
-  end if 
+  read(5, nml=enkf_setting, iostat = ierr)
   read(5, nml=initial_score, iostat = ierr)
   read(5, nml=output, iostat = ierr)
   ! name list io check
@@ -306,7 +306,9 @@ program lorenz63
           ! >> solve from TL function
           !call TL_Lorez63_Runge_Kutta(             &
           !  x_anl(it-1), y_anl(it-1), z_sim(it-1), & ! IN:  state
-          !  Pa(1,1), Pa(2,2), Pa(3,3),             & ! IN:  dX
+          !  Pa(1,1), Pa(1,2), Pa(1,3),             & ! IN:  dX 1st. step
+          !  Pa(2,1), Pa(2,2), Pa(2,3),             & ! IN:  dY 2nd. step
+          !  Pa(3,1), Pa(3,2), Pa(3,3),             & ! IN:  dZ 3rd. step
           !  x_trend, y_trend, z_trend              & ! OUT: trend
           !)
           ! +++ for check
@@ -484,10 +486,11 @@ program lorenz63
           call confirm_matrix(Kg, nx, ny)
           write(6,*) ''
 
+          !------------------------------------------------------- 
+          ! >> EnKF
+          ! +++ Pertuturbed observation method (PO)
+          !------------------------------------------------------- 
           do imem = 1, mems
-            !------------------------------------------------------- 
-            ! +++ Pertuturbed observation method (PO)
-            !------------------------------------------------------- 
             call gaussian_noise(sqrt(R(1,1)), Gnoise)
             x_innov(imem) = x_obs(it/obs_interval) + Gnoise
             obs_ens(1,imem) = x_innov(imem)
@@ -513,13 +516,55 @@ program lorenz63
             x_anl_m(it, imem) = x_a(1,1); y_anl_m(it, imem) = x_a(2,1); z_anl_m(it, imem) = x_a(3,1)
           end do
 
+          x_anl(it) = sum(x_anl_m(it, 1:mems))/mems
+          y_anl(it) = sum(y_anl_m(it, 1:mems))/mems
+          z_anl(it) = sum(z_anl_m(it, 1:mems))/mems
+
+          !------------------------------------------------------- 
+          ! >> EnKF
+          ! +++ Squared root fileter method (SRF)
+          !------------------------------------------------------- 
+          
+          x_ave_m = sum(x_anl_m(it, 1:mems))/mems
+          y_ave_m = sum(y_anl_m(it, 1:mems))/mems
+          z_ave_m = sum(z_anl_m(it, 1:mems))/mems
+
+          x_a(1,1) = x_ave_m
+          x_a(2,1) = y_ave_m
+          x_a(3,1) = z_ave_m
+
+          prb_mtx(1, imem) = x_anl_m(imem) - x_ave_m
+          prb_mtx(2, imem) = y_anl_m(imem) - y_ave_m
+          prb_mtx(3, imem) = z_anl_m(imem) - z_ave_m
+
+          prb_mtx_obs(3, mem) = matmul(H, prb_mtx)
+
+          obs_mtx = matmul(prb_mtx_obs, transpose(prb_mtx)) + (mem-1)R
+          obs_inv = obs_mtx
+          call dgetrf(ny, ny, obs_inv, lda, ipiv, ierr)
+          call dgetri(ny, obs_inv, lda, ipiv, work, lwork, ierr)
+          intg_method = 'Runge-Kutta'
+
+          Kg = matmul(matmul(prb_mtx, transpose(prb_mtx_obs)), obs_inv)
+          Kg_prb = I - matmul(matmul(prb_mtx, obs_inv), prb_mtx_obs)
+          
+          yt_obs(1,1) = x_obs(it/obs_interval)
+          yt_obs(2,1) = y_obs(it/obs_interval)
+          yt_obs(3,1) = z_obs(it/obs_interval)
+          
+          hx = matmul(H, x_a)
+          hdxf = yt_obs - hx
+          
+          x_a = x_a + matmul(Kg, hdxf)
+          prb_anl = matmul(prb_mtx, sqrt(Kg_prb))
+
+          x_a = x_a + prb_anl
+
+          x_anl(it) = x_a(1,1)
+          y_anl(it) = x_a(2,1)
+          z_anl(it) = x_a(3,1)
+
         end if
-        
-        x_anl(it) = sum(x_anl_m(it, 1:mems))/mems
-        y_anl(it) = sum(y_anl_m(it, 1:mems))/mems
-        z_anl(it) = sum(z_anl_m(it, 1:mems))/mems
-
-
       end do
     end if
   
