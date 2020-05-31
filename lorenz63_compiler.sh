@@ -1,7 +1,7 @@
 #!/bin/bash
 # attached by lorenz63.f90
 
-# set -ex
+set -ex
 prg=lorenz_maintools
 today=$(date "+%Y%m%d%H%M")
 rm -rf *.mod ${prg}
@@ -33,7 +33,7 @@ nx=3; ny=3
 alpha=0.0d0
 
 # +++ outqput info
-boolen='true' # write putput
+boolen='false' # write putput
 outputname=${da_method}
 outputfile='./output/lorenz63/'${outputname}'.csv'
 outputfile_error_matrix='./output/lorenz63/'Error_matrix_${outputname}'.csv'
@@ -66,7 +66,7 @@ gfortran -fbounds-check kinddef.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_m
   /
   &enkf_setting
     mems = ${mem},
-    enkf_method = ${enkf_method}
+    enkf_method = '${enkf_method}'
   /
   &initial_score
     x_tinit = ${x_tinit},  y_tinit = ${y_tinit}, z_tinit = ${z_tinit}

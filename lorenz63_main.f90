@@ -1,4 +1,4 @@
-! Created on 2020.4.1
+! Created on 2020.4.1~
 ! @author: Toyo_Daichi
 
 program lorenz63
@@ -19,7 +19,6 @@ program lorenz63
   character(8)  :: enkf_method
   character(12) :: intg_method
   
-  
   ! --- Physical variable
   real(r_size), allocatable :: x_true(:), y_true(:), z_true(:)
   real(r_size), allocatable :: x_sim(:), y_sim(:), z_sim(:)
@@ -29,18 +28,20 @@ program lorenz63
   real(r_size), allocatable :: x_anl_m(:,:), y_anl_m(:,:), z_anl_m(:,:)
   real(r_size), allocatable :: x_prtb(:), y_prtb(:), z_prtb(:)
   
-  real(r_size), allocatable :: obs_ens(:,:)
+  real(r_size), allocatable :: x_prtbmtx(:,:), obs_prtbmtx(:,:)
+  real(r_size), allocatable :: x_anl_prtbmtx(:,:)
   real(r_size), allocatable :: x_innov(:), y_innov(:), z_innov(:)
 
+  ! --- Temporal state vector
+  real(r_size), allocatable :: xt_vec(:,:)
+  real(r_size), allocatable :: yt_vec(:,:)
+  
   ! --- Matrix(element 1:x, 2:y, 3:z)
   ! +++ default setting
   ! Pf = ( Pxx: 1.0  Pxy: 0.0 Pxz: 0.0
   !        Pyx: 0.0  Pyy: 1.0 Pyz: 0.0 
   !        Pzx: 0.0  Pzy: 0.0 Pzz: 1.0 )
-
-  real(r_size), allocatable :: xt_anl(:,:)
-  real(r_size), allocatable :: yt_obs(:,:)
-
+  
   real(r_size), allocatable :: JM(:,:)  ! state transient matrix (=Jacobean　matrix)
   real(r_size), allocatable :: Pf(:,:)  ! Forecast error convariance matrix (in KF, EnKF)
   real(r_size), allocatable :: Pa(:,:)  ! Analysis error convariance matrix
@@ -48,40 +49,40 @@ program lorenz63
   real(r_size), allocatable ::  R(:,:)  ! Observation error convariance matrix
   real(r_size), allocatable :: Kg(:,:)  ! Kalman gain
   real(r_size), allocatable ::  H(:,:)  ! Observation operator
-
+  real(r_size), allocatable :: Kg_prtb(:,:)  ! Kalman gain for pertubation
+  
   real(r_size), allocatable :: obs_mtx(:,:)
   real(r_size), allocatable :: obs_inv(:,:)
+  
+  ! +++ for EnSRF
+  real(r_size), allocatable :: obs_srf_mtx(:,:)
+  real(r_size), allocatable :: obs_srf_inv(:,:)
   
   real(r_size), allocatable :: hx(:,:)
   real(r_size), allocatable :: hdxf(:,:)
   real(r_size), allocatable :: work(:)
   
   ! --- Output control
-  real(r_size), allocatable :: obs_chr(:, :)
+  logical                   :: opt_veach = .false.
+  real(r_size), allocatable :: yt_vec4out(:, :) ! for output
   integer, parameter        :: output_interval = 1
-  logical                   :: opt_veach = .true.
   character(256)            :: output_file
   character(256)            :: output_file_error_covariance
   character(1096)           :: linebuf
-
+  
   ! --- Working variable
+  !real(r_size) :: x_trend, y_trend, z_trend ! for tl_model
   integer :: it, il
   integer :: mems, imem
   integer :: ierr
-  integer :: iflag
   integer :: lda
-  integer :: iter
-  real(r_size) :: x_a(3,1)
-  real(r_size) :: x_trend, y_trend, z_trend
   real(r_size) :: dt_obs
   real(r_dble) :: Gnoise ! Gaussian noise
-  real(r_dble) :: delta  ! Gaussian noise
   real(r_size) :: alpha  ! inflation
   real(r_size), parameter:: undef = -999.e0
-
+  
   ! --- for matrix calculation consistent
   integer      :: ipiv, lwork
-  real(r_size) :: lwork0
   
   !======================================================================
   ! Data assimilation
@@ -92,7 +93,6 @@ program lorenz63
   !----------------------------------------------------------------------
   real(r_size) :: x_tinit, y_tinit, z_tinit
   real(r_size) :: x_sinit, y_sinit, z_sinit
-  real(r_size) :: x_e, y_e, z_e
   
   namelist /set_dim/ nx, ny
   namelist /set_parm/ nt_asm, nt_prd, obs_interval
@@ -101,7 +101,7 @@ program lorenz63
   namelist /enkf_setting/ mems, enkf_method
   namelist /initial_score/ x_tinit, y_tinit, z_tinit, x_sinit, y_sinit, z_sinit
   namelist /output/ output_file, output_file_error_covariance, opt_veach
-
+  
   read(5, nml=set_dim, iostat = ierr)
   read(5, nml=set_parm, iostat = ierr)
   read(5, nml=da_setting, iostat = ierr)
@@ -109,53 +109,53 @@ program lorenz63
   read(5, nml=enkf_setting, iostat = ierr)
   read(5, nml=initial_score, iostat = ierr)
   read(5, nml=output, iostat = ierr)
-  ! name list io check
+  
+  ! +++ name list state num(io) check
   if (ierr < 0 ) then
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
     write(6,*) '   Not found namelist.        '
     write(6,*) '   Use default values.        '
   else if (ierr > 0) then
-    write(6,*) trim(output_file), opt_veach
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
     write(6,*) '   *** Warning : Not appropriate names in namelist !! Check !!'
     write(6,*) '   Stop : lorenz63_main.f90              '
     stop
   end if
-
+  
   ! +++ display namelist
   write(6,*) 'Data assimlation method :: ', da_method
   write(6,*) 'Integral method         :: ', intg_method
-
+  
   allocate(x_true(0:nt_asm+nt_prd), y_true(0:nt_asm+nt_prd), z_true(0:nt_asm+nt_prd))
   allocate(x_anl(0:nt_asm+nt_prd), y_anl(0:nt_asm+nt_prd), z_anl(0:nt_asm+nt_prd))
   allocate(x_sim(0:nt_asm+nt_prd), y_sim(0:nt_asm+nt_prd), z_sim(0:nt_asm+nt_prd))
   allocate(x_anl_m(0:nt_asm, mems), y_anl_m(0:nt_asm, mems), z_anl_m(0:nt_asm, mems))
   allocate(x_prtb(mems), y_prtb(mems), z_prtb(mems))
   allocate(x_obs(0:nt_asm/obs_interval), y_obs(0:nt_asm/obs_interval), z_obs(0:nt_asm/obs_interval))
-
-  allocate(yt_obs(ny,1))
-  allocate(obs_ens(ny, mems))
+  
+  allocate(xt_vec(nx,1), yt_vec(ny,1))
+  allocate(x_prtbmtx(nx,mems), obs_prtbmtx(ny, mems), x_anl_prtbmtx(nx,1))
   allocate(x_innov(mems), y_innov(mems), z_innov(mems))
-  allocate(obs_chr(ny, 0:nt_asm+nt_prd))
-
+  allocate(yt_vec4out(ny, 0:nt_asm+nt_prd))
+  
   ! covariance matrix set.
   allocate(Pf(1:nx, 1:nx))
   allocate(Pa(1:nx, 1:nx))
   allocate(JM(1:nx, 1:nx))
-  allocate(I(1:nx, 1:nx))
+  allocate( I(1:nx, 1:nx))
   allocate(Kg(1:nx, 1:ny))
-  allocate(H(1:ny, 1:nx))
-  allocate(R(1:ny, 1:ny))
-
-  allocate(obs_mtx(1:ny, 1:ny))
-  allocate(obs_inv(1:ny, 1:ny))
-
+  allocate( H(1:ny, 1:nx))
+  allocate( R(1:ny, 1:ny))
+  
+  allocate(obs_mtx(1:ny, 1:ny), obs_inv(1:ny, 1:ny))
+  allocate(obs_srf_mtx(1:ny, 1:ny), obs_srf_inv(1:ny, 1:ny))
+  
   allocate(hx(ny, 1))
   allocate(hdxf(ny, 1))
-
+  
   lda = ny; lwork = ny
   allocate(work(1:ny))
-
+  
   !----------------------------------------------------------------------
   ! +++ initial setting
   !----------------------------------------------------------------------
@@ -173,12 +173,12 @@ program lorenz63
   forall ( il=1:nx )   I(il, il) = 1.0d0
   
   !----------------------------------------------------------------------
-  ! +++ if 3D var method ...
+  ! +++ if 3D var method (Not tested ... )
   !Pf(1,1) = 0.01; Pf(1,2) = 0.01; Pf(1,3) = 0.01
   !Pf(2,1) = 0.01; Pf(2,2) = 0.01; Pf(2,3) = 0.01
   !Pf(3,1) = 0.01; Pf(3,2) = 0.01; Pf(3,3) = 0.01
   !----------------------------------------------------------------------
-
+  
   ! --- Initialization of random number generator
   call random_seed()
   
@@ -193,6 +193,7 @@ program lorenz63
     
     !------------------------------------------------------- 
     ! +++ Euler method
+    !------------------------------------------------------- 
     if ( trim(intg_method) == 'Euler' ) then
       x_true(it) = x_true(it-1) + dt*x_k(1)
       y_true(it) = y_true(it-1) + dt*y_k(1)
@@ -200,25 +201,26 @@ program lorenz63
       
       !------------------------------------------------------- 
       ! +++ Runge-Kutta method
+      !------------------------------------------------------- 
     else if ( trim(intg_method) == 'Runge-Kutta' ) then 
       
       call Lorenz63_Runge_Kutta(                  &
-        x_true(it-1), y_true(it-1), z_true(it-1), & ! IN
-        x_true(it), y_true(it), z_true(it)        & ! OUT
+      x_true(it-1), y_true(it-1), z_true(it-1), & ! IN
+      x_true(it), y_true(it), z_true(it)        & ! OUT
       )
       
     end if
     
     ! making observations
     if ((mod(it, obs_interval) == 0) .and. (it <= nt_asm)) then
-
+      
       call gaussian_noise(sqrt(R(1,1)), Gnoise)
       ! Generate observation by adding Gaussian noise to true value
       x_obs(it/obs_interval) = x_true(it) + Gnoise
       
       call gaussian_noise(sqrt(R(2,2)), Gnoise)
       y_obs(it/obs_interval) = y_true(it) + Gnoise
-
+      
       call gaussian_noise(sqrt(R(3,3)), Gnoise)
       z_obs(it/obs_interval) = z_true(it) + Gnoise
       
@@ -239,6 +241,7 @@ program lorenz63
     
     !------------------------------------------------------- 
     ! +++ Euler method
+    !------------------------------------------------------- 
     if ( trim(intg_method) == 'Euler' ) then
       x_sim(it) = x_sim(it-1) + dt * x_k(1)
       y_sim(it) = y_sim(it-1) + dt * y_k(1)
@@ -246,37 +249,39 @@ program lorenz63
       
       !------------------------------------------------------- 
       ! +++ Runge-Kutta method
+      !------------------------------------------------------- 
     else if ( trim(intg_method) == 'Runge-Kutta' ) then 
       
       call Lorenz63_Runge_Kutta(               &
-        x_sim(it-1), y_sim(it-1), z_sim(it-1), & ! IN
-        x_sim(it), y_sim(it), z_sim(it)        & ! OUT
-        )
-
-      end if
-    end do
-    
-    ! --- Sec4. Data assimilation
-    if ( da_method == 'KF' ) then
-      x_anl(0) = x_sim(0)
-      y_anl(0) = y_sim(0)
-      z_anl(0) = z_sim(0)
+      x_sim(it-1), y_sim(it-1), z_sim(it-1), & ! IN
+      x_sim(it), y_sim(it), z_sim(it)        & ! OUT
+      )
       
-      do it = 1, nt_asm
-        if ( opt_veach ) then
-          call write_error_covariance_matrix(it, nt_asm, Pa)
-        end if  
+    end if
+  end do
+  
+  !====================================================================== 
+  ! --- Sec4. Data assimilation
+
+  if ( da_method == 'KF' ) then
+    x_anl(0) = x_sim(0)
+    y_anl(0) = y_sim(0)
+    z_anl(0) = z_sim(0)
+    
+    do it = 1, nt_asm
+      if ( opt_veach ) call output_Pf(it, nt_asm, Pa)
+      
+      ! 4.1: Time integration
+      if ( trim(intg_method) == 'Euler' ) then
+        !------------------------------------------------------- 
+        ! +++ Euler method
+        !------------------------------------------------------- 
         
-        ! 4.1: Time integration
-        if ( trim(intg_method) == 'Euler' ) then
-          !------------------------------------------------------- 
-          ! +++ Euler method
-          
-          call cal_Lorenz(                         &
-          x_anl(it-1), y_anl(it-1), z_anl(it-1),   & ! IN
-          x_k(1), y_k(1), z_k(1)                   & ! OUT
-          )
-          
+        call cal_Lorenz(                         &
+        x_anl(it-1), y_anl(it-1), z_anl(it-1),   & ! IN
+        x_k(1), y_k(1), z_k(1)                   & ! OUT
+        )
+        
           x_anl(it) = x_anl(it-1) + dt * x_k(1)
           y_anl(it) = y_anl(it-1) + dt * y_k(1)
           z_anl(it) = z_anl(it-1) + dt * z_k(1)
@@ -284,6 +289,7 @@ program lorenz63
         else if ( trim(intg_method) == 'Runge-Kutta' ) then 
           !------------------------------------------------------- 
           ! +++ Runge-Kutta method
+          !------------------------------------------------------- 
           
           call Lorenz63_Runge_Kutta(                &
           x_anl(it-1), y_anl(it-1), z_anl(it-1),    & ! IN
@@ -299,9 +305,8 @@ program lorenz63
           write(6,*) '  OBSERVE = ', x_obs(it/obs_interval), y_obs(it/obs_interval), z_obs(it/obs_interval)
           write(6,*) ''
 
-          !------------------------------------------------------- 
+          !--------------------------------------------------------------------------------
           ! 4.2: Kalman fileter
-          !------------------------------------------------------- 
           ! +++ 4.2.1 State Transient Matrix
           ! >> solve from TL function
           !call TL_Lorez63_Runge_Kutta(             &
@@ -314,10 +319,11 @@ program lorenz63
           ! +++ for check
           ! write(6,*) x_trend, y_trend, z_trend
           
-          ! >> Jacobian　matrix
+          ! >> Jacobian　matrix (*** origin form)
           !JM(1,1) = -sig              ;JM(1,2) = sig             ;JM(1,3) = 0.0d0
           !JM(2,1) = gamm -z_anl(it-1) ;JM(2,2) = -1.d0           ;JM(2,3) = -x_anl(it-1)
           !JM(3,1) = y_anl(it-1)       ;JM(3,2) = x_anl(it-1)     ;JM(3,3) = -b
+          !--------------------------------------------------------------------------------
           
           ! >> Jacobian　matrix with time evolution
           dt_obs = dt*obs_interval
@@ -328,8 +334,11 @@ program lorenz63
           write(6,*) '  ANALYSIS ERROR COVARIANCE before one step.'
           call confirm_matrix(Pa, nx, nx)
           
+          !------------------------------------------------------- 
+          ! +++ making Pf
           Pf = matmul(JM, matmul(Pa, transpose(JM)))
           Pf = Pf*(1.0d0 + alpha)
+          !------------------------------------------------------- 
           
           write(6,*) '  PREDICTION ERROR COVARIANCE on present step'
           call confirm_matrix(Pf, nx, nx)
@@ -337,7 +346,6 @@ program lorenz63
           
           !------------------------------------------------------- 
           ! >> 4.2.3 Kalman gain: Weighting of model result and obs.
-          !
           ! +++ making inverse matrix
           !------------------------------------------------------- 
           
@@ -359,19 +367,20 @@ program lorenz63
           !-------------------------------------------------------
           ! >> 4.2.4 calculate innovation and correlation
           ! +++ Kalman Filter Main equation
-          x_a(1,1) = x_anl(it)
-          x_a(2,1) = y_anl(it)
-          x_a(3,1) = z_anl(it)
+          !-------------------------------------------------------
+          xt_vec(1,1) = x_anl(it)
+          xt_vec(2,1) = y_anl(it)
+          xt_vec(3,1) = z_anl(it)
           
-          yt_obs(1,1) = x_obs(it/obs_interval)
-          yt_obs(2,1) = y_obs(it/obs_interval)
-          yt_obs(3,1) = z_obs(it/obs_interval)
+          yt_vec(1,1) = x_obs(it/obs_interval)
+          yt_vec(2,1) = y_obs(it/obs_interval)
+          yt_vec(3,1) = z_obs(it/obs_interval)
           
-          hx = matmul(H, x_a)
-          hdxf = yt_obs - hx
+          hx = matmul(H, xt_vec)
+          hdxf = yt_vec - hx
           
-          x_a = x_a + matmul(Kg, hdxf)
-          x_anl(it) = x_a(1,1); y_anl(it) = x_a(2,1); z_anl(it) = x_a(3,1)
+          xt_vec = xt_vec + matmul(Kg, hdxf)
+          x_anl(it) = xt_vec(1,1); y_anl(it) = xt_vec(2,1); z_anl(it) = xt_vec(3,1)
           
           ! >> 4.2.5 analysis error covariance matrix
           Pa = matmul(I - matmul(Kg, H), Pf)
@@ -394,10 +403,7 @@ program lorenz63
       z_anl(0) = sum(z_anl_m(0, 1:mems))/mems
       
       do it = 1, nt_asm
-        
-        if ( opt_veach ) then
-          call write_error_covariance_matrix(it, nt_asm, Pf)
-        end if 
+        if ( opt_veach ) call output_Pf(it, nt_asm, Pf)
         
         ! 4.1: Time integration
         do imem = 1, mems
@@ -442,6 +448,7 @@ program lorenz63
             z_prtb(imem) = z_anl_m(it, imem) - z_anl(it)
             
             !------------------------------------------------------- 
+            ! making Pf (one shot)
             ! +++ Dispersion
             Pf(1,1) = Pf(1,1) + x_prtb(imem)**2/(mems-1)
             Pf(2,2) = Pf(2,2) + y_prtb(imem)**2/(mems-1)
@@ -454,24 +461,14 @@ program lorenz63
             Pf(3,1) = Pf(1,3)
             Pf(2,3) = Pf(2,3) + y_prtb(imem)*z_prtb(imem)/(mems-1)
             Pf(3,2) = Pf(1,3)
+            !------------------------------------------------------- 
           end do
-          
+
           Pf = Pf*(1.0d0 + alpha)
           
           write(6,*) ' PREDICTION ERROR COVARIANCE on present step'
           call confirm_matrix(Pf, nx, nx)
           write(6,*) ''
-          
-          obs_mtx = R + matmul(H, matmul(Pf, transpose(H)))
-          obs_inv = obs_mtx
-          
-          !------------------------------------------------------- 
-          ! >>  Kalman gain: Weighting of model result and obs.
-          ! +++ making inverse matrix
-          !
-          ! ( +++ inverse matrix calculate for 2x2 on formula )
-          ! >> call inverse_matrix_for2x2(obs_mtx, obs_inv)
-          !------------------------------------------------------- 
           
           obs_mtx = matmul(H, matmul(Pf, transpose(H))) + R
           obs_inv = obs_mtx
@@ -479,91 +476,92 @@ program lorenz63
           call dgetrf(ny, ny, obs_inv, lda, ipiv, ierr)
           call dgetri(ny, obs_inv, lda, ipiv, work, lwork, ierr)
           intg_method = 'Runge-Kutta'
-
+          
           write(6,*) ' KALMAN GAIN WEIGHTING MATRIX '
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv)
           
           call confirm_matrix(Kg, nx, ny)
           write(6,*) ''
+          
+          if ( trim(enkf_method) == 'PO' ) then
+            !------------------------------------------------------- 
+            ! >> EnKF
+            ! +++ Pertuturbed observation method (PO)
+            ! (Phase. plus OBS pertubation)
+            !------------------------------------------------------- 
+            do imem = 1, mems
+              call gaussian_noise(sqrt(R(1,1)), Gnoise)
+              x_innov(imem) = x_obs(it/obs_interval) + Gnoise
+              obs_prtbmtx(1,imem) = x_innov(imem)
+              call gaussian_noise(sqrt(R(2,2)), Gnoise)
+              y_innov(imem) = y_obs(it/obs_interval) + Gnoise
+              obs_prtbmtx(2,imem) = y_innov(imem)
+              call gaussian_noise(sqrt(R(3,3)), Gnoise)
+              z_innov(imem) = z_obs(it/obs_interval) + Gnoise
+              obs_prtbmtx(3,imem) = z_innov(imem)
 
-          !------------------------------------------------------- 
-          ! >> EnKF
-          ! +++ Pertuturbed observation method (PO)
-          !------------------------------------------------------- 
-          do imem = 1, mems
-            call gaussian_noise(sqrt(R(1,1)), Gnoise)
-            x_innov(imem) = x_obs(it/obs_interval) + Gnoise
-            obs_ens(1,imem) = x_innov(imem)
-            call gaussian_noise(sqrt(R(2,2)), Gnoise)
-            y_innov(imem) = y_obs(it/obs_interval) + Gnoise
-            obs_ens(2,imem) = y_innov(imem)
-            call gaussian_noise(sqrt(R(3,3)), Gnoise)
-            z_innov(imem) = z_obs(it/obs_interval) + Gnoise
-            obs_ens(3,imem) = z_innov(imem)
-
-            x_a(1,1) = x_anl_m(it, imem)
-            x_a(2,1) = y_anl_m(it, imem)
-            x_a(3,1) = z_anl_m(it, imem)
+              xt_vec(1,1) = x_anl_m(it, imem)
+              xt_vec(2,1) = y_anl_m(it, imem)
+              xt_vec(3,1) = z_anl_m(it, imem)
             
-            yt_obs(1,1) = obs_ens(1,imem)
-            yt_obs(2,1) = obs_ens(2,imem)
-            yt_obs(3,1) = obs_ens(3,imem)
+              yt_vec(1,1) = obs_prtbmtx(1,imem)
+              yt_vec(2,1) = obs_prtbmtx(2,imem)
+              yt_vec(3,1) = obs_prtbmtx(3,imem)
             
-            hx = matmul(H, x_a)
-            hdxf = yt_obs - hx
+              hx = matmul(H, xt_vec)
+              hdxf = yt_vec - hx
 
-            x_a = x_a + matmul(Kg, hdxf)
-            x_anl_m(it, imem) = x_a(1,1); y_anl_m(it, imem) = x_a(2,1); z_anl_m(it, imem) = x_a(3,1)
-          end do
+              xt_vec = xt_vec + matmul(Kg, hdxf)
+              x_anl_m(it, imem) = xt_vec(1,1); y_anl_m(it, imem) = xt_vec(2,1); z_anl_m(it, imem) = xt_vec(3,1)
+            end do
 
-          x_anl(it) = sum(x_anl_m(it, 1:mems))/mems
-          y_anl(it) = sum(y_anl_m(it, 1:mems))/mems
-          z_anl(it) = sum(z_anl_m(it, 1:mems))/mems
+            x_anl(it) = sum(x_anl_m(it, 1:mems))/mems
+            y_anl(it) = sum(y_anl_m(it, 1:mems))/mems
+            z_anl(it) = sum(z_anl_m(it, 1:mems))/mems
 
-          !------------------------------------------------------- 
-          ! >> EnKF
-          ! +++ Squared root fileter method (SRF)
-          !------------------------------------------------------- 
-          
-          x_ave_m = sum(x_anl_m(it, 1:mems))/mems
-          y_ave_m = sum(y_anl_m(it, 1:mems))/mems
-          z_ave_m = sum(z_anl_m(it, 1:mems))/mems
+          else if ( trim(enkf_method) == 'SRF' ) then
+            !------------------------------------------------------- 
+            ! >> EnKF (-> EnSRF)
+            ! +++ Squared root fileter method (SRF)
+            !------------------------------------------------------- 
+            
+            xt_vec(1,1) = x_anl(it)
+            xt_vec(2,1) = y_anl(it)
+            xt_vec(3,1) = z_anl(it)
 
-          x_a(1,1) = x_ave_m
-          x_a(2,1) = y_ave_m
-          x_a(3,1) = z_ave_m
+            x_prtbmtx(1, :) = x_prtb(:)
+            x_prtbmtx(2, :) = y_prtb(:)
+            x_prtbmtx(3, :) = z_prtb(:)
+      
+            ! Pertubation kalmangain(=T matrix)
+            obs_srf_mtx = sqrt(matmul(H, matmul(Pf, transpose(H))) + R) + sqrt(R)
+            obs_srf_inv = obs_srf_mtx
+            
+            call dgetrf(ny, ny, obs_srf_inv, lda, ipiv, ierr)
+            call dgetri(ny, obs_srf_inv, lda, ipiv, work, lwork, ierr)
 
-          prb_mtx(1, imem) = x_anl_m(imem) - x_ave_m
-          prb_mtx(2, imem) = y_anl_m(imem) - y_ave_m
-          prb_mtx(3, imem) = z_anl_m(imem) - z_ave_m
+            Kg_prtb = matmul( matmul( &
+                          matmul( Pf, transpose(H)), &
+                          transpose(sqrt(obs_inv))), &
+                      obs_srf_inv)
+            
+            yt_vec(1,1) = x_obs(it/obs_interval)
+            yt_vec(2,1) = y_obs(it/obs_interval)
+            yt_vec(3,1) = z_obs(it/obs_interval)
+            
+            hx = matmul(H, xt_vec)
+            hdxf = yt_vec - hx
+            
+            xt_vec = xt_vec + matmul(Kg, hdxf)
+            x_anl_prtbmtx = x_prtbmtx + matmul(Kg_prtb, hdxf)
+            
+            xt_vec = xt_vec + x_anl_prtbmtx
 
-          prb_mtx_obs(3, mem) = matmul(H, prb_mtx)
+            x_anl(it) = xt_vec(1,1)
+            y_anl(it) = xt_vec(2,1)
+            z_anl(it) = xt_vec(3,1)
 
-          obs_mtx = matmul(prb_mtx_obs, transpose(prb_mtx)) + (mem-1)R
-          obs_inv = obs_mtx
-          call dgetrf(ny, ny, obs_inv, lda, ipiv, ierr)
-          call dgetri(ny, obs_inv, lda, ipiv, work, lwork, ierr)
-          intg_method = 'Runge-Kutta'
-
-          Kg = matmul(matmul(prb_mtx, transpose(prb_mtx_obs)), obs_inv)
-          Kg_prb = I - matmul(matmul(prb_mtx, obs_inv), prb_mtx_obs)
-          
-          yt_obs(1,1) = x_obs(it/obs_interval)
-          yt_obs(2,1) = y_obs(it/obs_interval)
-          yt_obs(3,1) = z_obs(it/obs_interval)
-          
-          hx = matmul(H, x_a)
-          hdxf = yt_obs - hx
-          
-          x_a = x_a + matmul(Kg, hdxf)
-          prb_anl = matmul(prb_mtx, sqrt(Kg_prb))
-
-          x_a = x_a + prb_anl
-
-          x_anl(it) = x_a(1,1)
-          y_anl(it) = x_a(2,1)
-          z_anl(it) = x_a(3,1)
-
+          end if
         end if
       end do
     end if
@@ -599,12 +597,12 @@ program lorenz63
     
     ! --- Sec6. Writing OUTPUT
     if ( opt_veach ) then
-      obs_chr(:, 0:nt_asm+nt_prd) = undef
+      yt_vec4out(:, 0:nt_asm+nt_prd) = undef
       do it = 1, nt_asm
         if (mod(it, obs_interval) == 0) then
-          obs_chr(1, it) = x_obs(it/obs_interval)
-          obs_chr(2, it) = y_obs(it/obs_interval)
-          obs_chr(3, it) = z_obs(it/obs_interval)
+          yt_vec4out(1, it) = x_obs(it/obs_interval)
+          yt_vec4out(2, it) = y_obs(it/obs_interval)
+          yt_vec4out(3, it) = z_obs(it/obs_interval)
         end if
       end do
       
@@ -617,7 +615,7 @@ program lorenz63
             x_true(it), y_true(it), z_true(it),         &
             x_sim(it), y_sim(it), z_sim(it),            &
             x_anl(it), y_anl(it), z_anl(it),            &
-            obs_chr(1, it), obs_chr(2, it), obs_chr(3,it)
+            yt_vec4out(1, it), yt_vec4out(2, it), yt_vec4out(3,it)
           call del_spaces(linebuf)
           write(1, '(a)') trim(linebuf)
         end if
@@ -654,7 +652,7 @@ contains
     return
   end subroutine
 
-  subroutine write_error_covariance_matrix(it, last_step, error_covariance_matrix)
+  subroutine output_Pf(it, last_step, error_covariance_matrix)
     implicit none
     integer, intent(in)       :: it, last_step
     real(r_size), intent(in)  :: error_covariance_matrix(3,3)
