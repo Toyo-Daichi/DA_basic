@@ -14,11 +14,11 @@ nt_prd=2500
 obs_interval=1
 da_method='EnKF' #'KF' or 'EnKF'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
-mem=0
+mem=1
 enkf_method='none'
 if [ ${da_method} = 'EnKF' ]; then 
-  mem=50
-  enkf_method='PO' # 'PO' or "SRF"
+  mem=5
+  enkf_method='SRF' # 'PO' or "SRF"
 fi
 
 # +++ initial value
@@ -45,8 +45,13 @@ fi
 #----------------------------------------------------------------------
 # +++ Run exp.
 #----------------------------------------------------------------------
+cp ./common/common_mtx.f90 common_mtx_mod.f90
 
-gfortran -fbounds-check kinddef.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_main.f90 -o ${prg} -I/usr/local/include -llapack -lblas
+gfortran -fbounds-check \
+  kinddef.f90 common_mtx_mod.f90 \
+  lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_main.f90 
+  -o ${prg} \
+  -I/usr/local/include -llapack -lblas
 
 ./${prg} > ./log/${today}_${prg}_${da_method}.log << EOF
   &set_dim
