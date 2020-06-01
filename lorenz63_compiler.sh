@@ -88,7 +88,7 @@ gfortran -fbounds-check \
   /
 EOF
 
-rm -rf *.mod ${prg}
+rm -rf *.mod *_mod.f90 ${prg}
 echo 'Normal END'
 
 exit

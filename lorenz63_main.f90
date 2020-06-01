@@ -416,10 +416,9 @@ program lorenz63
         
       ! 4.1: Time integration
       do imem = 1, mems
-        
         call cal_Lorenz(                                                   &
-          x_anl_m(it-1, imem), y_anl_m(it-1, imem), z_anl_m(it-1, imem),   & ! IN
-          x_k(1), y_k(1), z_k(1)                                           & ! OUT
+        x_anl_m(it-1, imem), y_anl_m(it-1, imem), z_anl_m(it-1, imem),   & ! IN
+        x_k(1), y_k(1), z_k(1)                                           & ! OUT
         )
         
         !------------------------------------------------------- 
@@ -449,7 +448,7 @@ program lorenz63
         x_anl(it) = sum(x_anl_m(it, 1:mems))/mems
         y_anl(it) = sum(y_anl_m(it, 1:mems))/mems
         z_anl(it) = sum(z_anl_m(it, 1:mems))/mems
-        write(6,*) '  ANALYSIS = ', x_anl(it/obs_interval), y_anl(it/obs_interval), z_anl(it/obs_interval)
+        write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it), y_anl(it), z_anl(it)
         write(6,*) ''
         Pf = 0.0d0
         do imem = 1, mems
@@ -537,11 +536,24 @@ program lorenz63
           ! Pf H^T [(H Pf H^T + R)^-1/2]^T [(H Pf H^T + R)^-1/2]^-1
           !----------------------------------------------------------- 
           
+          ! +++ (1) Average step 
           xt_vec(1,1) = x_anl(it); xt_vec(2,1) = y_anl(it); xt_vec(3,1) = z_anl(it)
           
-          Ef(1, :) = x_prtb(:)
-          Ef(2, :) = y_prtb(:)
-          Ef(3, :) = z_prtb(:)
+          yt_vec(1,1) = x_obs(it/obs_interval)
+          yt_vec(2,1) = y_obs(it/obs_interval)
+          yt_vec(3,1) = z_obs(it/obs_interval)
+          
+          hx = matmul(H, xt_vec)
+          hdxf = yt_vec - hx
+          
+          xt_vec = xt_vec + matmul(Kg, hdxf)
+          x_anl(it) = xt_vec(1,1); y_anl(it) = xt_vec(2,1); z_anl(it) = xt_vec(3,1)
+          
+          write(6,*) '  ANALYSIS (AVERAGE STEP) = ', x_anl(it), y_anl(it), z_anl(it)
+          write(6,*) ''
+          
+          ! +++ (2) Pertubation step
+          Ef(1, :) = x_prtb(:); Ef(2, :) = y_prtb(:); Ef(3, :) = z_prtb(:)
           
           obs_srf_mtx_v1 = matmul(H, matmul(Pf, transpose(H))) + R
           call mtx_sqrt(ny, obs_srf_mtx_v1, obs_srf_inv_v1)
@@ -555,6 +567,7 @@ program lorenz63
           
           call dgetrf(ny, ny, obs_srf_inv_v2, lda, ipiv, ierr)
           call dgetri(ny, obs_srf_inv_v2, lda, ipiv, work, lwork, ierr)
+          intg_method = 'Runge-Kutta'
           
           Kh = matmul(matmul(Pf, transpose(H)), transpose(obs_srf_inv_v1))
           Kh = matmul(Kh, obs_srf_inv_v2)
@@ -566,19 +579,27 @@ program lorenz63
           write(6,*) ' ANALYSIS ENSEMBLE VECTOR '
           Ea = matmul(I - matmul(Kh,H), Ef)
           call confirm_matrix(Ea, nx, mems)
+          write(6,*) ' && AVERAGE PERTUBATION   '
+          write(6,*) sum(Ea(1,:))/mems, sum(Ea(2,:))/mems, sum(Ea(3,:))/mems
           write(6,*) ''
           
-          x_anl(it) = xt_vec(1,1) + sum(Ea(1,:))/mems
-          y_anl(it) = xt_vec(2,1) + sum(Ea(2,:))/mems
-          z_anl(it) = xt_vec(3,1) + sum(Ea(3,:))/mems
-          
-          write(6,*) ' ANALYSIS VECTOR '
-          write(6,*) x_anl(it), y_anl(it), z_anl(it)
-          write(6,*) ''
+          ! +++ for next step, initiallize
+          do imem = 1, mems
+            x_anl_m(it, imem) = x_anl(it) + Ea(1,imem)
+            y_anl_m(it, imem) = y_anl(it) + Ea(2,imem)
+            z_anl_m(it, imem) = z_anl(it) + Ea(3,imem)
+          end do
 
-          ! initiallize
           obs_srf_mtx_v1 = 0.0d0; obs_srf_mtx_v2 = 0.0d0
           obs_srf_inv_v1 = 0.0d0; obs_srf_inv_v2 = 0.0d0
+
+          ! +++ Union step (ave. + pertb)
+          x_anl(it) = x_anl(it) + sum(Ea(1,:))/mems
+          y_anl(it) = y_anl(it) + sum(Ea(2,:))/mems
+          z_anl(it) = z_anl(it) + sum(Ea(3,:))/mems
+          
+          write(6,*) '  ANALYSIS (PRTB STEP) = ', x_anl(it), y_anl(it), z_anl(it)
+          write(6,*) ''
 
         end if
       end if
