@@ -102,10 +102,10 @@ if __name__ == "__main__":
   timestep = stepday*4+1
   
   # OBS
-  obs_xintv, obs_tintv = 1, 2
+  obs_xintv, obs_tintv = 1, 1
   ny = int(nx/obs_xintv)
-  obs_timestep = int(timestep/obs_tintv) 
-  mems = 15
+  obs_timestep = int(timestep/obs_tintv)-1
+  mems = 500
 
   outdir = './output/lorenz96'
   da_method = 'EnKF'

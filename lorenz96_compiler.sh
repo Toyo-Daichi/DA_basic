@@ -28,7 +28,7 @@ intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
 if [ ${da_method} = 'EnKF' ]; then 
-  mem=15
+  mem=500
   enkf_method='PO' # 'PO' or "SRF"
 fi
 
@@ -37,7 +37,7 @@ alpha=0.0d0
 
 # +++ making obs. info
 obs_xintv=1
-obs_tintv=2
+obs_tintv=1
 
 # +++ output info
 out_boolen='true' # write putput
