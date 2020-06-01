@@ -1,16 +1,48 @@
 ! Created on 2020.5.2
 ! @author: Toyo_Daichi
+!
+! +++ reference
+!  >> https://github.com/takemasa-miyoshi/letkf
 
 module lorenz96_cal
 
   use common
   use lorenz96_prm
 
-  public   :: ting_rk4, Lorenz96_core, del_spaces
+  public   :: ting_rk4, Lorenz96_core, tinteg_rk4_ptbmtx, del_spaces
   private  :: none
 
-  contains
- 
+contains
+
+  !======================================================================
+  !
+  ! --- Sec.1 lorenz96 calculation
+  !----------------------------------------------------------------------
+  ! +++ Lorenz96 equation
+  
+  subroutine Lorenz96_core(x_in, x_out)
+    implicit none
+    real(r_size), intent(in)  :: x_in(1:nx)
+    real(r_size), intent(out) :: x_out(1:nx)
+    
+    ! --- Working variable
+    integer :: i
+    
+    x_out(1) = x_in(nx)*(x_in(2) - x_in(nx-1)) - x_in(1) + force
+    x_out(2) = x_in(1)*(x_in(3) - x_in(nx)) - x_in(2) + force
+    
+    do i = 3, nx-1
+      x_out(i) = x_in(i-1)*(x_in(i+1) - x_in(i-2)) - x_in(i) + force
+    end do
+    x_out(nx) = x_in(nx-1)*(x_in(1) - x_in(nx-2)) - x_in(nx) + force
+    x_out = dt* x_out(:)
+    
+    return
+  end subroutine Lorenz96_core
+
+  !----------------------------------------------------------------------
+  ! +++ Runge Kutta method
+
   subroutine ting_rk4(kt, x_in, x_out)
     implicit none
 
@@ -49,26 +81,46 @@ module lorenz96_cal
     return
   end subroutine ting_rk4
 
-  subroutine Lorenz96_core(x_in, x_out)
+  !======================================================================
+  !
+  ! --- Sec.2  Time integration of Perturbation Matrix
+  !----------------------------------------------------------------------
+  ! +++ M P M^T
+  !----------------------------------------------------------------------
+  subroutine tinteg_rk4_ptbmtx(   &
+    alpha, kt, nx,                & ! IN:  loop num
+    x_in,                         & ! IN:  input score
+    Pa,                           & ! IN:  analysis matrix
+    Pf                            & ! OUT: forecast matrix
+  )
+
     implicit none
+    real(r_size), intent(in)  :: alpha ! NL(x+alpha*dx) = NL(x) + alpha*dxf
+    integer, intent(in)       :: kt, nx 
     real(r_size), intent(in)  :: x_in(1:nx)
-    real(r_size), intent(out) :: x_out(1:nx)
+    real(r_size), intent(in)  :: Pa(1:nx, 1:nx)
+    real(r_size), intent(out) :: Pf(1:nx, 1:nx)
 
     ! --- Working variable
+    real(r_size), allocatable :: work1(:), work2(:)
     integer :: i
-    
-    x_out(1) = x_in(nx)*(x_in(2) - x_in(nx-1)) - x_in(1) + force
-    x_out(2) = x_in(1)*(x_in(3) - x_in(nx)) - x_in(2) + force
-    
-    do i = 3, nx-1
-      x_out(i) = x_in(i-1)*(x_in(i+1) - x_in(i-2)) - x_in(i) + force
-    end do
-    x_out(nx) = x_in(nx-1)*(x_in(1) - x_in(nx-2)) - x_in(nx) + force
-    x_out = dt* x_out(:)
-    
-    return
-  end subroutine Lorenz96_core
 
+    allocate(work1(1:nx), work2(1:nx))
+    call ting_rk4(kt, x_in, work1)
+    do i = 1, nx
+      work2(:) = Pa(:,i) * alpha + x_in(:)
+      call ting_rk4(kt, work2, work2)
+      Pf(:,i) = (work2 - work1) / alpha
+    end do
+
+    ! --- tidy up
+    deallocate(work1, work2)
+
+    return 
+  end subroutine tinteg_rk4_ptbmtx
+
+  !======================================================================
+  ! +++ Useful tools
   subroutine del_spaces(space)
     implicit none
     character(*), intent(inout) :: space

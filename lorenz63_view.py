@@ -231,43 +231,10 @@ if __name__ == "__main__":
   time_after = time.time()
   elapsed_time = time_after - time_before
   print(f'time: {elapsed_time} sec.')
-  """
-
-  # >> rmse draw
   num_sim_elem = 3
   rmse_sim = score.accuracy_rmse_func(score.true_list, score.sim_list, num_sim_elem)
   rmse_da  = score.accuracy_rmse_func(score.true_list, score.da_list, num_sim_elem)
   num_obs_elem = 3
   rmse_obs = score.accuracy_rmse_func(score.obs_true_list, score.obs_list, num_obs_elem)
 
-  # Basic.
-  score.lorenz_rmse_draw(rmse_sim, rmse_obs, rmse_da)
-
-  # >> plus. dataset rmse
-  """
-  data_path_1 = outdir + 'EnKF_3m_0.2d0infla.csv'
-  score_1 = lorenz63_score(data_path_1)
-  data_path_2 = outdir + 'EnKF_10m_0.2d0infla.csv'
-  score_2 = lorenz63_score(data_path_2)
-  data_path_3 = outdir + 'EnKF_100m_0.2d0infla.csv'
-  score_3 = lorenz63_score(data_path_3)
-  data_path_4 = outdir + 'EnKF_1000m_0.2d0infla.csv'
-  score_4 = lorenz63_score(data_path_4)
-  data_path_5 = outdir + 'EnKF_5000m_0.2d0infla.csv'
-  score_5 = lorenz63_score(data_path_5)
-
-  rmse_da_1 = score.accuracy_rmse_func(score.true_list, score_1.da_list, num_sim_elem)
-  rmse_da_2 = score.accuracy_rmse_func(score.true_list, score_2.da_list, num_sim_elem)
-  rmse_da_3 = score.accuracy_rmse_func(score.true_list, score_3.da_list, num_sim_elem)
-  rmse_da_4 = score.accuracy_rmse_func(score.true_list, score_4.da_list, num_sim_elem)
-  rmse_da_5 = score.accuracy_rmse_func(score.true_list, score_5.da_list, num_sim_elem)
-
-  score.lorenz_rmse_draw(rmse_sim, rmse_obs, rmse_da, rmse_da_1, rmse_da_2, rmse_da_3, rmse_da_4, rmse_da_5)
-  """
-
-  # >> error covariance matrix
-  """
-  for i_num in tqdm(range(0, int(len(score.time_list)/2), obs_interval)):
-    matrix_data = e_matrix.err_data[i_num].reshape(matrix_size, matrix_size)
-    e_matrix.error_heatmap(matrix_data, i_num)
   """
