@@ -21,6 +21,7 @@ program lorenz96_main
   real(r_size), allocatable :: x_true(:,:)
   real(r_size), allocatable :: x_anl(:,:)
   real(r_size), allocatable :: x_sim(:,:)
+  real(r_size), allocatable :: x_obs(:,:)
   ! *** x_mem(timescale, nx, member), x_prtb(nx, member)
   real(r_size), allocatable :: x_anl_m(:,:,:)
   real(r_size), allocatable :: x_prtb(:,:)
@@ -29,8 +30,11 @@ program lorenz96_main
   ! *** x(timescale, nx)
   real(r_size), allocatable :: x_out(:,:)
   real(r_size), allocatable :: x_init(:)
+
+  ! --- Temporal state vector
+  real(r_size), allocatable :: xt_vec(:,:)
   real(r_size), allocatable :: yt_vec(:,:)
-  real(r_size), allocatable :: yt_vec_ens(:,:)
+  
   ! *** Various parameters
   real(r_size), parameter   :: size_noise_obs = 1.0d0
   real(r_size)              :: gnoise, alpha
@@ -47,7 +51,9 @@ program lorenz96_main
   real(r_size), allocatable :: Kg(:,:)  ! Kalman gain
   real(r_size), allocatable :: Kh(:,:)  ! Kalman gain for pertuvation
   real(r_size), allocatable ::  H(:,:)  ! Observation operator
+  
   real(r_size), allocatable :: Ef(:,:), Ea(:,:) ! Ensemble pertubation
+  real(r_size), allocatable :: obs_prtbmtx(:,:) ! Ensemble pertubation
 
   real(r_size), allocatable :: hx(:,:)
   real(r_size), allocatable :: hdxf(:,:)
@@ -77,7 +83,7 @@ program lorenz96_main
   character(4)    :: cfmt_num, cfmt_obsnum
   integer         :: spinup_period, normal_period
   integer         :: kt_oneday
-  integer         :: ix, it, il, imem, ierr, lda, ipiv, lwork
+  integer         :: ix, iy, it, il, imem, ierr, lda, ipiv, lwork
 
   integer, parameter :: one_loop = 1
 
@@ -91,6 +97,7 @@ program lorenz96_main
   namelist /set_parm/ nx, dt, force, oneday
   namelist /set_exp/ tool, ts_check, intg_method
   namelist /set_da_exp/ da_veach, mems, da_method, alpha
+  namelist /enkf_setting/ mems, enkf_method
   namelist /set_period/ spinup_period, normal_period
   namelist /set_mobs/ obs_xintv, obs_tintv
   namelist /output/ initial_true_file, initial_sim_file, &
@@ -99,6 +106,7 @@ program lorenz96_main
   read(5, nml=set_parm, iostat=ierr)
   read(5, nml=set_exp, iostat=ierr)
   read(5, nml=set_da_exp, iostat=ierr)
+  read(5, nml=enkf_setting, iostat = ierr)
   read(5, nml=set_period, iostat=ierr)
   read(5, nml=set_mobs, iostat=ierr)
   read(5, nml=output, iostat=ierr)
@@ -123,12 +131,19 @@ program lorenz96_main
     allocate(x_true(0:kt_oneday*normal_period, nx))
     allocate(x_init(nx))
     
-    ! obs setting
+    ! --- OBS setting
     ny = int(nx/obs_xintv)
-    nt = int((kt_oneday*normal_period)/obs_tintv)
-    allocate(yt_vec(nt,ny))
-    lda = ny; lwork = ny
+    obs_time = int((kt_oneday*normal_period)/obs_tintv)
+    lda = ny
+    lwork = ny
+
+    allocate(x_obs(obs_time,ny))
     allocate(work(ny))
+
+    ! --- Temporal state vector
+    ! +++ 
+    allocate(xt_vec(nx,1))
+    allocate(yt_vec(ny,1))
     
     !----------------------------------------------------------------------
     ! +++ Data assim. set 
@@ -139,7 +154,6 @@ program lorenz96_main
       if ( da_method == 'EnKF' ) then
         allocate(x_anl_m(0:kt_oneday*normal_period, nx, mems))
         allocate(x_prtb(nx, mems))
-        allocate(yt_vec_ens(ny, mems))
       end if
 
       ! covariance matrix set.
@@ -151,6 +165,8 @@ program lorenz96_main
       allocate( H(1:ny, 1:nx))
       allocate( R(1:ny, 1:ny))
 
+      allocate(Ef(nx,mems), Ea(nx,mems), obs_prtbmtx(ny, mems))
+
       ! for kalmangain inverse calculate.
       allocate(obs_mtx(1:ny, 1:ny), obs_inv(1:ny, 1:ny))
       allocate(obs_srf_mtx_v1(1:ny, 1:ny), obs_srf_mtx_v2(1:ny, 1:ny))
@@ -159,8 +175,6 @@ program lorenz96_main
       allocate(hx(ny,1))
       allocate(hdxf(ny,1))
       
-      lda = ny; lwork = ny
-      allocate(work(1:ny))
     end if
   end if
 
@@ -194,7 +208,7 @@ program lorenz96_main
         do ix=1,nx
           if( mod(ix,obs_xintv)==0 ) then
             call gaussian_noise(size_noise_obs, gnoise)
-            yt_vec(it/obs_tintv, ix/obs_xintv) = x_true(it, ix) + gnoise
+            x_obs(it/obs_tintv, ix/obs_xintv) = x_true(it, ix) + gnoise
           endif
         enddo
       endif
@@ -252,7 +266,7 @@ program lorenz96_main
         if ( mod(it, obs_tintv)==0 ) then
           write(6,*) '  TRUTH    = ', x_true(it,:)
           write(6,*) '  PREDICT  = ', x_sim(it,:)
-          write(6,*) '  OBSERVE  = ', yt_vec(it,:)
+          write(6,*) '  OBSERVE  = ', x_obs(it,:)
           write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,:)
           write(6,*) ''
           
@@ -301,7 +315,7 @@ program lorenz96_main
           ! +++ inflation mode
           !-----------------------------------------------------------
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv)
-          x_anl(it,:) = x_anl(it,:) + matmul(Kg, (yt_vec(it/obs_tintv,:) - matmul(H, x_anl(it,:))))
+          x_anl(it,:) = x_anl(it,:) + matmul(Kg, (x_obs(it/obs_tintv,:) - matmul(H, x_anl(it,:))))
           write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,:)
           
           Pa = matmul((I - matmul(Kg, H)), Pf)
@@ -329,31 +343,42 @@ program lorenz96_main
       
       !-----------------------------------------------------------
       ! +++ assimilation loop start
+      !-----------------------------------------------------------
       data_assim_EnKF_loop :&
       do it = 1, kt_oneday*normal_period
         write(6,*) 'Data assim. time step: ', it
         do imem = 1, mems
-          call ting_rk4(one_loop, x_anl_m(it-1,:, imem), x_anl_m(it,:, imem))
+          call ting_rk4(one_loop, x_anl_m(it-1,:,imem), x_anl_m(it,:,imem))
         end do
         
-        if ( mod(it, obs_tintv)==0 .and. it /= 0) then
-          Pf = 0.0d0
+        if ( mod(it, obs_tintv) == 0 .and. it /= 0) then
+          write(6,*) '  TRUTH    = ', x_true(it,:)
+          write(6,*) '  PREDICT  = ', x_sim(it,:)
+          write(6,*) '  OBSERVE  = ', x_obs(it,:)
           do ix = 1, nx
             x_anl(it, ix) = sum(x_anl_m(it,ix,1:mems))/mems
           end do
-          do imem = 1, mems
-            x_prtb(:, imem) = x_anl_m(it, :, imem) - x_anl(it, :)
-            !------------------------------------------------------- 
-            ! +++ making ptbmtx
-            !------------------------------------------------------- 
-            forall ( il=1:nx ) Pf(il,il) = Pf(il,il) + x_prtb(il,imem)**2/(mems-1)
-            do il = 1, nx-1
-              Pf(il,il+1) = Pf(il,il+1) + x_prtb(il, imem)*x_prtb(il+1,imem)/(mems-1)
-              Pf(il+1,il) = Pf(il,il+1)
-            end do
-            Pf(nx,1) = Pf(nx,1) + x_prtb(nx, imem)*x_prtb(1,imem)/(mems-1)
-          end do
+          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,:)
+          write(6,*) ''
+          Pf = 0.0d0
           
+          !------------------------------------------------------- 
+          ! +++ making error covariance matix by pertubation
+          !------------------------------------------------------- 
+          do imem = 1, mems
+            x_prtb(:,imem) = x_anl_m(it,:,imem) - x_anl(it,:)
+            Ef(:,imem) = x_prtb(:,imem)
+          end do
+
+          write(6,*) ' PREDICTION ENSEMBLE VECTOR '
+          call confirm_matrix(Ef, nx, mems)
+          write(6,*) ''
+
+          write(6,*) '  PREDICTION ERROR COVARIANCE on present step'
+          Pf = matmul(Ef, transpose(Ef))
+          call confirm_matrix(Pf, nx, nx)
+          write(6,*) ''
+
           !-----------------------------------------------------------
           ! +++ making inverse matrix
           !-----------------------------------------------------------
@@ -365,27 +390,49 @@ program lorenz96_main
           !-----------------------------------------------------------
           ! +++ adaptive inflation mode
           !-----------------------------------------------------------
-          Pf = Pf*(1.0d0 + 0.1d0)
+          Pf = Pf*(1.0d0 + alpha)
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv)
           
-          !-----------------------------------------------------------
-          ! +++ Pertuturbed observation method (PO)
-          !-----------------------------------------------------------
-          !do imem = 1, mems
-          !  do iy = 1, ny
-          !  call gaussian_noise(size_noise_obs, gnoise)
-          !  yt_vec_ens(iy, imem) = yt_vec(it, iy) + gnoise
-          !
-          !nd do
+          da_enkf_method :&
+          if ( trim(enkf_method) == 'PO' ) then
+            !------------------------------------------------------- 
+            ! >> EnKF
+            ! +++ Pertuturbed observation method (PO)
+            ! (Phase. plus OBS pertubation)
+            ! x_anl = x_sim + Kg(y +"e" -H*x_sim)
+            !------------------------------------------------------- 
+            do iy = 1, ny
+              do imem = 1, mems
+                call gaussian_noise(size_noise_obs, gnoise)
+                obs_prtbmtx(iy, imem) = x_obs(it/obs_tintv, iy) + gnoise 
+              end do
+            end do
 
-          x_anl(it,:) = x_anl(it,:) + matmul(Kg, (yt_vec(it/obs_tintv,:) - matmul(H, x_anl(it,:))))
-          Pa = Pf - matmul(matmul(Kg, H), Pf)
+            do imem = 1, mems
+              xt_vec(:,1) = x_anl_m(it,:,imem)
+              hx = matmul(H, xt_vec)
+              yt_vec(:,1) = obs_prtbmtx(:,imem)
+              
+              hdxf = yt_vec - hx
+              xt_vec = xt_vec + matmul(Kg, hdxf)
+              
+              x_anl_m(it,:,imem) =  xt_vec(:,1)
+            end do
+
+            do ix = 1, nx
+              x_anl(it, ix) = sum(x_anl_m(it, ix, :))/mems
+            end do
+
+          end if &
+          da_enkf_method
         end if
+
       end do &
       data_assim_EnKF_loop
       
     end if &
     DataAssim_exp_kind
+
   end if &
   DataAssim_exp_set
   
@@ -443,7 +490,7 @@ program lorenz96_main
           cfmt_obs = '(xx(F15.7, ","), F15.7)'
           write(cfmt_obsnum,"(I2)") ny-1
           cfmt_obs(2:3) = cfmt_obsnum
-          write(linebuf, trim(cfmt_obs)) yt_vec(it, :)
+          write(linebuf, trim(cfmt_obs)) x_obs(it, :)
           call del_spaces(linebuf)
           write(24,'(a)') linebuf
         end do
@@ -521,7 +568,6 @@ contains
 
     if ( it == 1 ) then
       open(2, file=trim(output_errcov_file), status='replace')
-      write(6,*) cfmt
         write(linebuf, trim(cfmt)) errcov_mtx(:,:)
         call del_spaces(linebuf)
         write(2, '(a)') trim(linebuf)

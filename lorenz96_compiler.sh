@@ -3,7 +3,7 @@
 
 set -ex
 CDIR=`pwd`
-tool='spinup' #spinup or normal
+tool='normal' #spinup or normal
 ts_check='true' # if spinup output is 'true' or 'sim'.
 prg=lorenz96_${tool}_maintools
 today=$(date "+%Y%m%d%H%M")
@@ -12,6 +12,8 @@ rm -rf *.mod ${prg}
 #----------------------------------------------------------------------
 # +++ Set intial setting
 #----------------------------------------------------------------------
+
+# +++ model dimension
 nx=40
 dt=0.05d0
 force=8.0d0
@@ -21,9 +23,14 @@ oneday=0.2d0
 spinup_period=365
 normal_period=40
 
-da_method='KF'
+da_method='EnKF'
 intg_method='Runge-Kutta'
-mem=40
+mem=1
+enkf_method='none'
+if [ ${da_method} = 'EnKF' ]; then 
+  mem=5
+  enkf_method='PO' # 'PO' or "SRF"
+fi
 
 # +++ adaptive inflation
 alpha=0.0d0
@@ -78,6 +85,10 @@ gfortran -fbounds-check  \
     mems      = ${mem},
     da_method = '${da_method}',
     alpha = ${alpha}
+  /
+  &enkf_setting
+    mems = ${mem},
+    enkf_method = '${enkf_method}'
   /
   &set_period
     spinup_period = ${spinup_period},

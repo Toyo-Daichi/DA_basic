@@ -8,7 +8,7 @@ module lorenz96_prm
   private :: none 
   
   integer, public            :: nx  ! number of grid point
-  integer, public            :: ny, nt
+  integer, public            :: ny, obs_time
   integer, public            :: obs_xintv, obs_tintv
   real(r_size), save, public :: dt
   real(r_size), save, public :: force
