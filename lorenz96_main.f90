@@ -26,7 +26,7 @@ program lorenz96_main
   real(r_size), allocatable :: x_anl_m(:,:,:)
   real(r_size), allocatable :: x_prtb(:,:)
   
-  ! --- For spinup && OBS info
+  ! --- For spinup
   ! *** x(timescale, nx)
   real(r_size), allocatable :: x_out(:,:)
   real(r_size), allocatable :: x_init(:)
@@ -141,7 +141,6 @@ program lorenz96_main
     allocate(work(ny))
 
     ! --- Temporal state vector
-    ! +++ 
     allocate(xt_vec(nx,1))
     allocate(yt_vec(ny,1))
     
@@ -250,6 +249,7 @@ program lorenz96_main
     ! +++ Data assimilation
     !
     ! 1st. Extend Kalman Filter
+    ! *** Key: Pf = JM*Pa*JM^T
     !-------------------------------------------------------------------
     
     DataAssim_exp_kind :&
@@ -264,10 +264,10 @@ program lorenz96_main
         call ting_rk4(one_loop, x_anl(it-1,:), x_anl(it,:))
         
         if ( mod(it, obs_tintv)==0 ) then
-          write(6,*) '  TRUTH    = ', x_true(it,:)
-          write(6,*) '  PREDICT  = ', x_sim(it,:)
-          write(6,*) '  OBSERVE  = ', x_obs(it,:)
-          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,:)
+          write(6,*) '  TRUTH    = ', x_true(it,1:5)
+          write(6,*) '  PREDICT  = ', x_sim(it,1:5)
+          write(6,*) '  OBSERVE  = ', x_obs(it,1:5)
+          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,1:5)
           write(6,*) ''
           
           !-------------------------------------------------------------------
@@ -320,7 +320,7 @@ program lorenz96_main
           write(6,*) ''
 
           x_anl(it,:) = x_anl(it,:) + matmul(Kg, (x_obs(it/obs_tintv,:) - matmul(H, x_anl(it,:))))
-          write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,:)
+          write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,1:5)
           
           Pa = matmul((I - matmul(Kg, H)), Pf)
           write(6,*) '  ANALYSIS ERROR COVARIANCE on present step.'
@@ -337,10 +337,13 @@ program lorenz96_main
       !-----------------------------------------------------------
       ! +++ making ensemble initial score
       !-----------------------------------------------------------
-      do imem = 1, mems
-        call gaussian_noise(size_noise_obs, gnoise)
-        x_anl_m(0, :, imem) = x_sim(0, :) + gnoise
+      do ix = 1, nx
+        do imem = 1, mems
+          call gaussian_noise(size_noise_obs, gnoise)
+          x_anl_m(0, ix, imem) = x_sim(0, ix) + gnoise
+        end do
       end do
+
       do ix = 1, nx
         x_anl(0, ix) = sum(x_anl_m(0,ix,1:mems))/mems
       end do
@@ -351,18 +354,23 @@ program lorenz96_main
       data_assim_EnKF_loop :&
       do it = 1, kt_oneday*normal_period
         write(6,*) 'Data assim. time step: ', it
+
+        write(6,*) ' CHECK ENSEMBLE FOR UPDATE (BEFORE) on ', it-1
+        write(6,*) x_anl_m(it-1,1,1:5)
+        
         do imem = 1, mems
           call ting_rk4(one_loop, x_anl_m(it-1,:,imem), x_anl_m(it,:,imem))
         end do
+
         
         if ( mod(it, obs_tintv) == 0 .and. it /= 0) then
-          write(6,*) '  TRUTH    = ', x_true(it,:)
-          write(6,*) '  PREDICT  = ', x_sim(it,:)
-          write(6,*) '  OBSERVE  = ', x_obs(it,:)
+          write(6,*) '  TRUTH    = ', x_true(it,1:5)
+          write(6,*) '  PREDICT  = ', x_sim(it,1:5)
+          write(6,*) '  OBSERVE  = ', x_obs(it,1:5)
           do ix = 1, nx
             x_anl(it, ix) = sum(x_anl_m(it,ix,1:mems))/mems
           end do
-          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,:)
+          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,1:5)
           write(6,*) ''
           Pf = 0.0d0
           
@@ -371,7 +379,7 @@ program lorenz96_main
           !------------------------------------------------------- 
           do imem = 1, mems
             x_prtb(:,imem) = x_anl_m(it,:,imem) - x_anl(it,:)
-            Ef(:,imem) = x_prtb(:,imem)/sqrt(float(mems-1))
+            Ef(:,imem) = x_prtb(:,imem)
           end do
 
           write(6,*) ' PREDICTION ENSEMBLE VECTOR '
@@ -380,6 +388,7 @@ program lorenz96_main
 
           write(6,*) '  PREDICTION ERROR COVARIANCE on present step'
           Pf = matmul(Ef, transpose(Ef))
+          Pf = Pf/(mems-1)
           call confirm_matrix(Pf, nx, nx)
           write(6,*) ''
 
@@ -408,6 +417,8 @@ program lorenz96_main
             ! (Phase. plus OBS pertubation)
             ! x_anl = x_sim + Kg(y +"e" -H*x_sim)
             !------------------------------------------------------- 
+            
+            ! +++ making obs pertubation err.
             do iy = 1, ny
               do imem = 1, mems
                 call gaussian_noise(size_noise_obs, gnoise)
@@ -416,19 +427,27 @@ program lorenz96_main
             end do
 
             do imem = 1, mems
+              ! for matrix calculation
               xt_vec(:,1) = x_anl_m(it,:,imem)
-              hx = matmul(H, xt_vec)
               yt_vec(:,1) = obs_prtbmtx(:,imem)
-              
+
+              ! simple KF formula
+              hx = matmul(H, xt_vec)
               hdxf = yt_vec - hx
               xt_vec = xt_vec + matmul(Kg, hdxf)
 
+              ! fix matrix -> each score
               x_anl_m(it,:,imem) =  xt_vec(:,1)
             end do
 
             do ix = 1, nx
               x_anl(it, ix) = sum(x_anl_m(it, ix, :))/mems
             end do
+            write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,1:5)
+            write(6,*) ''
+            write(6,*) ' CHECK ENSEMBLE FOR UPDATE (AFTER) on ', it 
+            write(6,*) x_anl_m(it,1,1:5)
+            write(6,*) ''
 
           end if &
           da_enkf_method
