@@ -6,6 +6,7 @@ program lorenz63
   use common
   use common_mtx
   use lorenz63_prm
+  use lorenz63_cal
 
   implicit none
 
@@ -51,7 +52,10 @@ program lorenz63
   real(r_size), allocatable :: Kg(:,:)  ! Kalman gain
   real(r_size), allocatable :: Kh(:,:)  ! Kalman gain for pertuvation
   real(r_size), allocatable ::  H(:,:)  ! Observation operator
-  real(r_size), allocatable :: Pr(:,:)
+
+  real(r_size), allocatable :: hx(:,:)
+  real(r_size), allocatable :: hdxf(:,:)
+  real(r_size), allocatable :: work(:)
 
   real(r_size), allocatable :: obs_mtx(:,:)
   real(r_size), allocatable :: obs_inv(:,:)
@@ -59,10 +63,6 @@ program lorenz63
   ! --- for EnSRF
   real(r_size), allocatable :: obs_srf_mtx_v1(:,:), obs_srf_mtx_v2(:,:)
   real(r_size), allocatable :: obs_srf_inv_v1(:,:), obs_srf_inv_v2(:,:)
-
-  real(r_size), allocatable :: hx(:,:)
-  real(r_size), allocatable :: hdxf(:,:)
-  real(r_size), allocatable :: work(:)
   
   ! --- Output control
   logical                   :: opt_veach = .false.
@@ -151,7 +151,6 @@ program lorenz63
   allocate(Kh(1:nx, 1:ny))
   allocate( H(1:ny, 1:nx))
   allocate( R(1:ny, 1:ny))
-  allocate(Pr(1:ny, 1:ny))
 
   allocate(obs_mtx(1:ny, 1:ny), obs_inv(1:ny, 1:ny))
   allocate(obs_srf_mtx_v1(1:ny, 1:ny), obs_srf_mtx_v2(1:ny, 1:ny))
@@ -311,7 +310,7 @@ program lorenz63
         write(6,*) '  TRUTH    = ', x_true(it), y_true(it), z_true(it)
         write(6,*) '  PREDICT  = ', x_sim(it), y_sim(it), z_sim(it)
         write(6,*) '  OBSERVE  = ', x_obs(it/obs_interval), y_obs(it/obs_interval), z_obs(it/obs_interval)
-        write(6,*) '  ANALYSIS = ', x_anl(it), y_anl(it), z_anl(it)
+        write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it), y_anl(it), z_anl(it)
         write(6,*) ''
 
         !--------------------------------------------------------------------------------
@@ -327,7 +326,7 @@ program lorenz63
         !)
         ! +++ for check
         ! write(6,*) x_trend, y_trend, z_trend
-        
+        !
         ! >> Jacobian　matrix (*** origin form)
         !JM(1,1) = -sig              ;JM(1,2) = sig             ;JM(1,3) = 0.0d0
         !JM(2,1) = gamm -z_anl(it-1) ;JM(2,2) = -1.d0           ;JM(2,3) = -x_anl(it-1)
@@ -390,7 +389,8 @@ program lorenz63
         
         xt_vec = xt_vec + matmul(Kg, hdxf)
         x_anl(it) = xt_vec(1,1); y_anl(it) = xt_vec(2,1); z_anl(it) = xt_vec(3,1)
-        
+        write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it), y_anl(it), z_anl(it)
+        write(6,*) ''
         ! >> 4.2.5 analysis error covariance matrix
         Pa = matmul(I - matmul(Kg, H), Pf)
       end if
