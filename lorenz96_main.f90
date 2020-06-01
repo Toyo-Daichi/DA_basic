@@ -20,17 +20,16 @@ program lorenz96_main
   ! --- For spinup && OBS info
   real(r_size), allocatable :: x_out(:,:)
   real(r_size), allocatable :: x_tmp(:)
-  real(r_size), allocatable :: x_e(:)
   real(r_size), allocatable :: yt_obs(:,:)
   real(r_size), allocatable :: yt_obs_ens(:,:)
   ! ***
   real(r_size), parameter   :: size_noise_obs = 1.0d0
-  integer                   :: ny, nt
-  integer                   :: obs_xintv, obs_tintv
   integer                   :: mems
 
   ! --- settign exp.
-  character(8)  :: tool, ts_check, da_method
+  character(8)  :: tool, ts_check
+  character(8)  :: da_method
+  character(8)  :: enkf_method
   character(12) :: intg_method
   
   ! --- Data assimilation exp.
@@ -132,7 +131,6 @@ program lorenz96_main
         allocate(yt_obs_ens(ny, mems))
       end if
       ! covariance matrix set.
-      allocate(x_e(1:nx))
       allocate(Pf(1:nx, 1:nx))
       allocate(Pa(1:nx, 1:nx))
       allocate(JM(1:nx, 1:nx))

@@ -50,12 +50,16 @@ output_obs_file='./output/'${outputname}/${tool}'_obs_score_'${nx}'.csv'
 #----------------------------------------------------------------------
 # +++ Run exp.
 #----------------------------------------------------------------------
-cp ${CDIR}/common/SFMT.f90 SFMT_mod.f90
 cp ${CDIR}/common/common.f90 common_mod.f90
+cp ${CDIR}/common/common_mtx.f90 common_mtx_mod.f90
+cp ${CDIR}/common/SFMT.f90 SFMT_mod.f90
+cp ${CDIR}/common/netlib.f netlib_mod.f
 
 # +++ compile
-gfortran -fbounds-check -I/usr/local/include -lm -lblas -llapack \
-SFMT_mod.f90 common_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 -o ${prg} 
+gfortran -fbounds-check  \
+  SFMT_mod.f90 common_mod.f90 common_mtx_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 \
+  -o ${prg} -I/usr/local/include -lm -lblas -llapack \
+  -w # error message Suppression
 
 ./${prg} > ./log/${today}_${prg}_${da_method}.log << EOF
   &set_parm
@@ -97,4 +101,5 @@ EOF
 
 rm -rf *.mod *_mod.f90 ${prg}
 echo 'Normal END'
+
 exit
