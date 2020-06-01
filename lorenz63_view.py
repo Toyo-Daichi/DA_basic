@@ -160,7 +160,7 @@ class lorenz63_score:
 
     ax1.set_xlabel('sec.')
     ax1.set_ylabel('RMSE')
-    ax1.set_xlim(0, 25)
+    ax1.set_xlim(0, 1)
     ax1.set_ylim(0, 10)
     ax1.set_title('Lorenz(1963) RMSE infla. ***', loc='left')
 
@@ -200,8 +200,8 @@ if __name__ == "__main__":
   # +++ info. setting
   matrix_size  = 3
   obs_interval = 3
-  mem          = 2 #5000
-  alpha        = '1.0d0'
+  mem          = 5 #5000
+  alpha        = '0.0d0'
 
   outdir    = './output/lorenz63/'
   da_method = 'EnKF'

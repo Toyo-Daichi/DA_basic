@@ -4,13 +4,14 @@
 !  dx/dt = -sig*(x+y)
 !  dy/dt = -x*z+gamm*x-y
 !  dz/dt = x*y-b*z
+!
 
 subroutine cal_Lorenz( &
     x, y, z,           & ! IN : previous step score 
     r_x, r_y, r_z      & ! OUT: Lorenz63 score  
 )
   
-  use kinddef
+  use common
   use lorenz63_prm
   
   implicit none
@@ -79,7 +80,7 @@ subroutine cal_TL_Lorenz(   &
   fx, fy, fz                & ! OUT
   )
   
-  use kinddef
+  use common
   use lorenz63_prm
   
   implicit none
@@ -100,7 +101,7 @@ subroutine TL_Lorez63_Runge_Kutta( &
   x_trend, y_trend, z_trend        & ! OUT
 )
 
-  use kinddef
+  use common
   use lorenz63_prm
 
   implicit none
@@ -111,7 +112,7 @@ subroutine TL_Lorez63_Runge_Kutta( &
   call cal_TL_Lorenz(          &
     x_state, y_state, z_state, &
     dx, dy, dz,                &
-    x_k(1), y_k(1), z_k(1)       &
+    x_k(1), y_k(1), z_k(1)     &
     )
     
     x_cal(1) = x_state + 0.5*x_k(1)*dt
