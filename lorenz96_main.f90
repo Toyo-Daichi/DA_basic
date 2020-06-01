@@ -264,10 +264,10 @@ program lorenz96_main
         call ting_rk4(one_loop, x_anl(it-1,:), x_anl(it,:))
         
         if ( mod(it, obs_tintv)==0 ) then
-          write(6,*) '  TRUTH    = ', x_true(it,1:5)
-          write(6,*) '  PREDICT  = ', x_sim(it,1:5)
-          write(6,*) '  OBSERVE  = ', x_obs(it,1:5)
-          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,1:5)
+          write(6,*) '  TRUTH    = ', x_true(it,1:5), '...'
+          write(6,*) '  PREDICT  = ', x_sim(it,1:5), '...'
+          write(6,*) '  OBSERVE  = ', x_obs(it,1:5), '...'
+          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,1:5), '...'
           write(6,*) ''
           
           !-------------------------------------------------------------------
@@ -320,7 +320,7 @@ program lorenz96_main
           write(6,*) ''
 
           x_anl(it,:) = x_anl(it,:) + matmul(Kg, (x_obs(it/obs_tintv,:) - matmul(H, x_anl(it,:))))
-          write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,1:5)
+          write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,1:5), '...'
           
           Pa = matmul((I - matmul(Kg, H)), Pf)
           write(6,*) '  ANALYSIS ERROR COVARIANCE on present step.'
@@ -355,7 +355,7 @@ program lorenz96_main
       do it = 1, kt_oneday*normal_period
         write(6,*) 'Data assim. time step: ', it
 
-        write(6,*) ' CHECK ENSEMBLE FOR UPDATE (BEFORE) on ', it-1
+        write(6,*) ' CHECK ENSEMBLE PART FOR UPDATE (BEFORE) on ', it-1
         write(6,*) x_anl_m(it-1,1,1:5)
         
         do imem = 1, mems
@@ -364,13 +364,13 @@ program lorenz96_main
 
         
         if ( mod(it, obs_tintv) == 0 .and. it /= 0) then
-          write(6,*) '  TRUTH    = ', x_true(it,1:5)
-          write(6,*) '  PREDICT  = ', x_sim(it,1:5)
-          write(6,*) '  OBSERVE  = ', x_obs(it,1:5)
+          write(6,*) '  TRUTH    = ', x_true(it,1:5), '...'
+          write(6,*) '  PREDICT  = ', x_sim(it,1:5), '...'
+          write(6,*) '  OBSERVE  = ', x_obs(it,1:5), '...'
           do ix = 1, nx
             x_anl(it, ix) = sum(x_anl_m(it,ix,1:mems))/mems
           end do
-          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,1:5)
+          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,1:5), '...'
           write(6,*) ''
           Pf = 0.0d0
           
@@ -443,9 +443,9 @@ program lorenz96_main
             do ix = 1, nx
               x_anl(it, ix) = sum(x_anl_m(it, ix, :))/mems
             end do
-            write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,1:5)
+            write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,1:5), '...'
             write(6,*) ''
-            write(6,*) ' CHECK ENSEMBLE FOR UPDATE (AFTER) on ', it 
+            write(6,*) ' CHECK ENSEMBLE PART FOR UPDATE (AFTER) on ', it 
             write(6,*) x_anl_m(it,1,1:5)
             write(6,*) ''
 
