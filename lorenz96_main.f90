@@ -314,7 +314,11 @@ program lorenz96_main
           !-----------------------------------------------------------
           ! +++ inflation mode
           !-----------------------------------------------------------
+          write(6,*) ' KALMAN GAIN WEIGHTING MATRIX '
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv)
+          call confirm_matrix(Kg, nx, ny)
+          write(6,*) ''
+
           x_anl(it,:) = x_anl(it,:) + matmul(Kg, (x_obs(it/obs_tintv,:) - matmul(H, x_anl(it,:))))
           write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,:)
           
@@ -367,7 +371,7 @@ program lorenz96_main
           !------------------------------------------------------- 
           do imem = 1, mems
             x_prtb(:,imem) = x_anl_m(it,:,imem) - x_anl(it,:)
-            Ef(:,imem) = x_prtb(:,imem)
+            Ef(:,imem) = x_prtb(:,imem)/sqrt(float(mems-1))
           end do
 
           write(6,*) ' PREDICTION ENSEMBLE VECTOR '
@@ -391,7 +395,10 @@ program lorenz96_main
           ! +++ adaptive inflation mode
           !-----------------------------------------------------------
           Pf = Pf*(1.0d0 + alpha)
+          write(6,*) ' KALMAN GAIN WEIGHTING MATRIX '
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv)
+          call confirm_matrix(Kg, nx, ny)
+          write(6,*) ''
           
           da_enkf_method :&
           if ( trim(enkf_method) == 'PO' ) then
@@ -415,7 +422,7 @@ program lorenz96_main
               
               hdxf = yt_vec - hx
               xt_vec = xt_vec + matmul(Kg, hdxf)
-              
+
               x_anl_m(it,:,imem) =  xt_vec(:,1)
             end do
 

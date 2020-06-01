@@ -28,7 +28,7 @@ intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
 if [ ${da_method} = 'EnKF' ]; then 
-  mem=5
+  mem=5000
   enkf_method='PO' # 'PO' or "SRF"
 fi
 
