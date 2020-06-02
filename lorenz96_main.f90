@@ -65,6 +65,7 @@ program lorenz96_main
   ! --- for EnSRF
   real(r_size), allocatable :: obs_srf_mtx_v1(:,:), obs_srf_mtx_v2(:,:)
   real(r_size), allocatable :: obs_srf_inv_v1(:,:), obs_srf_inv_v2(:,:)
+  real(r_size) :: sqrt_mems
 
   ! --- Output control
   logical, save         :: opt_veach = .false.
@@ -136,13 +137,14 @@ program lorenz96_main
     obs_time = int((kt_oneday*normal_period)/obs_tintv)
     lda = ny
     lwork = ny
-
     allocate(x_obs(obs_time,ny))
     allocate(work(ny))
-
+    
     ! --- Temporal state vector
     allocate(xt_vec(nx,1))
     allocate(yt_vec(ny,1))
+    ! --- EnSRF setting
+    sqrt_mems = sqrt(float(mems-1))
     
     !----------------------------------------------------------------------
     ! +++ Data assim. set 
@@ -374,8 +376,13 @@ program lorenz96_main
           write(6,*) ''
           Pf = 0.0d0
           
+          !=======================================================
+          !
+          ! Pf = Ef*Ef^T / (mems-1) 
           !------------------------------------------------------- 
           ! +++ making error covariance matix by pertubation
+          ! >> this step is not include Ef sqrt(mems-1)
+          !    Check Pf = Pf/(mems-1)
           !------------------------------------------------------- 
           do imem = 1, mems
             x_prtb(:,imem) = x_anl_m(it,:,imem) - x_anl(it,:)
@@ -447,6 +454,66 @@ program lorenz96_main
             write(6,*) ''
             write(6,*) ' CHECK ENSEMBLE PART FOR UPDATE (AFTER) on ', it 
             write(6,*) x_anl_m(it,1,1:5)
+            write(6,*) ''
+          
+          else if ( trim(enkf_method) == 'SRF' ) then
+            !----------------------------------------------------------- 
+            ! >> EnKF (-> Serial EnSRF)
+            ! +++ Squared root fileter method (SRF)
+            ! Ea = (I - K^H)*Ef
+            ! K^ = 
+            ! Pf H^T [(H Pf H^T + R)^-1/2]^T [(H Pf H^T + R)^-1/2]^-1
+            !----------------------------------------------------------- 
+
+            ! +++ (1) Average step 
+            x_anl(it,:) = x_anl(it,:) + matmul(Kg, (x_obs(it/obs_tintv,:) - matmul(H, x_anl(it,:))))
+            write(6,*) '  ANALYSIS (AVERAGE STEP) = ', x_anl(it,1:5), '...'
+            write(6,*) ''
+
+            ! +++ (2) Pertubation step
+            obs_srf_mtx_v1 = matmul(H, matmul(Pf, transpose(H))) + R
+            call mtx_sqrt(ny, obs_srf_mtx_v1, obs_srf_inv_v1)
+            
+            call dgetrf(ny, ny, obs_srf_inv_v1, lda, ipiv, ierr)
+            call dgetri(ny, obs_srf_inv_v1, lda, ipiv, work, lwork, ierr)
+            
+            obs_srf_mtx_v2 = obs_srf_mtx_v1 + R
+            call mtx_sqrt(ny, obs_srf_mtx_v2, obs_srf_inv_v2)
+            obs_srf_inv_v2 = obs_srf_mtx_v2
+            
+            call dgetrf(ny, ny, obs_srf_inv_v2, lda, ipiv, ierr)
+            call dgetri(ny, obs_srf_inv_v2, lda, ipiv, work, lwork, ierr)
+
+            Kh = matmul(matmul(Pf, transpose(H)), transpose(obs_srf_inv_v1))
+            Kh = matmul(Kh, obs_srf_inv_v2)
+          
+            write(6,*) ' KALMAN GAIN HAT WEIGHTING MATRIX '
+            call confirm_matrix(Kh, nx, ny)
+            write(6,*) ''
+          
+            write(6,*) ' ANALYSIS ENSEMBLE VECTOR '
+            Ef = Ef/sqrt_mems
+            Ea = matmul(I - matmul(Kh,H), Ef)
+            call confirm_matrix(Ea, nx, mems)
+
+            write(6,*) ' && AVERAGE PERTUBATION   '
+            write(6,*) sum(Ea(1,:))/mems, sum(Ea(2,:))/mems, sum(Ea(3,:))/mems, &
+                       sum(Ea(4,:))/mems, sum(Ea(5,:))/mems, '...'
+            write(6,*) ''
+
+            ! +++ for next step, initiallize
+            do imem = 1, mems
+              x_anl_m(it, :, imem) = x_anl(it, :) + Ea(:,imem)
+            end do
+
+            obs_srf_mtx_v1 = 0.0d0; obs_srf_mtx_v2 = 0.0d0
+            obs_srf_inv_v1 = 0.0d0; obs_srf_inv_v2 = 0.0d0
+
+            ! +++ Union step (ave. + pertb)
+            do ix = 1, nx
+              x_anl(it, ix) = x_anl(it, ix) + sum(Ea(ix, :))/mems
+            end do
+            write(6,*) '  ANALYSIS (PRTB STEP) = ', x_anl(it,1:5), '...'
             write(6,*) ''
 
           end if &

@@ -28,8 +28,8 @@ intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
 if [ ${da_method} = 'EnKF' ]; then 
-  mem=500
-  enkf_method='PO' # 'PO' or "SRF"
+  mem=50
+  enkf_method='SRF' # 'PO' or "SRF"
 fi
 
 # +++ adaptive inflation

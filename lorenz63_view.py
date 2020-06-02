@@ -162,7 +162,7 @@ class lorenz63_score:
     ax1.set_ylabel('RMSE')
     ax1.set_xlim(0, 1)
     ax1.set_ylim(0, 10)
-    ax1.set_title('Lorenz(1963) RMSE infla. ***', loc='left')
+    ax1.set_title('Lorenz(1963) RMSE infla. 0.0d0', loc='left')
 
     plt.grid()
     plt.legend()

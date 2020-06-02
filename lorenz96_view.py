@@ -105,7 +105,7 @@ if __name__ == "__main__":
   obs_xintv, obs_tintv = 1, 1
   ny = int(nx/obs_xintv)
   obs_timestep = int(timestep/obs_tintv)-1
-  mems = 500
+  mems = 50
 
   outdir = './output/lorenz96'
   da_method = 'EnKF'
