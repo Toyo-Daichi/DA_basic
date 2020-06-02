@@ -102,16 +102,18 @@ if __name__ == "__main__":
   timestep = stepday*4+1
   
   # OBS
-  obs_xintv, obs_tintv = 1, 2
+  obs_xintv, obs_tintv = 1, 1
   ny = int(nx/obs_xintv)
-  obs_timestep = int(timestep/obs_tintv) 
+  obs_timestep = int(timestep/obs_tintv)-1
+  mems = 50
 
   outdir = './output/lorenz96'
-  da_method = 'KF'
+  da_method = 'EnKF'
+
 
   data_true_path = outdir + '/normal_true_score_' + str(nx) + 'n.csv'
   data_sim_path = outdir + '/normal_sim_score_' + str(nx) + 'n.csv'
-  data_anl_path   = outdir + '/normal_'+ da_method + '_anl_score_' + str(nx) + 'n.csv'
+  data_anl_path   = outdir + '/normal_'+ da_method + str(mems) + 'm_anl_score_' + str(nx) + 'n.csv'
   data_obs_path  = outdir + '/normal_obs_score_' + str(nx) + '.csv'
 
   data_err_path = outdir + '/Error_matrix_' + da_method + '_' + str(nx) + 'n.csv'
@@ -121,7 +123,7 @@ if __name__ == "__main__":
   # > lorenz96 cal. score
   #---------------------------------------------------------- 
   lz = lorenz96_score()
-  err = lorenz96_errcov(data_err_path)
+  #err = lorenz96_errcov(data_err_path)
 
   #---------------------------------------------------------- 
   # +++ reading func.

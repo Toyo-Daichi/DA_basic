@@ -12,6 +12,8 @@ rm -rf *.mod ${prg}
 #----------------------------------------------------------------------
 # +++ Set intial setting
 #----------------------------------------------------------------------
+
+# +++ model dimension
 nx=40
 dt=0.05d0
 force=8.0d0
@@ -21,16 +23,21 @@ oneday=0.2d0
 spinup_period=365
 normal_period=40
 
-da_method='KF'
+da_method='EnKF'
 intg_method='Runge-Kutta'
-mem=40
+mem=1
+enkf_method='none'
+if [ ${da_method} = 'EnKF' ]; then 
+  mem=50
+  enkf_method='SRF' # 'PO' or "SRF"
+fi
 
 # +++ adaptive inflation
 alpha=0.0d0
 
 # +++ making obs. info
 obs_xintv=1
-obs_tintv=2
+obs_tintv=1
 
 # +++ output info
 out_boolen='true' # write putput
@@ -57,7 +64,7 @@ cp ${CDIR}/common/netlib.f netlib_mod.f
 
 # +++ compile
 gfortran -fbounds-check  \
-  SFMT_mod.f90 common_mod.f90 common_mtx_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 \
+  SFMT_mod.f90 common_mod.f90 netlib_mod.f common_mtx_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 \
   -o ${prg} -I/usr/local/include -lm -lblas -llapack \
   -w # error message Suppression
 
@@ -78,6 +85,10 @@ gfortran -fbounds-check  \
     mems      = ${mem},
     da_method = '${da_method}',
     alpha = ${alpha}
+  /
+  &enkf_setting
+    mems = ${mem},
+    enkf_method = '${enkf_method}'
   /
   &set_period
     spinup_period = ${spinup_period},
