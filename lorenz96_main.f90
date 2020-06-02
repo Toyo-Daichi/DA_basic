@@ -492,7 +492,6 @@ program lorenz96_main
             write(6,*) ''
           
             write(6,*) ' ANALYSIS ENSEMBLE VECTOR '
-            Ef = Ef/sqrt_mems
             Ea = matmul(I - matmul(Kh,H), Ef)
             call confirm_matrix(Ea, nx, mems)
 
