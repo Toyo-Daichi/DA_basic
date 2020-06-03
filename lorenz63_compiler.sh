@@ -14,12 +14,12 @@ rm -rf *.mod ${prg}
 nt_asm=2500
 nt_prd=2500
 obs_interval=1
-da_method='KF' #'KF' or 'EnKF'
+da_method='EnKF' #'KF' or 'EnKF'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
 mem=1
 enkf_method='none'
 if [ ${da_method} = 'EnKF' ]; then 
-  mem=5
+  mem=50
   enkf_method='SRF' # 'PO' or "SRF"
 fi
 
@@ -41,12 +41,14 @@ boolen='true' # output logical format
 outputname=${da_method}'.csv'
 outputfile_score='./output/lorenz63/'${outputname}
 outputfile_errcov='./output/lorenz63/'errcov_${outputname}
+exp_log=./log/${today}_${prg}_${da_method}.log
 
 # for EnKF
 if [ ${da_method} = 'EnKF' ]; then 
-  outputname=${da_method}_${mem}'m.csv'
+  outputname=${da_method}_${mem}'m'_${enkf_method}'.csv'
   outputfile_score='./output/lorenz63/'${outputname}
   outputfile_errcov='./output/lorenz63/'errcov_${outputname}
+  exp_log=./log/${today}_${prg}_${da_method}_${enkf_method}.log
 fi
 
 #----------------------------------------------------------------------
@@ -57,13 +59,14 @@ cp ${CDIR}/common/common_mtx.f90 common_mtx_mod.f90
 cp ${CDIR}/common/SFMT.f90 SFMT_mod.f90
 cp ${CDIR}/common/netlib.f netlib_mod.f
 
+
 # +++ compile
 gfortran -fbounds-check \
   SFMT_mod.f90 common_mod.f90 netlib_mod.f common_mtx_mod.f90 lorenz63_prm.f90 lorenz63_cal.f90 lorenz63_main.f90 \
   -o ${prg} -I/usr/local/include -llapack -lblas \
   -w # error message Suppression
 
-./${prg} > ./log/${today}_${prg}_${da_method}.log << EOF
+./${prg} > ${exp_log} << EOF
   $day_info
     today = '${today}'
   /
