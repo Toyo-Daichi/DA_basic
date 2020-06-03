@@ -34,12 +34,12 @@ nx=3; ny=3
 alpha=0.0d0
 
 # +++ outqput info
-boolen='false' # write putput
-outputname=${da_method}
-outputfile='./output/lorenz63/'${outputname}'.csv'
+boolen='true' # output logical format
+outputname=${da_method}'.csv'
+outputfile_score='./output/lorenz63/'${outputname}
 outputfile_error_matrix='./output/lorenz63/'Error_matrix_${outputname}'.csv'
 if [ ${da_method} = 'EnKF' ]; then 
-  outputfile='./output/lorenz63/'${outputname}_${mem}'m_'${alpha}'infla.csv'
+  outputfile_score='./output/lorenz63/'${outputname}_${mem}'m_'${alpha}'infla.csv'
   outputfile_error_matrix='./output/lorenz63/'Error_matrix_${outputname}_${mem}'mem_'${alpha}'infla.csv'
 fi
 
@@ -82,7 +82,7 @@ gfortran -fbounds-check \
     x_sinit = ${x_sinit},  y_sinit = ${y_sinit}, z_sinit = ${z_sinit}
   /
   &output
-    output_file  = '${outputfile}',
+    output_file  = '${outputfile_score}',
     output_file_error_covariance = '${outputfile_error_matrix}'
     opt_veach    = .${boolen}.
   /

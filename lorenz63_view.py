@@ -36,33 +36,33 @@ class lorenz63_score:
       self.obs_list(list): 
       self.obs_time_list(list): 観測値様の時間リスト
       self.obs_true_list(list): 観測値様の時間に相当するtrue_listの値
-    """
-    print('Call ..... Constract of lorenz63_score')
+    """ 
+    print('Call ..... Constract of lorenz63_score', + path)
     
     # +++ common list
     self.df  = pd.read_csv(path, sep=',')
 
-    self.time_list = self.df2_list(self.df, ' timestep')[0]
-    self.true_list = self.df2_list(self.df, ' x_true', ' y_true', ' z_true')
+    self.time_list = self._df2list(self.df, ' timestep')[0]
+    self.true_list = self._df2list(self.df, ' x_true', ' y_true', ' z_true')
     undef = -999.e0
     
     # obs. list
     obs = self.df.loc[ :, [' timestep', ' x_true', ' y_true', ' z_true', ' x_obs', ' y_obs', ' z_obs']]
     obs = obs[obs[' x_obs'] != undef]
-    self.obs_time_list = self.df2_list(obs, ' timestep')[0]
-    self.obs_true_list = self.df2_list(obs, ' x_true', ' y_true', ' z_true')
-    self.obs_list      = self.df2_list(obs, ' x_obs', ' y_obs', ' z_obs')
+    self.obs_time_list = self._df2list(obs, ' timestep')[0]
+    self.obs_true_list = self._df2list(obs, ' x_true', ' y_true', ' z_true')
+    self.obs_list      = self._df2list(obs, ' x_obs', ' y_obs', ' z_obs')
     
     # sim. list
-    self.sim_list  = self.df2_list(self.df, ' x_sim', ' y_sim', ' z_sim')
-    self.da_list   = self.df2_list(self.df, ' x_anl', ' y_anl', ' z_anl')
+    self.sim_list  = self._df2list(self.df, ' x_sim', ' y_sim', ' z_sim')
+    self.da_list   = self._df2list(self.df, ' x_anl', ' y_anl', ' z_anl')
     
     """
     list.shape
     list[0] = x score, list[1] = y score, list[2] = z score, 
     """
   
-  def df2_list(self, Dataframe:pd.core.frame.DataFrame, *index_wrd:tuple) -> list:
+  def _df2list(self, Dataframe:pd.core.frame.DataFrame, *index_wrd:tuple) -> list:
     """pandasフレームをリスト化
 
     Args:
@@ -168,14 +168,14 @@ class lorenz63_score:
     plt.legend()
     plt.show()
 
-class lorenz63_error_covariance_matrix:
+class lorenz63_errcov:
   """
   一つのデータリストを誤差共分散行列の扱いを行うクラスメソッド
   """
   def __init__(self, path:str):
-    self.err_data = self.read_error_csv(path)
+    self.err_data = self._read_errcov(path)
 
-  def read_error_csv(self, path:str) -> np.ndarray:
+  def _read_errcov(self, path:str) -> np.ndarray:
     return np.genfromtxt(path, delimiter=",")
 
   def error_heatmap(self, err_data:np.ndarray, timestep:int) -> None:
@@ -216,7 +216,7 @@ if __name__ == "__main__":
   # > lorenz63 cal. score
   score = lorenz63_score(data_path)
   # > prediction err covariance matrix
-  #e_matrix = lorenz63_error_covariance_matrix(err_path)
+  #e_matrix = lorenz63_errcov(err_path)
   
   #---------------------------------------------------------- 
   # +++ draw func.
