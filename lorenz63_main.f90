@@ -69,7 +69,7 @@ program lorenz63
   real(r_size), allocatable :: yt_vec4out(:, :) ! for output
   integer, parameter        :: output_interval = 1
   character(256)            :: output_file
-  character(256)            :: output_file_error_covariance
+  character(256)            :: output_file_errcov
   character(1096)           :: linebuf
   
   ! --- Working variable
@@ -103,7 +103,7 @@ program lorenz63
   namelist /intg_setting/ intg_method
   namelist /enkf_setting/ mems, enkf_method
   namelist /initial_score/ x_tinit, y_tinit, z_tinit, x_sinit, y_sinit, z_sinit
-  namelist /output/ output_file, output_file_error_covariance, opt_veach
+  namelist /output/ output_file, output_file_errcov, opt_veach
   
   read(5, nml=set_dim, iostat = ierr)
   read(5, nml=set_parm, iostat = ierr)

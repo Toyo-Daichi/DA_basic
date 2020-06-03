@@ -13,7 +13,7 @@ rm -rf *.mod ${prg}
 nt_asm=2500
 nt_prd=2500
 obs_interval=1
-da_method='EnKF' #'KF' or 'EnKF'
+da_method='KF' #'KF' or 'EnKF'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
 mem=1
 enkf_method='none'
@@ -35,12 +35,17 @@ alpha=0.0d0
 
 # +++ outqput info
 boolen='true' # output logical format
+
+# for KF
 outputname=${da_method}'.csv'
 outputfile_score='./output/lorenz63/'${outputname}
-outputfile_error_matrix='./output/lorenz63/'Error_matrix_${outputname}'.csv'
+outputfile_errcov='./output/lorenz63/'errcov_${outputname}
+
+# for EnKF
 if [ ${da_method} = 'EnKF' ]; then 
-  outputfile_score='./output/lorenz63/'${outputname}_${mem}'m_'${alpha}'infla.csv'
-  outputfile_error_matrix='./output/lorenz63/'Error_matrix_${outputname}_${mem}'mem_'${alpha}'infla.csv'
+  outputname=${da_method}_${mem}'m.csv'
+  outputfile_score='./output/lorenz63/'${outputname}
+  outputfile_errcov='./output/lorenz63/'errcov_${outputname}
 fi
 
 #----------------------------------------------------------------------
@@ -82,19 +87,19 @@ gfortran -fbounds-check \
     x_sinit = ${x_sinit},  y_sinit = ${y_sinit}, z_sinit = ${z_sinit}
   /
   &output
-    output_file  = '${outputfile_score}',
-    output_file_error_covariance = '${outputfile_error_matrix}'
-    opt_veach    = .${boolen}.
+    output_file = '${outputfile_score}',
+    output_file_errcov = '${outputfile_errcov}'
+    opt_veach = .${boolen}.
   /
 EOF
 
-rm -rf *.mod *_mod.f90 ${prg}
+rm -rf *.mod *_mod.f *_mod.f90 ${prg}
 echo 'Normal END'
 
 exit
 
 #----------------------------------------------------------------------
-# +++ matrix memo
+# +++ matrix memo !
 #  The following cases are for 
 #  three predictor var and two observation var.
 #----------------------------------------------------------------------
