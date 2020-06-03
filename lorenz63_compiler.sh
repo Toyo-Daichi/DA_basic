@@ -1,10 +1,11 @@
 #!/bin/bash
 # attached by lorenz63.f90
 
-#set -ex
+set -ex
 CDIR=`pwd`
 prg=lorenz_maintools
 today=$(date "+%Y%m%d%H%M")
+echo ${today}
 rm -rf *.mod ${prg}
 
 #----------------------------------------------------------------------
@@ -63,6 +64,9 @@ gfortran -fbounds-check \
   -w # error message Suppression
 
 ./${prg} > ./log/${today}_${prg}_${da_method}.log << EOF
+  $day_info
+    today = '${today}'
+  /
   &set_dim
     nx = ${nx},
     ny = ${ny}

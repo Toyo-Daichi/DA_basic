@@ -124,7 +124,7 @@ program lorenz63
     write(6,*) '   Stop : lorenz63_main.f90              '
     stop
   end if
-  
+
   ! +++ display namelist
   write(6,*) 'Data assimlation method :: ', da_method
   write(6,*) 'Integral method         :: ', intg_method
@@ -186,8 +186,9 @@ program lorenz63
   !Pf(3,1) = 0.01; Pf(3,2) = 0.01; Pf(3,3) = 0.01
   !----------------------------------------------------------------------
   
-  ! --- Initialization of random number generator
+  ! --- Initialization of random number generator && OBS null time set
   call random_seed()
+  x_obs(:) = undef; y_obs(:) = undef; z_obs(:) = undef
   
   ! --- Sec2. True field and observations
   do it = 1, nt_asm+nt_prd
@@ -647,7 +648,10 @@ program lorenz63
       end do
       
       open (1, file=trim(output_file), status='replace')
-      write(1,*) 'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_anl, y_anl, z_anl, x_obs, y_obs, z_obs'
+      write(1,*) "# DATA ASSIM. METHOD :: ", da_method
+      write(1,'(" # INFLATION (+1.0)   ::", f5.2)') alpha
+      write(1,*) &
+      'timestep, x_true, y_true, z_true, x_sim, y_sim, z_sim, x_anl, y_anl, z_anl, x_obs, y_obs, z_obs'
       do it = 0, nt_asm+nt_prd
         if (mod(it, output_interval) == 0) then
           write(linebuf, '(f5.2, ",", 9(f12.7, ","), 2(F7.2, ","), F7.2)')  & 
@@ -698,7 +702,7 @@ contains
     real(r_size), intent(in)  :: error_covariance_matrix(3,3)
 
     if ( it == 1 ) then
-      open(2, file=trim(output_file_error_covariance), status='replace')
+      open(2, file=trim(output_file_errcov), status='replace')
       write(linebuf, '(8(f12.5, ","), f12.5)') error_covariance_matrix
         call del_spaces(linebuf)
         write(2, '(a)') trim(linebuf)
