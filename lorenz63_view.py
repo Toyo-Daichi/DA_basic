@@ -150,6 +150,7 @@ class lorenz63_errcov:
   """
   def __init__(self, path:str, *, matrix_size:int=3):
     self.err_data = self._read_errcov(path)
+    
   def _read_errcov(self, path:str) -> np.ndarray:
     return np.genfromtxt(path, delimiter=",")
 

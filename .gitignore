@@ -1,8 +1,10 @@
 #.gitignore
+
+# (1) file
 .DS_Store
 *.swp
 
-#dir
+# (2) dir
 log
 figure
 output
