@@ -111,7 +111,7 @@ class lorenz63_score:
                              ) -> None:
     """RMSEの描画
 
-    Arguments:
+    Args:
         rmse_obs(list): 土台データの観測値のRMSE
         rmse_da(list): 土台データのデータ同化のRMSE
         rmse_sim(list): 土台データリストのシミュレーション値のRMSE
@@ -157,7 +157,7 @@ class lorenz63_errcov:
     return np.trace(matrix)
 
   def error_heatmap(self, err_data:np.ndarray, timestep:int) -> None:
-    fig, ax = plt.subplots()
+    ax = plt.subplots()
     cmap = sns.diverging_palette(220, 10, as_cmap=True)
     sns.set(style='white')
     sns.heatmap(
@@ -202,15 +202,16 @@ def accuracy_rmse_func(true_list:list, asses_list:list, num_elem:int) -> list:
 def _enkf_pathset(mem:int, method_num:int, *, outdir:str='./output/lorenz63/') -> str:
   """EnKFのPATH設定
 
-  Arguments:
-      mem {int} -- EnKFのメンバー数
-      method_num {int} -- 0はPO法、1はSRF法
+  Args:
+      mem(int): EnKFのメンバー数
+      method_num(int): 0はPO法、1はSRF法
 
   Keyword Arguments:
-      outdir {str} -- PATHの大元設定。変更なければ引数に加えなくて良い。 (default: {'./output/lorenz63'})
+      outdir(str): PATHの大元設定。変更なければ引数に加えなくて良い。 (default: {'./output/lorenz63'})
 
   Returns:
-      str -- 2つのPATHを返す。
+      enkf_data_path(str):  enkfのデータPATH
+      enkf_errcov_path(str):  enkfの誤差共分散データPATH
   """
   enkf_method = ['PO', 'SRF']
   enkf_data_path = outdir+'EnKF_'+str(mem)+'m_'+enkf_method[method_num]+'.csv'
