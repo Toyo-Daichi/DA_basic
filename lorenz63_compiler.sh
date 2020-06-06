@@ -5,8 +5,9 @@ set -ex
 CDIR=`pwd`
 prg=lorenz_maintools
 today=$(date "+%Y%m%d%H%M")
-echo ${today}
 rm -rf *.mod ${prg}
+
+echo ${today}
 
 #----------------------------------------------------------------------
 # +++ Set intial setting
@@ -58,7 +59,6 @@ cp ${CDIR}/common/common.f90 common_mod.f90
 cp ${CDIR}/common/common_mtx.f90 common_mtx_mod.f90
 cp ${CDIR}/common/SFMT.f90 SFMT_mod.f90
 cp ${CDIR}/common/netlib.f netlib_mod.f
-
 
 # +++ compile
 gfortran -fbounds-check \
