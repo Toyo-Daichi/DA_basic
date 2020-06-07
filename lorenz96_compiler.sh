@@ -22,25 +22,25 @@ oneday=0.2d0
 
 # +++ integral period(day)
 spinup_period=365
-normal_period=40
+normal_period=100
 
 # +++ exp. info
-da_method='EnKF'
+da_method='KF'
 intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
 if [ ${da_method} = 'EnKF' ]; then 
-  mem=40
+  mem=20
   enkf_method='SRF' # 'PO' or "SRF"
 fi
 
 # +++ adaptive inflation & localization
 alpha=0.0d0
-localization_mode=1
+localization_mode=0
 
 # +++ making obs. info
 obs_xintv=1
-obs_tintv=1
+obs_tintv=5
 
 # +++ output info
 out_boolen='true' # write putput
@@ -123,12 +123,12 @@ gfortran -fbounds-check  \
     output_sim_file    = '${output_sim_file}',
     output_obs_file    = '${output_obs_file}', 
     output_errcov_file = '${output_errcov_file}', 
-    output_anlinc_file   = '${output_anlinc_file}',
+    output_anlinc_file = '${output_anlinc_file}',
     opt_veach = .${out_boolen}.
   /
 EOF
 
-rm -rf *.mod *_mod.f90 ${prg}
+rm -rf *.mod *_mod.f* ${prg}
 echo 'Normal END'
 
 exit

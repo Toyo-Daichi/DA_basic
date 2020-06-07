@@ -34,10 +34,10 @@ program lorenz96_main
   ! --- Temporal state vector
   real(r_size), allocatable :: xt_vec(:,:)
   real(r_size), allocatable :: yt_vec(:,:)
-  real(r_size), allocatable :: x_anl_before(:,:)
+  real(r_size), allocatable :: anlinc(:,:)
 
   ! *** Various parameters
-  real(r_size), parameter   :: size_noise_obs = 1.0d0
+  real(r_size), parameter   :: size_noise_obs = 0.5d0
   real(r_size)              :: gnoise, alpha
   real(r_dble)              :: delta
   real(r_size)              :: scale, dist, factor
@@ -150,7 +150,7 @@ program lorenz96_main
     ! --- Temporal state vector
     allocate(xt_vec(nx,1))
     allocate(yt_vec(ny,1))
-    allocate(x_anl_before(nx,1))
+    allocate(anlinc(nx,1))
     
     !----------------------------------------------------------------------
     ! +++ Data assim. set 
@@ -329,12 +329,15 @@ program lorenz96_main
           call confirm_matrix(Kg, nx, ny)
           write(6,*) ''
 
-          xt_vec(:,1) = x_anl(it,:)
+          xt_vec(:,1) = x_anl(it,:); anlinc(:,1) = x_anl(it,:)
           yt_vec(:,1) = x_obs(it/obs_tintv,:)
           
           hx = matmul(H, xt_vec)
           hdxf = yt_vec - hx
-          anlinc4out(it,:) = matmul(Kg, hdxf)
+
+          ! for save increment
+          anlinc = matmul(Kg, hdxf)
+          anlinc4out(it/obs_tintv, :) = anlinc(:,1)
 
           xt_vec = xt_vec + matmul(Kg, hdxf)
           x_anl(it,:) = xt_vec(:,1)
@@ -387,9 +390,9 @@ program lorenz96_main
           write(6,*) '  OBSERVE  = ', x_obs(it,1:5), '...'
           do ix = 1, nx
             x_anl(it, ix) = sum(x_anl_m(it,ix,1:mems))/mems
-            x_anl_before(ix,1) = x_anl(it,ix)
+            anlinc(ix,1) = x_anl(it,ix)
           end do
-          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl_before(1:5, 1), '...'
+          write(6,*) '  ANALYSIS (BEFORE) = ', anlinc(1:5, 1), '...'
           write(6,*) ''
           Pf = 0.0d0
           
@@ -439,9 +442,11 @@ program lorenz96_main
               end do
             end do
           end if
+
           
           write(6,*) '  PREDICTION ERROR COVARIANCE on present step'
           call confirm_matrix(Pf, nx, nx)
+          call output_errcov(nx, it/obs_tintv, kt_oneday*normal_period/obs_tintv, Pf)
           write(6,*) ''
           !=======================================================
 
@@ -484,7 +489,7 @@ program lorenz96_main
             do ix = 1, nx
               x_anl(it, ix) = sum(x_anl_m(it, ix, :))/mems
             end do
-            anlinc4out(it,:) = x_anl_before(:,1) - x_anl(it,:)
+            anlinc4out(it/obs_tintv,:) = anlinc(:,1) - x_anl(it,:)
             write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,1:5), '...'
             write(6,*) ''
             write(6,*) ' CHECK ENSEMBLE PART FOR UPDATE (AFTER) on ', it 
@@ -506,7 +511,6 @@ program lorenz96_main
             
             hx = matmul(H, xt_vec)
             hdxf = yt_vec - hx
-            anlinc4out(it,:) = matmul(Kg, hdxf)
             xt_vec = xt_vec + matmul(Kg, hdxf)
             
             x_anl(it,:) = xt_vec(:,1)
@@ -555,7 +559,7 @@ program lorenz96_main
             do ix = 1, nx
               x_anl(it, ix) = x_anl(it, ix) + sum(Ea(ix, :))/mems
             end do
-            anlinc4out(it,:) = x_anl_before(:,1) - x_anl(it,:)
+            anlinc4out(it/obs_tintv,:) = anlinc(:,1) - x_anl(it,:)
             write(6,*) '  ANALYSIS (PRTB STEP) = ', x_anl(it,1:5), '...'
             write(6,*) ''
 

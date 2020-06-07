@@ -7,13 +7,11 @@ Created on 2020.5.7
 import os, sys
 sys.path.append(os.path.join(os.path.dirname(__file__), './lib'))
 
+import cal_statics
 import itertools
 import numpy as np
 import pandas as pd
 import seaborn as sns
-
-import cal_statics
-
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -22,16 +20,9 @@ from matplotlib.ticker import MaxNLocator
 
 class lorenz96_score:
   def __init__(self):
-    print('Call ..... Constract of lorenz96_score')
+    print('..... Constract of lorenz96_score class ')
 
-  def csv2list(self, path:str) -> np.ndarray:
-    return np.genfromtxt(path, delimiter=",")
-  
-  def accuracy_rmse_func(self, true_list:list, asses_list:list) -> list:
-    rmse = cal_statics.rmse(true_list, asses_list)
-    return rmse
-
-  def rmse_draw(self, timestep:int, rmse_anl:list, rmse_sim:list, rmse_obs:list, obs_tintv:int) -> None:
+  def lorenz_rmse_draw(self, timestep:int, rmse_anl:list, rmse_sim:list, rmse_obs:list, obs_tintv:int) -> None:
     fig = plt.figure()
     ax1 = fig.subplots()
     
@@ -52,7 +43,7 @@ class lorenz96_score:
     plt.legend()
     plt.show()
 
-  def draw_hovmoller(self, nx:int, timestep:int, lorenz_anlta:np.ndarray) -> None:
+  def lorenz_hov_draw(self, nx:int, timestep:int, lorenz_anlta:np.ndarray) -> None:
     fig, ax = plt.subplots()
     xs = np.arange(1,nx+1)
     ts = np.arange(timestep)
@@ -63,7 +54,6 @@ class lorenz96_score:
     ax.set_ylim(ax.get_ylim()[::-1])
     fig.colorbar(cmap, ax=ax)
     ax.set_title('Lorenz(1996) NX=40, F=8.0', loc='left')
-
     plt.show()
 
 class lorenz96_errcov:
@@ -71,10 +61,7 @@ class lorenz96_errcov:
   一つのデータリストを誤差共分散行列の扱いを行うクラスメソッド
   """
   def __init__(self, path:str):
-    self.err_anlta = self.read_error_csv(path)
-
-  def read_error_csv(self, path:str) -> np.ndarray:
-    return np.genfromtxt(path, delimiter=",")
+    self.err_anlta = _csv2list(path)
 
   def error_heatmap(self, err_anlta:np.ndarray, timestep:int) -> None:
     fig, ax = plt.subplots()
@@ -92,78 +79,68 @@ class lorenz96_errcov:
     plt.savefig('./figure/error_heatmap_{:.1f}sec.png'.format(time))
     plt.close('all')
 
+""" private package """
+
+def _csv2list(path:str) -> np.ndarray:
+  return np.genfromtxt(path, delimiter=",")
+
+def _accuracy_rmse_func(true_list:list, asses_list:list) -> list:
+  rmse = cal_statics.rmse(true_list, asses_list)
+  return rmse
 
 if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ info. setting
   #---------------------------------------------------------- 
+  # (1) dimension
+  obs_xintv = 1
+  obs_tintv = 1
+  day_tintv = 4
+  init_step = 1
   nx = 40
-  stepday = 40
-  timestep = stepday*4+1
-  
-  # OBS
-  obs_xintv, obs_tintv = 1, 1
   ny = int(nx/obs_xintv)
-  obs_timestep = int(timestep/obs_tintv)-1
+
+  stepday = 40
+  timestep = stepday*day_tintv
+
+  timeshape = init_step + timestep
+  obs_timeshape =  int(timestep/obs_tintv)
+
+  # (2) PATH setting
+  # >> The three file names below do not change in any way.
+  outdir = './output/lorenz96/'
+  true_path = outdir + 'normal_true_score_' + str(nx) + 'ndim.csv'
+  sim_path = outdir + 'normal_sim_score_' + str(nx) + 'ndim.csv'
+  obs_path = outdir + 'normal_obs_score_' + str(nx) + 'ndim.csv'
+
+  """ KF data set """
+  path_kf = outdir + 'normal_KF_anl_score_' + str(nx) + 'ndim.csv'
+  path_kf_errcov = outdir + 'normal_KF_anlinc_' + str(nx) + 'ndim.csv'
+  path_kf_anlinc = outdir + 'normal_KF_anlinc_' + str(nx) + 'ndim.csv'
+  
+  """Ensemble KF data set (basic is EnSRF.) """
   mems = 50
+  path_enkf = outdir + 'normal_EnKF' + str(mems) + 'm_anl_score_' + str(nx) + 'ndim.csv'
+  path_kf_errcov = outdir + 'normal_EnKF' + str(mems) + 'm_anlinc_' + str(nx) + 'ndim.csv'
+  path_kf_anlinc = outdir + 'normal_EnKF' + str(mems) + 'm_errcov_' + str(nx) + 'ndim.csv'
 
-  outdir = './output/lorenz96'
-  da_method = 'EnKF'
-
-
-  data_true_path = outdir + '/normal_true_score_' + str(nx) + 'n.csv'
-  data_sim_path = outdir + '/normal_sim_score_' + str(nx) + 'n.csv'
-  data_anl_path   = outdir + '/normal_'+ da_method + str(mems) + 'm_anl_score_' + str(nx) + 'n.csv'
-  data_obs_path  = outdir + '/normal_obs_score_' + str(nx) + '.csv'
-
-  data_err_path = outdir + '/Error_matrix_' + da_method + '_' + str(nx) + 'n.csv'
+  #---------------------------------------------------------- 
+  # +++ reading basic score.
+  #---------------------------------------------------------- 
+  true_score = _csv2list(true_path).reshape(timeshape, nx)
+  sim_score = _csv2list(sim_path).reshape(timeshape, nx)
+  obs_score = _csv2list(obs_path).reshape(obs_timeshape, ny)
 
   #---------------------------------------------------------- 
   # +++ class set
-  # > lorenz96 cal. score
+  # (1) lorenz96_score
   #---------------------------------------------------------- 
-  lz = lorenz96_score()
-  #err = lorenz96_errcov(data_err_path)
-
-  #---------------------------------------------------------- 
-  # +++ reading func.
-  #---------------------------------------------------------- 
-  true_score = lz.csv2list(data_true_path).reshape(timestep, nx)
-  noda_score = lz.csv2list(data_sim_path).reshape(timestep, nx)
-  anl_score  = lz.csv2list(data_anl_path).reshape(timestep, nx)
-  obs_score  = lz.csv2list(data_obs_path).reshape(obs_timestep, ny)
-
-  lz.draw_hovmoller(nx, timestep, true_score)
-  lz.draw_hovmoller(nx, timestep, noda_score)
-  lz.draw_hovmoller(nx, timestep, anl_score)
+  lorenz96 = lorenz96_score()
+  
+  kf_anl_score = _csv2list(path_kf).reshape(timeshape, nx)
+  enkf_anl_score = _csv2list(path_enkf).reshape(timeshape, nx)
 
   #---------------------------------------------------------- 
   # +++ RMSE func.
   #---------------------------------------------------------- 
-  rmse_anl_list = []
-  rmse_sim_list = []
-  rmse_obs_list = []
-  for it in range(timestep):
-    rmse_anl = lz.accuracy_rmse_func(true_score[it], anl_score[it])
-    rmse_sim = lz.accuracy_rmse_func(true_score[it], noda_score[it])
-    rmse_anl_list.append(rmse_anl)
-    rmse_sim_list.append(rmse_sim)
-
-  for it_obs in range(1, obs_timestep):
-    obs_true_score = []
-    for ix_obs in range(0, nx, obs_xintv):
-      obs_true_score.append(true_score[it_obs*obs_tintv][ix_obs])
-    rmse_obs = lz.accuracy_rmse_func(obs_true_score, obs_score[it_obs-1])
-    rmse_obs_list.append(rmse_obs)
-
-  lz.rmse_draw(timestep, rmse_anl_list, rmse_sim_list, rmse_obs_list, obs_tintv)
-
-  #---------------------------------------------------------- 
-  # +++ err cov func.
-  #---------------------------------------------------------- 
-  """
-  for i_num in tqdm(range(0, int(timestep/obs_tintv))):
-    matrix_anlta = err.err_anlta[i_num].reshape(nx, nx)
-    err.error_heatmap(matrix_anlta, i_num)
-  """
   
