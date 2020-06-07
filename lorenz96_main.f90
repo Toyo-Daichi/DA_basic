@@ -34,7 +34,8 @@ program lorenz96_main
   ! --- Temporal state vector
   real(r_size), allocatable :: xt_vec(:,:)
   real(r_size), allocatable :: yt_vec(:,:)
-  
+  real(r_size), allocatable :: x_anl_before(:,:)
+
   ! *** Various parameters
   real(r_size), parameter   :: size_noise_obs = 1.0d0
   real(r_size)              :: gnoise, alpha
@@ -77,10 +78,10 @@ program lorenz96_main
   character(256)        :: output_anl_file
   character(256)        :: output_sim_file
   character(256)        :: output_obs_file
-  character(256)        :: output_hdxf_file
+  character(256)        :: output_anlinc_file
   character(256)        :: output_errcov_file
 
-  real(r_size), allocatable :: hdxf4out(:, :) ! increment info.
+  real(r_size), allocatable :: anlinc4out(:, :) ! increment info.
   
   ! --- Working variable
   character(1086) :: linebuf
@@ -107,7 +108,7 @@ program lorenz96_main
   namelist /set_mobs/ obs_xintv, obs_tintv
   namelist /spinup_output/ initial_true_file, initial_sim_file
   namelist /exp_output/ &
-    output_true_file, output_anl_file, output_sim_file, output_obs_file, output_errcov_file, output_hdxf_file, opt_veach
+    output_true_file, output_anl_file, output_sim_file, output_obs_file, output_errcov_file, output_anlinc_file, opt_veach
   
   read(5, nml=set_parm, iostat=ierr)
   read(5, nml=set_exp, iostat=ierr)
@@ -149,6 +150,7 @@ program lorenz96_main
     ! --- Temporal state vector
     allocate(xt_vec(nx,1))
     allocate(yt_vec(ny,1))
+    allocate(x_anl_before(nx,1))
     
     !----------------------------------------------------------------------
     ! +++ Data assim. set 
@@ -180,7 +182,7 @@ program lorenz96_main
       allocate(hx(ny,1))
       allocate(hdxf(ny,1))
       
-      allocate(hdxf4out(obs_time, ny))
+      allocate(anlinc4out(obs_time, ny))
 
     end if
   end if
@@ -332,10 +334,10 @@ program lorenz96_main
           
           hx = matmul(H, xt_vec)
           hdxf = yt_vec - hx
-          hdxf4out(it,:) = hdxf(:,1)
+          anlinc4out(it,:) = matmul(Kg, hdxf)
+
           xt_vec = xt_vec + matmul(Kg, hdxf)
           x_anl(it,:) = xt_vec(:,1)
-
           write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,1:5), '...'
           
           Pa = matmul((I - matmul(Kg, H)), Pf)
@@ -385,8 +387,9 @@ program lorenz96_main
           write(6,*) '  OBSERVE  = ', x_obs(it,1:5), '...'
           do ix = 1, nx
             x_anl(it, ix) = sum(x_anl_m(it,ix,1:mems))/mems
+            x_anl_before(ix,1) = x_anl(it,ix)
           end do
-          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,1:5), '...'
+          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl_before(1:5, 1), '...'
           write(6,*) ''
           Pf = 0.0d0
           
@@ -472,7 +475,6 @@ program lorenz96_main
               ! simple KF formula
               hx = matmul(H, xt_vec)
               hdxf = yt_vec - hx
-              hdxf4out(it,:) = hdxf(:,1)
               xt_vec = xt_vec + matmul(Kg, hdxf)
 
               ! fix matrix -> each score
@@ -482,6 +484,7 @@ program lorenz96_main
             do ix = 1, nx
               x_anl(it, ix) = sum(x_anl_m(it, ix, :))/mems
             end do
+            anlinc4out(it,:) = x_anl_before(:,1) - x_anl(it,:)
             write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,1:5), '...'
             write(6,*) ''
             write(6,*) ' CHECK ENSEMBLE PART FOR UPDATE (AFTER) on ', it 
@@ -503,7 +506,7 @@ program lorenz96_main
             
             hx = matmul(H, xt_vec)
             hdxf = yt_vec - hx
-            hdxf4out(it,:) = hdxf(:,1)
+            anlinc4out(it,:) = matmul(Kg, hdxf)
             xt_vec = xt_vec + matmul(Kg, hdxf)
             
             x_anl(it,:) = xt_vec(:,1)
@@ -552,6 +555,7 @@ program lorenz96_main
             do ix = 1, nx
               x_anl(it, ix) = x_anl(it, ix) + sum(Ea(ix, :))/mems
             end do
+            anlinc4out(it,:) = x_anl_before(:,1) - x_anl(it,:)
             write(6,*) '  ANALYSIS (PRTB STEP) = ', x_anl(it,1:5), '...'
             write(6,*) ''
 
@@ -617,7 +621,7 @@ program lorenz96_main
       close(23)
       
       open(30, file=trim(output_obs_file), form='formatted', status='replace')
-      open(31, file=trim(output_hdxf_file), form='formatted', status='replace')
+      open(31, file=trim(output_anlinc_file), form='formatted', status='replace')
       do it = 1, kt_oneday*normal_period/obs_tintv
         cfmt_obs = '(xx(F15.7, ","), F15.7)'
         write(cfmt_obsnum,"(I2)") ny-1
@@ -625,7 +629,7 @@ program lorenz96_main
         write(linebuf, trim(cfmt_obs)) x_obs(it, :)
         call del_spaces(linebuf)
         write(30,'(a)') linebuf
-        write(linebuf, trim(cfmt)) hdxf4out(it,:)
+        write(linebuf, trim(cfmt)) anlinc4out(it,:)
         call del_spaces(linebuf)
         write(31,'(a)') linebuf
         end do

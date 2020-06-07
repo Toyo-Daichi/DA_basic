@@ -58,13 +58,13 @@ output_sim_file=${output_dir}/'normal_sim_score_'${nx}'ndim.csv'
 output_obs_file=${output_dir}/'normal_obs_score_'${nx}'ndim.csv'
 #
 output_anl_file=${output_dir}/'normal_'${da_method}'_anl_score_'${nx}'ndim.csv'
-output_hdxf_file=${output_dir}/'normal_'${da_method}'_hdxf_'${nx}'ndim.csv'
+output_anlinc_file=${output_dir}/'normal_'${da_method}'_anlinc_'${nx}'ndim.csv'
 output_errcov_file=${output_dir}/'normal_'${da_method}'_errcov_'${nx}'ndim.csv'
 exp_log=./log/${today}_${prg}_${da_method}.log
 
 if [ ${da_method} = 'EnKF' ]; then 
   output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim.csv'
-  output_hdxf_file=${output_dir}/'normal_'${da_method}${mem}'m_hdxf_'${nx}'ndim.csv'
+  output_anlinc_file=${output_dir}/'normal_'${da_method}${mem}'m_anlinc_'${nx}'ndim.csv'
   output_errcov_file=${output_dir}/'normal_'${da_method}${mem}'m_errcov_'${nx}'ndim.csv'
   exp_log=./log/${today}_${prg}_${da_method}_${enkf_method}.log
 fi
@@ -123,7 +123,7 @@ gfortran -fbounds-check  \
     output_sim_file    = '${output_sim_file}',
     output_obs_file    = '${output_obs_file}', 
     output_errcov_file = '${output_errcov_file}', 
-    output_hdxf_file   = '${output_hdxf_file}',
+    output_anlinc_file   = '${output_anlinc_file}',
     opt_veach = .${out_boolen}.
   /
 EOF
