@@ -24,7 +24,7 @@ class lorenz96_score:
 
   def trajectory_draw(
     self, true_score:np.ndarray, sim_score:np.ndarray, anl_score:np.ndarray, obs_score:np.ndarray,
-    *, time_length:int=30, obs_tintv:int=1
+    *, time_length:int=70, obs_tintv:int=1
     ) -> None:
     """一つの要素の時間変化を示す図の作成
     Args:
@@ -36,7 +36,7 @@ class lorenz96_score:
         Shape of true_score, sim_score, anl_score is [timescale, nx].
         Shape of obs_score is [obs_timescale, ny]. OBS dont have 0step score.
     """
-    fig, ax = plt.subplots(2, 3, figsize=(15,15))
+    fig, ax = plt.subplots(2, 3, figsize=(15,10))
     x_coord = np.arange(time_length)
     obs_x_coord = np.arange(1,time_length, obs_tintv)
 
@@ -89,17 +89,20 @@ class lorenz96_score:
     _, _ = self._hovmeller_basic(1,50,sim_score,'SIMULATION',ax,x_coord,y_coord)
     _ax, _cbar = self._hovmeller_basic(2,50,anl_score,'DATA ASSIM',ax,x_coord,y_coord)
     fig.colorbar(_cbar, ax=_ax)
+    plt.savefig('./figure/houvmeller.png')
 
     fig, ax = plt.subplots(1,2, figsize=(11,5))
     levels = np.arange(-1.0, 1.0, 0.01)
-    _ax1, _cbar1 = self._hovmeller_basic(0,50,true_score-sim_score,'TRUE - SIMULATION',ax,x_coord,y_coord, cmap=plt.get_cmap('bwr'))
-    _ax2, _cbar2 = self._hovmeller_basic(1,50,true_score-anl_score,'TRUE - DATA ASSIM',ax,x_coord,y_coord, cmap=plt.get_cmap('bwr'), levels=levels)
+    _ax1, _cbar1 = self._hovmeller_basic(0,70,true_score-sim_score,'TRUE - SIMULATION',ax,x_coord,y_coord, cmap=plt.get_cmap('bwr'))
+    _ax2, _cbar2 = self._hovmeller_basic(1,70,true_score-anl_score,'TRUE - DATA ASSIM',ax,x_coord,y_coord, cmap=plt.get_cmap('bwr'), levels=levels)
     fig.colorbar(_cbar1, ax=_ax1)
     fig.colorbar(_cbar2, ax=_ax2)
+    plt.savefig('./figure/houvmeller_diff.png')
 
     fig, ax = plt.subplots(1,1, figsize=(6,5))
     _ax, _cbar = self._hovmeller_inc(50,anl_inc_score,'DATA ASSIM INCREMENT',ax,x_coord,y_coord_inc)
     fig.colorbar(_cbar, ax=_ax)
+    plt.savefig('./figure/houvmeller_inc.png')
 
   def _hovmeller_basic(
     self, fig_line:int, time_length:int, data:np.ndarray, data_form:str, 
@@ -212,10 +215,13 @@ class lorenz96_errcov:
   def __init__(self):
     pass
 
-  def mtx_heatmap(self, ) -> None:
+  def errcov_draw(self, errcov_mtx:np.ndarray, *, nx=40, state='Pa', time=1) -> None:
+    """誤差共分散行列の描画
+    Args:
+        errcov_mtx (np.ndarray): 時間が指定してある誤差共分散-np.ndarray
+        nx (int) : 変数の数
+    """
     fig, ax = plt.subplots()
-
-    errcov_draw = ax
     cmap = sns.diverging_palette(220, 10, as_cmap=True)
     sns.set(style='white')
     sns.heatmap(
@@ -223,7 +229,15 @@ class lorenz96_errcov:
       vmax=0.05, vmin=-0.05, center=0,
       square=True, linewidths=.5, 
       cbar_kws={"shrink": .5, "extend": 'both'},
+      xticklabels=2, yticklabels=2
     )
+    ax.set_title('LORENZ(1996) ERROR COVARIANCE MATRIX ({}), {:d} step.'.format(state, time), fontsize=8, loc='left')
+    plt.yticks(rotation=0)
+    plt.savefig('./figure/errcov_matrix_{:03d}step.png'.format(time))
+    plt.close('all')
+
+  def cross_corr_draw(self) -> None:
+    pass
 
 """ private package """
 
@@ -274,14 +288,14 @@ if __name__ == "__main__":
 
   """ KF data set """
   path_kf = outdir + 'normal_KF_anl_score_' + str(nx) + 'ndim.csv'
-  path_kf_errcov = outdir + 'normal_KF_anlinc_' + str(nx) + 'ndim.csv'
+  path_kf_errcov = outdir + 'normal_KF_errcov_' + str(nx) + 'ndim.csv'
   path_kf_anlinc = outdir + 'normal_KF_anlinc_' + str(nx) + 'ndim.csv'
   
   """Ensemble KF data set (basic is EnSRF.) """
   mems = 20
   path_enkf = outdir + 'normal_EnKF' + str(mems) + 'm_anl_score_' + str(nx) + 'ndim.csv'
-  path_kf_errcov = outdir + 'normal_EnKF' + str(mems) + 'm_errcov_' + str(nx) + 'ndim.csv'
-  path_kf_anlinc = outdir + 'normal_EnKF' + str(mems) + 'm_anlinc_' + str(nx) + 'ndim.csv'
+  path_enkf_errcov = outdir + 'normal_EnKF' + str(mems) + 'm_errcov_' + str(nx) + 'ndim.csv'
+  path_enkf_anlinc = outdir + 'normal_EnKF' + str(mems) + 'm_anlinc_' + str(nx) + 'ndim.csv'
 
   #---------------------------------------------------------- 
   # +++ reading basic score.
@@ -321,7 +335,15 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   lorenz96_errcov = lorenz96_errcov()
   kf_anl_errcov = _csv2list(path_kf_errcov).reshape(obs_timeshape,nx,nx)
-  
+
+  for _it in tqdm(range(obs_timeshape)):
+    lorenz96_errcov.errcov_draw(kf_anl_errcov[_it], time=_it)
+
+  #---------------------------------------------------------- 
+  # +++ Prepare gaussian distribution 
+  #---------------------------------------------------------- 
+
+
 
 
   
