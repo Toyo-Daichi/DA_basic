@@ -22,7 +22,7 @@ oneday=0.2d0
 
 # +++ integral period(day)
 spinup_period=365
-normal_period=100
+normal_period=40
 
 # +++ exp. info
 da_method='KF'
@@ -40,7 +40,7 @@ localization_mode=0
 
 # +++ making obs. info
 obs_xintv=1
-obs_tintv=5
+obs_tintv=1
 
 # +++ output info
 out_boolen='true' # write putput
