@@ -13,6 +13,7 @@ import pandas as pd
 import seaborn as sns
 import statics_tool
 from tqdm import tqdm
+import math
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.colors import BoundaryNorm
@@ -236,8 +237,70 @@ class lorenz96_errcov:
     plt.savefig('./figure/errcov_matrix_{:03d}step.png'.format(time))
     plt.close('all')
 
-  def cross_corr_draw(self) -> None:
-    pass
+  def cross_corr_draw(self, cross_corr, cross_cov, y_gauss, *, nx=40, time=1) -> None:
+    fig, ax = plt.subplots(figsize=(8, 5))
+    _cor = ax
+    _cov = ax.twinx()
+    x_coord = np.arange(nx)
+
+    _cor.scatter(x_coord, cross_corr, marker='*', color='y')
+    lns1 = _cor.plot(x_coord, cross_corr, ls='-', color='r', label='CORRELATION')
+    lns2 = _cov.plot(x_coord, cross_cov, ls='-', color='k', lw=2, alpha= 0.5, label='COVARIANCE')
+    lns3 = _cor.plot(x_coord, y_gauss, ls=':', color='b', alpha=0.5, label='GAUSSIAN FUNCTION')
+    
+    _cor.set_xlabel('X COORDINATE')
+    _cor.set_ylabel('CORRELATION')
+    _cov.set_ylabel('COVARIANCE')
+    
+    _cor.set_ylim(-1.0,1.0)
+    _cov.set_ylim(-0.3,0.3)
+
+    _cor.set_title('LORENZ(1996) CROSS CORRELATION {:d} step.'.format(time), loc='left')
+    # added these three lines
+    lns = lns1+lns2+lns3
+    labs = [l.get_label() for l in lns]
+    _cor.legend(lns, labs, loc=0)
+    plt.show()  
+
+  def making_cross_corr(self, anl_errcov:np.ndarray, obs_timeshape:int, *, target_grd=19) -> list:
+    """相関係数の断面図的なlistの作成??
+    Args:
+        anl_errcov (np.ndarray): 誤差共分散データ(時系列含む)
+        obs_timeshape (int): obs_timeshape (int): 観測データが持つタイムステップ数(0ステップは持っていない)
+        target_grd (int, optional): クロス断面図を作るにあたる相関をとるターゲットのグリッド。Defaults to 20.
+    Returns:
+        list: target_grdとの各地点での相関リスト(時系列含む)
+    """
+    cross_corr = [[]*i for i in range(obs_timeshape)]
+    gaussian_list = [[]*i for i in range(obs_timeshape)]
+
+    for _it in range(obs_timeshape):
+      diag = np.diag(anl_errcov[_it])
+      errcov_line = anl_errcov[_it, target_grd]
+    
+      for _ix in range(nx):
+        corr = errcov_line[_ix]/(math.sqrt(diag[_ix])*math.sqrt(diag[target_grd]))
+        cross_corr[_it].append(corr)
+    
+      gaussian_list[_it] = self._compare_gaussian(cross_corr[_it])
+    return cross_corr, gaussian_list
+
+  def _compare_gaussian(self, cross_corr:list, *, nx=40, target_grd=19) -> list:
+    gaussian_list = []
+    std_list = np.arange(0.05, 2.0, 0.05)
+    x_coord = np.arange(nx)
+    for _ in std_list:
+      y_gauss = _gaussian_func(x_coord, amp=1.0, ave=target_grd, std=_)
+      gaussian_list.append(y_gauss)
+    
+    rmse_list = []
+    for _ in gaussian_list:
+      rmse_list.append(_accuracy_rmse_func(cross_corr, _))
+    
+    least_case = np.argmin(rmse_list)
+    least_rmse = min(rmse_list)
+    return gaussian_list[least_case]
+
 
 """ private package """
 
@@ -311,8 +374,8 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   lorenz96_score = lorenz96_score()
   
-  kf_anl_score = _csv2list(path_kf).reshape(timeshape, nx)
-  kf_anlinc_score = _csv2list(path_kf_anlinc).reshape(obs_timeshape, nx)
+  #kf_anl_score = _csv2list(path_kf).reshape(timeshape, nx)
+  #kf_anlinc_score = _csv2list(path_kf_anlinc).reshape(obs_timeshape, nx)
 
   #---------------------------------------------------------- 
   # +++ Trajectory & Hovmeller 
@@ -336,12 +399,19 @@ if __name__ == "__main__":
   lorenz96_errcov = lorenz96_errcov()
   kf_anl_errcov = _csv2list(path_kf_errcov).reshape(obs_timeshape,nx,nx)
 
-  for _it in tqdm(range(obs_timeshape)):
-    lorenz96_errcov.errcov_draw(kf_anl_errcov[_it], time=_it)
+  #for _it in tqdm(range(obs_timeshape)):
+    #lorenz96_errcov.errcov_draw(kf_anl_errcov[_it], time=_it)
+    #lorenz96_errcov.errcov_draw(enkf_anl_errcov[_it], state='Pf', time=_it)
 
   #---------------------------------------------------------- 
-  # +++ Prepare gaussian distribution 
+  # +++ Cross correlation list
   #---------------------------------------------------------- 
+  cross_corr_list, gaussian_list = lorenz96_errcov.making_cross_corr(kf_anl_errcov, obs_timeshape)
+  for _it in tqdm(range(obs_timeshape)):
+    cross_cov_list = kf_anl_errcov[_it, 19]
+    lorenz96_errcov.cross_corr_draw(cross_corr_list[_it], cross_cov_list, gaussian_list[_it], time=_it+1)
+
+
 
 
 
