@@ -14,7 +14,7 @@ echo ${today}
 #----------------------------------------------------------------------
 nt_asm=2500
 nt_prd=2500
-obs_interval=1
+obs_interval=2
 da_method='EnKF' #'KF' or 'EnKF'
 intg_method='Runge-Kutta' #'Euler' or 'Runge-Kutta'
 mem=1

@@ -7,7 +7,7 @@ Created on 2020.4.25
 import os, sys
 sys.path.append(os.path.join(os.path.dirname(__file__), './lib'))
 
-import cal_statics
+import statics_tool
 import itertools
 import numpy as np
 import pandas as pd
@@ -77,8 +77,6 @@ class lorenz63_score:
       index_list.append(Dataframe[i_index].tolist())
     return index_list
 
-
-
   def lorenz_3ddraw(self, timestep:int) -> int:
     """土台データリストの3D描画
 
@@ -94,12 +92,12 @@ class lorenz63_score:
     ax.set_xlabel("X Axis"); ax.set_ylabel("Y Axis");  ax.set_zlabel("Z Axis")
     ax.plot(self.true_list[0], self.true_list[1], self.true_list[2], lw=0.5)
 
-    ax.scatter(self.true_list[0][timestep], self.true_list[1][timestep], self.true_list[2][timestep], marker='o', color='b',label='True', alpha=0.5)
-    ax.scatter(self.sim_list[0][timestep], self.sim_list[1][timestep], self.sim_list[2][timestep], marker='o', color='r', label='Sim.', alpha=0.5)
-    ax.scatter(self.da_list[0][timestep], self.da_list[1][timestep], self.da_list[2][timestep], marker='o', color='g', label='Data assim.', alpha=0.5)
+    ax.scatter(self.true_list[0][timestep], self.true_list[1][timestep], self.true_list[2][timestep], marker='o', color='r',label='TRUE', alpha=0.5)
+    ax.scatter(self.sim_list[0][timestep], self.sim_list[1][timestep], self.sim_list[2][timestep], marker='o', color='b', label='SIMULATION', alpha=0.8)
+    ax.scatter(self.da_list[0][timestep], self.da_list[1][timestep], self.da_list[2][timestep], marker='*', color='y', label='DATA ASSIM EKF', alpha=1.0, edgecolor='k')
 
     time = (timestep+1)*0.01
-    ax.set_title('Lorenz(1963) - {:.2f} sec.'.format(time), loc='left')
+    ax.set_title('LORENZ(1963) - {:.2f} sec.'.format(time), loc='right')
     plt.legend()
     plt.savefig('./figure/Lorenz_xyz_{:0>5}step.png'.format(timestep))
     plt.close('all')
@@ -107,7 +105,7 @@ class lorenz63_score:
     return timestep
 
   def lorenz_rmse_draw(self, rmse_sim:list, rmse_obs:list, rmse_kf:list,
-                             #rmse_da_1:list, rmse_da_2:list, rmse_da_3:list, rmse_da_4:list, rmse_da_5:list
+                             rmse_da_1:list, rmse_da_2:list, rmse_da_3:list, rmse_da_4:list, rmse_da_5:list
                              ) -> None:
     """RMSEの描画
 
@@ -123,25 +121,25 @@ class lorenz63_score:
     ax1 = fig.subplots()
     
     sns.set_style('whitegrid')
-    ax1.plot(self.time_list, rmse_sim, ls="--", color='b', label='SIM')
-    ax1.plot(self.time_list, rmse_kf, ls="--", color='r', label='KF')
+    ax1.plot(self.time_list, rmse_sim, alpha=0.5, ls=":", color='b', label='SIMULATION')
+    ax1.plot(self.time_list, rmse_kf, ls="-", color='r', label='DATA ASSIM EKF')
     
-    #ax1.plot(self.time_list, rmse_da_1, ls=":", alpha=0.3, label='EnKF 3mem')
-    #ax1.plot(self.time_list, rmse_da_2, ls="--", label='EnKF 10mem')
-    #ax1.plot(self.time_list, rmse_da_3, ls="--", label='EnKF 100mem')
-    #ax1.plot(self.time_list, rmse_da_4, ls="--", label='EnKF 1000mem')
-    #ax1.plot(self.time_list, rmse_da_5, ls="--", label='EnKF 5000mem')
+    ax1.plot(self.time_list, rmse_da_1, ls="--", label='DATA ASSIM EnKF=2m@PO')
+    ax1.plot(self.time_list, rmse_da_2, ls="--", label='DATA ASSIM EnKF=2m@SRF')
+    ax1.plot(self.time_list, rmse_da_3, ls="--", label='DATA ASSIM EnKF=5m@SRF')
+    ax1.plot(self.time_list, rmse_da_4, ls="--", label='DATA ASSIM EnKF=15m@SRF')
+    ax1.plot(self.time_list, rmse_da_5, ls="--", label='DATA ASSIM EnKF=50m@SRF')
 
-    ax1.scatter(self.obs_time_list, rmse_obs, marker='*', color='y', s=35, alpha=0.5, edgecolor='k', label='Obs.')
+    ax1.scatter(self.obs_time_list, rmse_obs, marker='*', color='y', s=25, alpha=0.5, edgecolor='k', label='Obs.')
 
     ax1.set_xlabel('sec.')
     ax1.set_ylabel('RMSE')
-    ax1.set_xlim(0, 1)
+    ax1.set_xlim(0, 1.5)
     ax1.set_ylim(0, 10)
-    ax1.set_title('Lorenz(1963) RMSE', loc='left')
+    ax1.set_title('LORENZ(1963) RMSE', loc='left')
 
     plt.grid()
-    plt.legend()
+    plt.legend(bbox_to_anchor=(1, 1), loc='upper right', borderaxespad=1)
     plt.show()
 
 class lorenz63_errcov:
@@ -149,7 +147,7 @@ class lorenz63_errcov:
   一つのデータリストを誤差共分散行列の扱いを行うクラスメソッド
   """
   def __init__(self, path:str, *, matrix_size:int=3):
-    self.err_data = self._read_errcov(path)
+    self.errcov = self._read_errcov(path)
     
   def _read_errcov(self, path:str) -> np.ndarray:
     return np.genfromtxt(path, delimiter=",")
@@ -157,21 +155,21 @@ class lorenz63_errcov:
   def trace_errcov(self, matrix) -> np.ndarray:
     return np.trace(matrix)
 
-  def error_heatmap(self, err_data:np.ndarray, timestep:int) -> None:
-    ax = plt.subplots()
+  def error_heatmap(self, errcov:np.ndarray, timestep:int) -> None:
+    fig, ax = plt.subplots()
     cmap = sns.diverging_palette(220, 10, as_cmap=True)
     sns.set(style='white')
     sns.heatmap(
-      data=err_data, cmap=cmap, annot=True, fmt='.6f',
-      vmax=1.0, vmin=-1.0, center=0,
-      square=True, linewidths=.5, 
+      data=errcov, cmap=cmap, annot=True, fmt='.6f',
+      vmax=0.25, vmin=-0.25, center=0,
+      square=True , linewidths=.5, 
       cbar_kws={"shrink": .5, "extend": 'both'},
       xticklabels=['x','y','z'], yticklabels=['x','y','z']
     )
 
     time = timestep*0.01
-    ax.set_title('Back ground Error Cov. - {:.1f} sec.'.format(time), loc='center')
-    plt.savefig('./figure/error_heatmap_{:.1f}sec.png'.format(time))
+    ax.set_title('LORENZ(1963) Error Cov. - {:.2f} sec.'.format(time), loc='left')
+    plt.savefig('./figure/error_heatmap_{:.2f}sec.png'.format(time))
     plt.close('all')
 
 """ private package """
@@ -195,7 +193,7 @@ def _accuracy_rmse_func(true_list:list, asses_list:list, num_elem:int) -> list:
     for i_elem in range(num_elem):
       rmse_true_list.append(true_list[i_elem][i_num])
       rmse_asses_list.append(asses_list[i_elem][i_num])
-    rmse = cal_statics.rmse(rmse_true_list, rmse_asses_list)
+    rmse = statics_tool.rmse(rmse_true_list, rmse_asses_list)
     rmse_list.append(rmse)
   
   return rmse_list
@@ -237,13 +235,14 @@ if __name__ == "__main__":
   path_enkf_5m_SRF, path_enkf_5m_errcov_SRF = _enkf_pathset(5,1)
   path_enkf_15m_SRF, path_enkf_15m_errcov_SRF = _enkf_pathset(15,1)
   path_enkf_50m_SRF, path_enkf_50m_errcov_SRF = _enkf_pathset(50,1)
-
+  
   #---------------------------------------------------------- 
   # +++ class set
   # >>  Args (1) lorenz63 result. score
   # >>       (2) Pf (rediction err covariance matrix)
   #---------------------------------------------------------- 
   score_kf, errcov_kf = lorenz63_score(path_kf), lorenz63_errcov(path_kf_errcov)
+
   score_enkf_2m_PO, errcov_enkf_2m_PO = lorenz63_score(path_enkf_2m_PO), lorenz63_errcov(path_enkf_2m_errcov_PO)
   score_enkf_2m_SRF, errcov_enkf_2m_SRF = lorenz63_score(path_enkf_2m_SRF), lorenz63_errcov(path_enkf_2m_errcov_SRF)
   
@@ -256,18 +255,27 @@ if __name__ == "__main__":
   # >>  (1) RMSE draw
   # >>  (2) 3D draw
   #---------------------------------------------------------- 
-
-  """ (1) RMSE draw """
+  """ (1) RMSE draw 
   num_sim_elem, num_obs_elem = 3, 3
   rmse_sim = _accuracy_rmse_func(score_kf.true_list, score_kf.sim_list, num_sim_elem)
-  rmse_kf  = _accuracy_rmse_func(score_kf.true_list, score_kf.da_list, num_sim_elem)
   rmse_obs = _accuracy_rmse_func(score_kf.obs_true_list, score_kf.obs_list, num_obs_elem)
 
-  score_kf.lorenz_rmse_draw(rmse_sim, rmse_obs, rmse_kf,)
+  rmse_kf  = _accuracy_rmse_func(score_kf.true_list, score_kf.da_list, num_sim_elem)
 
+  # for EnKF
+  rmse_enkf_2m_PO  = _accuracy_rmse_func(score_kf.true_list, score_enkf_2m_PO.da_list, num_sim_elem)
+  rmse_enkf_2m_SRF  = _accuracy_rmse_func(score_kf.true_list, score_enkf_2m_SRF.da_list, num_sim_elem)
+  rmse_enkf_5m_SRF  = _accuracy_rmse_func(score_kf.true_list, score_enkf_5m_SRF.da_list, num_sim_elem)
+  rmse_enkf_15m_SRF  = _accuracy_rmse_func(score_kf.true_list, score_enkf_15m_SRF.da_list, num_sim_elem)
+  rmse_enkf_50m_SRF  = _accuracy_rmse_func(score_kf.true_list, score_enkf_50m_SRF.da_list, num_sim_elem)
+
+  score_kf.lorenz_rmse_draw(rmse_sim, rmse_obs, rmse_kf,
+  rmse_enkf_2m_PO, rmse_enkf_2m_SRF, rmse_enkf_5m_SRF, rmse_enkf_15m_SRF, rmse_enkf_50m_SRF
+  )
   sys.exit()
+  """
 
-  """ (2) 3D draw @using Pool(parallel method) """
+  """ (2) 3D draw @using Pool(parallel method) 
   laststep = 2500
   viewstep = int(laststep/3)+1
   time_before = time.time()
@@ -279,3 +287,18 @@ if __name__ == "__main__":
   time_after = time.time()
   elapsed_time = time_after - time_before
   print(f'time: {elapsed_time} sec.')
+  """
+
+  """ (3) draw error covariance matrix """
+  time_scale, filter_stop_step = 2500, 100
+  
+  #mtx = lorenz63_errcov(path_kf_errcov)
+  #mtx = lorenz63_errcov(path_enkf_2m_errcov_PO)
+  mtx = lorenz63_errcov(path_enkf_2m_errcov_SRF)
+  #mtx = lorenz63_errcov(path_enkf_50m_errcov_SRF)
+
+  errcov_mtx = mtx.errcov.reshape(time_scale,3,3)
+  for _it in tqdm(range(filter_stop_step)):
+    mtx.error_heatmap(errcov_mtx[_it], _it)
+
+  print('Normal END')

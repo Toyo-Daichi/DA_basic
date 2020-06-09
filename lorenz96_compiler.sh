@@ -30,7 +30,7 @@ intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
 if [ ${da_method} = 'EnKF' ]; then 
-  mem=20
+  mem=1000
   enkf_method='SRF' # 'PO' or "SRF"
 fi
 
@@ -67,6 +67,12 @@ if [ ${da_method} = 'EnKF' ]; then
   output_anlinc_file=${output_dir}/'normal_'${da_method}${mem}'m_anlinc_'${nx}'ndim.csv'
   output_errcov_file=${output_dir}/'normal_'${da_method}${mem}'m_errcov_'${nx}'ndim.csv'
   exp_log=./log/${today}_${prg}_${da_method}_${enkf_method}.log
+  if [ ${localization_mode} == 1 ]; then
+  output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc.csv'
+  output_anlinc_file=${output_dir}/'normal_'${da_method}${mem}'m_anlinc_'${nx}'ndim_loc.csv'
+  output_errcov_file=${output_dir}/'normal_'${da_method}${mem}'m_errcov_'${nx}'ndim_loc.csv'
+  exp_log=./log/${today}_${prg}_${da_method}_${enkf_method}_loc.log
+  fi
 fi
 
 #----------------------------------------------------------------------
