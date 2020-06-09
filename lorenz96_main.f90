@@ -233,7 +233,8 @@ program lorenz96_main
     write(6,*) '-------------------------------------------------------'
     write(6,*) '+++ Data assimilation exp. start '
     write(6,*) ' >> Data assimilation method  :: ', da_method
-    
+    if ( trim(da_method) is 'EnKF' ) write(6,*) ' >> Localization is ', localization_mode
+
     ! making identity matrix
     Pf = 0.d0; Pa = 0.d0; I = 0.d0
     Kg = 0.d0;  H = 0.d0; R = 0.d0

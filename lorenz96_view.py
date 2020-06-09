@@ -298,7 +298,7 @@ class lorenz96_errcov:
       rmse_list.append(_accuracy_rmse_func(cross_corr, _))
     
     least_case = np.argmin(rmse_list)
-    least_rmse = min(rmse_list)
+    #least_rmse = min(rmse_list)
     return gaussian_list[least_case]
 
 
@@ -397,7 +397,7 @@ if __name__ == "__main__":
   #  >> & anl_data set
   #---------------------------------------------------------- 
   lorenz96_errcov = lorenz96_errcov()
-  kf_anl_errcov = _csv2list(path_kf_errcov).reshape(obs_timeshape,nx,nx)
+  #kf_anl_errcov = _csv2list(path_kf_errcov).reshape(obs_timeshape,nx,nx)
 
   #for _it in tqdm(range(obs_timeshape)):
     #lorenz96_errcov.errcov_draw(kf_anl_errcov[_it], time=_it)
@@ -406,10 +406,12 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ Cross correlation list
   #---------------------------------------------------------- 
-  cross_corr_list, gaussian_list = lorenz96_errcov.making_cross_corr(kf_anl_errcov, obs_timeshape)
-  for _it in tqdm(range(obs_timeshape)):
-    cross_cov_list = kf_anl_errcov[_it, 19]
-    lorenz96_errcov.cross_corr_draw(cross_corr_list[_it], cross_cov_list, gaussian_list[_it], time=_it+1)
+  #cross_corr_list, gaussian_list = lorenz96_errcov.making_cross_corr(kf_anl_errcov, obs_timeshape)
+  #for _it in tqdm(range(obs_timeshape)):
+  #  cross_cov_list = kf_anl_errcov[_it, 19]
+  #  lorenz96_errcov.cross_corr_draw(cross_corr_list[_it], cross_cov_list, gaussian_list[_it], time=_it+1)
+
+  print('Normal END')
 
 
 
