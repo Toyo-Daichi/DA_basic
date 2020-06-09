@@ -25,7 +25,7 @@ spinup_period=365
 normal_period=40
 
 # +++ exp. info
-da_method='KF'
+da_method='EnKF'
 intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
@@ -36,7 +36,7 @@ fi
 
 # +++ adaptive inflation & localization
 alpha=0.0d0
-localization_mode=0
+localization_mode=1
 
 # +++ making obs. info
 obs_xintv=1

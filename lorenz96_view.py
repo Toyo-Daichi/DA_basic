@@ -176,9 +176,12 @@ class lorenz96_score:
     _draw.plot(time_list[0:time_length], rmse_anl_list[0:time_length], ls="-", color='r', label='DATA ASSIM EKF')
 
     # for added other kind rmse_anl_list
-    _draw.plot(time_list[0:time_length], rmse_v1_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=20m@loc')
-    _draw.plot(time_list[0:time_length], rmse_v2_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=40m@loc')
-    _draw.plot(time_list[0:time_length], rmse_v3_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=100m@loc')
+    _draw.plot(time_list[0:time_length], rmse_v1_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=20m')
+    #_draw.plot(time_list[0:time_length], rmse_v1_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=20m@loc')
+    _draw.plot(time_list[0:time_length], rmse_v2_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=40m')
+    #_draw.plot(time_list[0:time_length], rmse_v2_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=40m@loc')
+    _draw.plot(time_list[0:time_length], rmse_v3_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=100m')
+    #_draw.plot(time_list[0:time_length], rmse_v3_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=100m@loc')
     _draw.plot(time_list[0:time_length], rmse_v4_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=500m')
     _draw.plot(time_list[0:time_length], rmse_v5_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=1000m')
 
@@ -241,7 +244,7 @@ class lorenz96_errcov:
     sns.set(style='white')
     sns.heatmap(
       data=errcov_mtx, cmap=cmap, 
-      vmax=0.05, vmin=-0.05, center=0,
+      vmax=0.1, vmin=-0.1, center=0,
       square=True, linewidths=.5, 
       cbar_kws={"shrink": .5, "extend": 'both'},
       xticklabels=2, yticklabels=2
@@ -370,15 +373,15 @@ if __name__ == "__main__":
   path_kf_anlinc = outdir + 'normal_KF_anlinc_' + str(nx) + 'ndim.csv'
   
   """Ensemble KF data set (basic is EnSRF.) """
-  mems, loc = 20, '_loc'
+  mems, loc = 20, ''
   v1_path_enkf = outdir + 'normal_EnKF' + str(mems) + 'm_anl_score_' + str(nx) + 'ndim' + loc +'.csv'
   v1_path_enkf_errcov = outdir + 'normal_EnKF' + str(mems) + 'm_errcov_' + str(nx) + 'ndim' + loc +'.csv'
   v1_path_enkf_anlinc = outdir + 'normal_EnKF' + str(mems) + 'm_anlinc_' + str(nx) + 'ndim' + loc +'.csv'
-  mems, loc = 40, '_loc'
+  mems, loc = 40, ''
   v2_path_enkf = outdir + 'normal_EnKF' + str(mems) + 'm_anl_score_' + str(nx) + 'ndim' + loc +'.csv'
   v2_path_enkf_errcov = outdir + 'normal_EnKF' + str(mems) + 'm_errcov_' + str(nx) + 'ndim' + loc +'.csv'
   v2_path_enkf_anlinc = outdir + 'normal_EnKF' + str(mems) + 'm_anlinc_' + str(nx) + 'ndim' + loc +'.csv'
-  mems, loc = 100, '_loc'
+  mems, loc = 100, ''
   v3_path_enkf = outdir + 'normal_EnKF' + str(mems) + 'm_anl_score_' + str(nx) + 'ndim' + loc +'.csv'
   v3_path_enkf_errcov = outdir + 'normal_EnKF' + str(mems) + 'm_errcov_' + str(nx) + 'ndim' + loc +'.csv'
   v3_path_enkf_anlinc = outdir + 'normal_EnKF' + str(mems) + 'm_anlinc_' + str(nx) + 'ndim' + loc +'.csv'
@@ -403,6 +406,7 @@ if __name__ == "__main__":
   #  (1) lorenz96_score
   #  >> & anl_data set
   #---------------------------------------------------------- 
+  """
   lorenz96_score = lorenz96_score()
   
   kf_anl_score = _csv2list(path_kf).reshape(timeshape, nx)
@@ -422,6 +426,7 @@ if __name__ == "__main__":
 
   v5_enkf_anl_score = _csv2list(v5_path_enkf).reshape(timeshape, nx)
   v5_enkf_anlinc_score = _csv2list(v5_path_enkf_anlinc).reshape(obs_timeshape, nx)
+  """
 
   #---------------------------------------------------------- 
   # +++ Trajectory & Hovmeller 
@@ -432,6 +437,7 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ RMSE 
   #---------------------------------------------------------- 
+  """
   rmse_anl_list,rmse_sim_list,rmse_obs_list = \
   lorenz96_score.making_rmse_snap(true_score, sim_score, kf_anl_score, obs_score, timeshape, obs_timeshape, obs_xintv)
   rmse_v1_enkf_anl_list, _, _ = \
@@ -444,23 +450,34 @@ if __name__ == "__main__":
   lorenz96_score.making_rmse_snap(true_score, sim_score, v4_enkf_anl_score, obs_score, timeshape, obs_timeshape, obs_xintv)
   rmse_v5_enkf_anl_list, _, _ = \
   lorenz96_score.making_rmse_snap(true_score, sim_score, v5_enkf_anl_score, obs_score, timeshape, obs_timeshape, obs_xintv)
+  """
 
-  lorenz96_score.rmse_draw(rmse_sim_list, rmse_obs_list, rmse_anl_list,
-  rmse_v1_enkf_anl_list, rmse_v2_enkf_anl_list, rmse_v3_enkf_anl_list, rmse_v4_enkf_anl_list, rmse_v5_enkf_anl_list,
-  time_length=100
-  )
+  #lorenz96_score.rmse_draw(rmse_sim_list, rmse_obs_list, rmse_anl_list,
+  #rmse_v1_enkf_anl_list, rmse_v2_enkf_anl_list, rmse_v3_enkf_anl_list, rmse_v4_enkf_anl_list, rmse_v5_enkf_anl_list,
+  #time_length=100
+  #)
 
   #---------------------------------------------------------- 
   # +++ class set
   #  (2) lorenz96_errcov
   #  >> & anl_data set
   #---------------------------------------------------------- 
-  #lorenz96_errcov = lorenz96_errcov()
-  #kf_anl_errcov = _csv2list(path_kf_errcov).reshape(obs_timeshape,nx,nx)
+  lorenz96_errcov = lorenz96_errcov()
+  kf_anl_errcov = _csv2list(path_kf_errcov).reshape(obs_timeshape,nx,nx)
+  v1_enkf_anl_errcov = _csv2list(v1_path_enkf_errcov).reshape(obs_timeshape,nx,nx)
+  v2_enkf_anl_errcov = _csv2list(v2_path_enkf_errcov).reshape(obs_timeshape,nx,nx)
+  v3_enkf_anl_errcov = _csv2list(v3_path_enkf_errcov).reshape(obs_timeshape,nx,nx)
+  v4_enkf_anl_errcov = _csv2list(v4_path_enkf_errcov).reshape(obs_timeshape,nx,nx)
+  v5_enkf_anl_errcov = _csv2list(v5_path_enkf_errcov).reshape(obs_timeshape,nx,nx)
 
-  #for _it in tqdm(range(obs_timeshape)):
+  filter_stop_step = 100
+  for _it in tqdm(range(100)):
     #lorenz96_errcov.errcov_draw(kf_anl_errcov[_it], time=_it)
-    #lorenz96_errcov.errcov_draw(enkf_anl_errcov[_it], state='Pf', time=_it)
+    lorenz96_errcov.errcov_draw(v1_enkf_anl_errcov[_it], state='Pf', time=_it)
+    #lorenz96_errcov.errcov_draw(v2_enkf_anl_errcov[_it], state='Pf', time=_it)
+    #lorenz96_errcov.errcov_draw(v3_enkf_anl_errcov[_it], state='Pf', time=_it)
+    #lorenz96_errcov.errcov_draw(v4_enkf_anl_errcov[_it], state='Pf', time=_it)
+    #lorenz96_errcov.errcov_draw(v5_enkf_anl_errcov[_it], state='Pf', time=_it)
 
   #---------------------------------------------------------- 
   # +++ Cross correlation list
