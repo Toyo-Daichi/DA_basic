@@ -18,7 +18,8 @@ contains
   !
   ! --- Sec.1 lorenz96 calculation
   !----------------------------------------------------------------------
-  ! +++ Lorenz96 equation
+! +++ Lorenz96 equation
+!----------------------------------------------------------------------
   
   subroutine Lorenz96_core(x_in, x_out)
     implicit none
@@ -42,6 +43,7 @@ contains
 
   !----------------------------------------------------------------------
   ! +++ Runge Kutta method
+  !----------------------------------------------------------------------
 
   subroutine ting_rk4(kt, x_in, x_out)
     implicit none
@@ -119,8 +121,38 @@ contains
     return 
   end subroutine tinteg_rk4_ptbmtx
 
+
   !======================================================================
   ! +++ Useful tools
+  !----------------------------------------------------------------------
+  ! >> Localization
+  !    Schur Product
+  !-----------------------------------------------------------------------
+  SUBROUTINE enkf_schur(scale,dist,factor)
+    IMPLICIT NONE
+    REAL(r_size),INTENT(IN)  :: scale
+    REAL(r_size),INTENT(IN)  :: dist
+    REAL(r_size),INTENT(OUT) :: factor
+    REAL(r_size) :: a,b
+  
+    a = scale * SQRT(10.0d0/3.0d0)
+    b = dist / a
+
+    IF( dist <= a ) THEN
+      factor = 1.0d0 -0.25d0*b**5 + 0.5d0*b**4 + 5.0d0/8.0d0*b**3 &
+        & - 5.0d0/3.0d0*b**2
+    ELSE IF( dist <= 2*a ) THEN
+      factor = 1.0d0/12.0d0*b**5 - 0.5d0*b**4 + 5.0d0/8.0d0*b**3 &
+        & + 5.0d0/3.0d0*b**2 - 5.0d0*b + 4.0d0 - 2.0d0/3.0d0/b
+    ELSE IF( a == 0.0d0 ) THEN
+      factor = 1.0d0
+    ELSE
+      factor = 0.0d0
+    END IF
+  
+    RETURN
+  END SUBROUTINE enkf_schur
+
   subroutine del_spaces(space)
     implicit none
     character(*), intent(inout) :: space

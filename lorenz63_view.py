@@ -176,7 +176,7 @@ class lorenz63_errcov:
 
 """ private package """
 
-def accuracy_rmse_func(true_list:list, asses_list:list, num_elem:int) -> list:
+def _accuracy_rmse_func(true_list:list, asses_list:list, num_elem:int) -> list:
   """RMSEリストの作成
   Args:
       true_list(list): 今回の実験の真値
@@ -259,9 +259,9 @@ if __name__ == "__main__":
 
   """ (1) RMSE draw """
   num_sim_elem, num_obs_elem = 3, 3
-  rmse_sim = accuracy_rmse_func(score_kf.true_list, score_kf.sim_list, num_sim_elem)
-  rmse_kf  = accuracy_rmse_func(score_kf.true_list, score_kf.da_list, num_sim_elem)
-  rmse_obs = accuracy_rmse_func(score_kf.obs_true_list, score_kf.obs_list, num_obs_elem)
+  rmse_sim = _accuracy_rmse_func(score_kf.true_list, score_kf.sim_list, num_sim_elem)
+  rmse_kf  = _accuracy_rmse_func(score_kf.true_list, score_kf.da_list, num_sim_elem)
+  rmse_obs = _accuracy_rmse_func(score_kf.obs_true_list, score_kf.obs_list, num_obs_elem)
 
   score_kf.lorenz_rmse_draw(rmse_sim, rmse_obs, rmse_kf,)
 
