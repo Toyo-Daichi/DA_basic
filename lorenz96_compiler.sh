@@ -4,15 +4,16 @@
 set -ex
 CDIR=`pwd`
 tool='normal' #spinup or normal
-ts_check='true' # if spinup output is 'true' or 'sim'.
+ts_check='sim' # if spinup output is 'true' or 'sim'.
 prg=lorenz96_${tool}_maintools
 today=$(date "+%Y%m%d%H%M")
 rm -rf *.mod ${prg}
 
+echo ${today}
+
 #----------------------------------------------------------------------
 # +++ Set intial setting
 #----------------------------------------------------------------------
-
 # +++ model dimension
 nx=40
 dt=0.05d0
@@ -23,17 +24,19 @@ oneday=0.2d0
 spinup_period=365
 normal_period=40
 
-da_method='EnKF'
+# +++ exp. info
+da_method='KF'
 intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
 if [ ${da_method} = 'EnKF' ]; then 
-  mem=50
+  mem=20
   enkf_method='SRF' # 'PO' or "SRF"
 fi
 
-# +++ adaptive inflation
+# +++ adaptive inflation & localization
 alpha=0.0d0
+localization_mode=0
 
 # +++ making obs. info
 obs_xintv=1
@@ -42,18 +45,30 @@ obs_tintv=1
 # +++ output info
 out_boolen='true' # write putput
 da_boolen='true'
-outputname='lorenz96'
-initial_true_file='./output/'${outputname}/'spinup_true_initial_'${nx}'n.csv'
-initial_sim_file='./output/'${outputname}/'spinup_sim_initial_'${nx}'n.csv'
-output_true_file='./output/'${outputname}/'normal_true_score_'${nx}'n.csv'
-output_sim_file='./output/'${outputname}/'normal_sim_score_'${nx}'n.csv'
-output_anl_file='./output/'${outputname}/'normal_'${da_method}'_anl_score_'${nx}'n.csv'
-output_errcov_file='./output/'${outputname}/'Error_matrix_'${da_method}'_'${nx}'n.csv'
+output_dir='./output/lorenz96/'
+
+# >> (1) spinup file set
+initial_true_file=${output_dir}/'spinup_true_initial_'${nx}'ndim.csv'
+initial_sim_file=${output_dir}/'spinup_sim_initial_'${nx}'ndim.csv'
+
+# >> (2) experiment file set
+# *** The three file names below do not change in any way.
+output_true_file=${output_dir}/'normal_true_score_'${nx}'ndim.csv'
+output_sim_file=${output_dir}/'normal_sim_score_'${nx}'ndim.csv'
+output_obs_file=${output_dir}/'normal_obs_score_'${nx}'ndim.csv'
+#
+output_anl_file=${output_dir}/'normal_'${da_method}'_anl_score_'${nx}'ndim.csv'
+output_anlinc_file=${output_dir}/'normal_'${da_method}'_anlinc_'${nx}'ndim.csv'
+output_errcov_file=${output_dir}/'normal_'${da_method}'_errcov_'${nx}'ndim.csv'
+exp_log=./log/${today}_${prg}_${da_method}.log
 
 if [ ${da_method} = 'EnKF' ]; then 
-  output_anl_file='./output/'${outputname}/${tool}'_'${da_method}${mem}'m_anl_score_'${nx}'n.csv'
+  output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim.csv'
+  output_anlinc_file=${output_dir}/'normal_'${da_method}${mem}'m_anlinc_'${nx}'ndim.csv'
+  output_errcov_file=${output_dir}/'normal_'${da_method}${mem}'m_errcov_'${nx}'ndim.csv'
+  exp_log=./log/${today}_${prg}_${da_method}_${enkf_method}.log
 fi
-output_obs_file='./output/'${outputname}/${tool}'_obs_score_'${nx}'.csv'
+
 #----------------------------------------------------------------------
 # +++ Run exp.
 #----------------------------------------------------------------------
@@ -68,7 +83,7 @@ gfortran -fbounds-check  \
   -o ${prg} -I/usr/local/include -lm -lblas -llapack \
   -w # error message Suppression
 
-./${prg} > ./log/${today}_${prg}_${da_method}.log << EOF
+./${prg} > ${exp_log} << EOF
   &set_parm
     nx = ${nx},
     dt = ${dt},
@@ -82,13 +97,13 @@ gfortran -fbounds-check  \
   /
   &set_da_exp
     da_veach  = .${da_boolen}.,
-    mems      = ${mem},
     da_method = '${da_method}',
     alpha = ${alpha}
   /
   &enkf_setting
     mems = ${mem},
     enkf_method = '${enkf_method}'
+    localization_mode = ${localization_mode}
   /
   &set_period
     spinup_period = ${spinup_period},
@@ -98,19 +113,22 @@ gfortran -fbounds-check  \
     obs_xintv = ${obs_xintv},
     obs_tintv = ${obs_tintv}
   /
-  &output
+  &spinup_output
     initial_true_file  = '${initial_true_file}',
-    initial_sim_file   = '${initial_sim_file}',
+    initial_sim_file   = '${initial_sim_file}'
+  /
+  &exp_output
     output_true_file   = '${output_true_file}',
     output_anl_file    = '${output_anl_file}',
     output_sim_file    = '${output_sim_file}',
     output_obs_file    = '${output_obs_file}', 
     output_errcov_file = '${output_errcov_file}', 
+    output_anlinc_file = '${output_anlinc_file}',
     opt_veach = .${out_boolen}.
   /
 EOF
 
-rm -rf *.mod *_mod.f90 ${prg}
+rm -rf *.mod *_mod.f* ${prg}
 echo 'Normal END'
 
 exit

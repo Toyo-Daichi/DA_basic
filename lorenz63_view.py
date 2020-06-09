@@ -36,33 +36,33 @@ class lorenz63_score:
       self.obs_list(list): 
       self.obs_time_list(list): 観測値様の時間リスト
       self.obs_true_list(list): 観測値様の時間に相当するtrue_listの値
-    """
-    print('Call ..... Constract of lorenz63_score')
+    """ 
+    print('Call ..... Constract of lorenz63_score' + path)
     
     # +++ common list
-    self.df  = pd.read_csv(path, sep=',')
+    self.df  = pd.read_csv(path, sep=',', comment='#', skiprows=2)
 
-    self.time_list = self.df2_list(self.df, ' timestep')[0]
-    self.true_list = self.df2_list(self.df, ' x_true', ' y_true', ' z_true')
+    self.time_list = self._df2list(self.df, ' timestep')[0]
+    self.true_list = self._df2list(self.df, ' x_true', ' y_true', ' z_true')
     undef = -999.e0
     
     # obs. list
     obs = self.df.loc[ :, [' timestep', ' x_true', ' y_true', ' z_true', ' x_obs', ' y_obs', ' z_obs']]
     obs = obs[obs[' x_obs'] != undef]
-    self.obs_time_list = self.df2_list(obs, ' timestep')[0]
-    self.obs_true_list = self.df2_list(obs, ' x_true', ' y_true', ' z_true')
-    self.obs_list      = self.df2_list(obs, ' x_obs', ' y_obs', ' z_obs')
+    self.obs_time_list = self._df2list(obs, ' timestep')[0]
+    self.obs_true_list = self._df2list(obs, ' x_true', ' y_true', ' z_true')
+    self.obs_list      = self._df2list(obs, ' x_obs', ' y_obs', ' z_obs')
     
     # sim. list
-    self.sim_list  = self.df2_list(self.df, ' x_sim', ' y_sim', ' z_sim')
-    self.da_list   = self.df2_list(self.df, ' x_anl', ' y_anl', ' z_anl')
+    self.sim_list  = self._df2list(self.df, ' x_sim', ' y_sim', ' z_sim')
+    self.da_list   = self._df2list(self.df, ' x_anl', ' y_anl', ' z_anl')
     
     """
     list.shape
     list[0] = x score, list[1] = y score, list[2] = z score, 
     """
   
-  def df2_list(self, Dataframe:pd.core.frame.DataFrame, *index_wrd:tuple) -> list:
+  def _df2list(self, Dataframe:pd.core.frame.DataFrame, *index_wrd:tuple) -> list:
     """pandasフレームをリスト化
 
     Args:
@@ -77,31 +77,7 @@ class lorenz63_score:
       index_list.append(Dataframe[i_index].tolist())
     return index_list
 
-  def accuracy_rmse_func(self, true_list:list, asses_list:list, num_elem:int) -> list:
-    """RMSEリストの作成
 
-    Args:
-        true_list(list): 今回の実験の真値
-        asses_list(list): 真値との差を図りたいリスト
-        num_elem(int): 真値との差を図りたい変数の数
-
-    Returns:
-        rmse_list(list): タイムステップ別に分けたrmse
-
-    Note:
-      シミュレーション値, データ同化値と観測値では, RMSEのタイムリストや変数の数が違うので注意。
-    """
-    rmse_list  = []
-    time_range = len(true_list[0])
-    for i_num in range(time_range):
-      rmse_true_list , rmse_asses_list= [], []
-      for i_elem in range(num_elem):
-        rmse_true_list.append(true_list[i_elem][i_num])
-        rmse_asses_list.append(asses_list[i_elem][i_num])
-
-      rmse = cal_statics.rmse(rmse_true_list, rmse_asses_list)
-      rmse_list.append(rmse)
-    return rmse_list
 
   def lorenz_3ddraw(self, timestep:int) -> int:
     """土台データリストの3D描画
@@ -130,12 +106,12 @@ class lorenz63_score:
 
     return timestep
 
-  def lorenz_rmse_draw(self, rmse_sim:list, rmse_obs:list, rmse_da:list,
+  def lorenz_rmse_draw(self, rmse_sim:list, rmse_obs:list, rmse_kf:list,
                              #rmse_da_1:list, rmse_da_2:list, rmse_da_3:list, rmse_da_4:list, rmse_da_5:list
                              ) -> None:
     """RMSEの描画
 
-    Arguments:
+    Args:
         rmse_obs(list): 土台データの観測値のRMSE
         rmse_da(list): 土台データのデータ同化のRMSE
         rmse_sim(list): 土台データリストのシミュレーション値のRMSE
@@ -147,8 +123,8 @@ class lorenz63_score:
     ax1 = fig.subplots()
     
     sns.set_style('whitegrid')
-    ax1.plot(self.time_list, rmse_sim, ls="--", color='b', label='No DA')
-    ax1.plot(self.time_list, rmse_da, ls="--", color='r', label='KF')
+    ax1.plot(self.time_list, rmse_sim, ls="--", color='b', label='SIM')
+    ax1.plot(self.time_list, rmse_kf, ls="--", color='r', label='KF')
     
     #ax1.plot(self.time_list, rmse_da_1, ls=":", alpha=0.3, label='EnKF 3mem')
     #ax1.plot(self.time_list, rmse_da_2, ls="--", label='EnKF 10mem')
@@ -162,24 +138,27 @@ class lorenz63_score:
     ax1.set_ylabel('RMSE')
     ax1.set_xlim(0, 1)
     ax1.set_ylim(0, 10)
-    ax1.set_title('Lorenz(1963) RMSE infla. 0.0d0', loc='left')
+    ax1.set_title('Lorenz(1963) RMSE', loc='left')
 
     plt.grid()
     plt.legend()
     plt.show()
 
-class lorenz63_error_covariance_matrix:
+class lorenz63_errcov:
   """
   一つのデータリストを誤差共分散行列の扱いを行うクラスメソッド
   """
-  def __init__(self, path:str):
-    self.err_data = self.read_error_csv(path)
-
-  def read_error_csv(self, path:str) -> np.ndarray:
+  def __init__(self, path:str, *, matrix_size:int=3):
+    self.err_data = self._read_errcov(path)
+    
+  def _read_errcov(self, path:str) -> np.ndarray:
     return np.genfromtxt(path, delimiter=",")
 
+  def trace_errcov(self, matrix) -> np.ndarray:
+    return np.trace(matrix)
+
   def error_heatmap(self, err_data:np.ndarray, timestep:int) -> None:
-    fig, ax = plt.subplots()
+    ax = plt.subplots()
     cmap = sns.diverging_palette(220, 10, as_cmap=True)
     sns.set(style='white')
     sns.heatmap(
@@ -195,46 +174,108 @@ class lorenz63_error_covariance_matrix:
     plt.savefig('./figure/error_heatmap_{:.1f}sec.png'.format(time))
     plt.close('all')
 
+""" private package """
+
+def _accuracy_rmse_func(true_list:list, asses_list:list, num_elem:int) -> list:
+  """RMSEリストの作成
+  Args:
+      true_list(list): 今回の実験の真値
+      asses_list(list): 真値との差を図りたいリスト
+      num_elem(int): 真値との差を図りたい変数の数
+  Returns:
+      rmse_list(list): タイムステップ別に分けたrmse
+  Note:
+    シミュレーション値, データ同化値と観測値では, RMSEのタイムリストや変数の数が違うので注意。
+  """
+  rmse_list  = []
+  time_range = len(true_list[0])
+  
+  for i_num in range(time_range):
+    rmse_true_list , rmse_asses_list= [], []
+    for i_elem in range(num_elem):
+      rmse_true_list.append(true_list[i_elem][i_num])
+      rmse_asses_list.append(asses_list[i_elem][i_num])
+    rmse = cal_statics.rmse(rmse_true_list, rmse_asses_list)
+    rmse_list.append(rmse)
+  
+  return rmse_list
+
+def _enkf_pathset(mem:int, method_num:int, *, outdir:str='./output/lorenz63/') -> str:
+  """EnKFのPATH設定
+
+  Args:
+      mem(int): EnKFのメンバー数
+      method_num(int): 0はPO法、1はSRF法
+
+  Keyword Arguments:
+      outdir(str): PATHの大元設定。変更なければ引数に加えなくて良い。 (default: {'./output/lorenz63'})
+
+  Returns:
+      enkf_data_path(str):  enkfのデータPATH
+      enkf_errcov_path(str):  enkfの誤差共分散データPATH
+  """
+  enkf_method = ['PO', 'SRF']
+  enkf_data_path = outdir+'EnKF_'+str(mem)+'m_'+enkf_method[method_num]+'.csv'
+  enkf_errcov_path = outdir+'errcov_EnKF_'+str(mem)+'m_'+enkf_method[method_num]+'.csv'
+  return enkf_data_path, enkf_errcov_path
+
 if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ info. setting
+  #---------------------------------------------------------- 
   matrix_size  = 3
-  obs_interval = 3
-  mem          = 5 #5000
-  alpha        = '0.0d0'
+  obs_interval = 1
 
-  outdir    = './output/lorenz63/'
-  da_method = 'EnKF'
-  data_path = outdir + da_method + '.csv'
-  err_path  = outdir + 'Error_matrix_' + da_method + '.csv'
-  if da_method is 'EnKF':
-    data_path = outdir +  da_method + '_' + str(mem) + 'm_' + alpha + 'infla.csv'
-    #err_path  = outdir + 'Error_matrix_' + da_method + '_' + str(mem) + 'mem.csv'
+  outdir = './output/lorenz63/'
+  path_kf, path_kf_errcov = outdir+'KF.csv', outdir+'errcov_KF.csv'
+  
+  """Ensemble data set"""
+  # for compare inflation
+  path_enkf_2m_PO, path_enkf_2m_errcov_PO = _enkf_pathset(2,0)
+  path_enkf_2m_SRF, path_enkf_2m_errcov_SRF = _enkf_pathset(2,1)
+  # for compare member
+  path_enkf_5m_SRF, path_enkf_5m_errcov_SRF = _enkf_pathset(5,1)
+  path_enkf_15m_SRF, path_enkf_15m_errcov_SRF = _enkf_pathset(15,1)
+  path_enkf_50m_SRF, path_enkf_50m_errcov_SRF = _enkf_pathset(50,1)
 
   #---------------------------------------------------------- 
   # +++ class set
-  # > lorenz63 cal. score
-  score = lorenz63_score(data_path)
-  # > prediction err covariance matrix
-  #e_matrix = lorenz63_error_covariance_matrix(err_path)
+  # >>  Args (1) lorenz63 result. score
+  # >>       (2) Pf (rediction err covariance matrix)
+  #---------------------------------------------------------- 
+  score_kf, errcov_kf = lorenz63_score(path_kf), lorenz63_errcov(path_kf_errcov)
+  score_enkf_2m_PO, errcov_enkf_2m_PO = lorenz63_score(path_enkf_2m_PO), lorenz63_errcov(path_enkf_2m_errcov_PO)
+  score_enkf_2m_SRF, errcov_enkf_2m_SRF = lorenz63_score(path_enkf_2m_SRF), lorenz63_errcov(path_enkf_2m_errcov_SRF)
   
+  score_enkf_5m_SRF = lorenz63_score(path_enkf_5m_SRF)
+  score_enkf_15m_SRF = lorenz63_score(path_enkf_15m_SRF)
+  score_enkf_50m_SRF = lorenz63_score(path_enkf_50m_SRF)
+
   #---------------------------------------------------------- 
   # +++ draw func.
-  # >> 3D draw
-  """
-  time_before = time.time()
+  # >>  (1) RMSE draw
+  # >>  (2) 3D draw
+  #---------------------------------------------------------- 
+
+  """ (1) RMSE draw """
+  num_sim_elem, num_obs_elem = 3, 3
+  rmse_sim = _accuracy_rmse_func(score_kf.true_list, score_kf.sim_list, num_sim_elem)
+  rmse_kf  = _accuracy_rmse_func(score_kf.true_list, score_kf.da_list, num_sim_elem)
+  rmse_obs = _accuracy_rmse_func(score_kf.obs_true_list, score_kf.obs_list, num_obs_elem)
+
+  score_kf.lorenz_rmse_draw(rmse_sim, rmse_obs, rmse_kf,)
+
+  sys.exit()
+
+  """ (2) 3D draw @using Pool(parallel method) """
   laststep = 2500
-  viewstep = int(laststep / 3) +1
-  values = [ i_num for i_num in range(0, len(score.time_list[0:laststep]), 3)]
+  viewstep = int(laststep/3)+1
+  time_before = time.time()
+  values = [ i_num for i_num in range(0, len(score_kf.time_list[0:laststep]), 3)]
+
   with Pool(4) as pool:
-    sleeps = list(tqdm(pool.imap(score.lorenz_3ddraw, values), total=viewstep))
+    sleeps = list(tqdm(pool.imap(score_kf.lorenz_3ddraw, values), total=viewstep))
+
   time_after = time.time()
   elapsed_time = time_after - time_before
   print(f'time: {elapsed_time} sec.')
-  num_sim_elem = 3
-  rmse_sim = score.accuracy_rmse_func(score.true_list, score.sim_list, num_sim_elem)
-  rmse_da  = score.accuracy_rmse_func(score.true_list, score.da_list, num_sim_elem)
-  num_obs_elem = 3
-  rmse_obs = score.accuracy_rmse_func(score.obs_true_list, score.obs_list, num_obs_elem)
-
-  """

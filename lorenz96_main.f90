@@ -34,12 +34,15 @@ program lorenz96_main
   ! --- Temporal state vector
   real(r_size), allocatable :: xt_vec(:,:)
   real(r_size), allocatable :: yt_vec(:,:)
-  
+  real(r_size), allocatable :: anlinc(:,:)
+
   ! *** Various parameters
-  real(r_size), parameter   :: size_noise_obs = 1.0d0
+  real(r_size), parameter   :: size_noise_obs = 0.5d0
   real(r_size)              :: gnoise, alpha
   real(r_dble)              :: delta
+  real(r_size)              :: scale, dist, factor
   integer                   :: mems
+  integer                   :: localization_mode
   
   ! --- Data assimilation exp.
   ! +++ Matrix setting
@@ -65,7 +68,6 @@ program lorenz96_main
   ! --- for EnSRF
   real(r_size), allocatable :: obs_srf_mtx_v1(:,:), obs_srf_mtx_v2(:,:)
   real(r_size), allocatable :: obs_srf_inv_v1(:,:), obs_srf_inv_v2(:,:)
-  real(r_size) :: sqrt_mems
 
   ! --- Output control
   logical, save         :: opt_veach = .false.
@@ -76,7 +78,10 @@ program lorenz96_main
   character(256)        :: output_anl_file
   character(256)        :: output_sim_file
   character(256)        :: output_obs_file
+  character(256)        :: output_anlinc_file
   character(256)        :: output_errcov_file
+
+  real(r_size), allocatable :: anlinc4out(:, :) ! increment info.
   
   ! --- Working variable
   character(1086) :: linebuf
@@ -97,12 +102,13 @@ program lorenz96_main
   
   namelist /set_parm/ nx, dt, force, oneday
   namelist /set_exp/ tool, ts_check, intg_method
-  namelist /set_da_exp/ da_veach, mems, da_method, alpha
-  namelist /enkf_setting/ mems, enkf_method
+  namelist /set_da_exp/ da_veach, da_method, alpha
+  namelist /enkf_setting/ mems, enkf_method, localization_mode
   namelist /set_period/ spinup_period, normal_period
   namelist /set_mobs/ obs_xintv, obs_tintv
-  namelist /output/ initial_true_file, initial_sim_file, &
-    output_true_file, output_anl_file, output_sim_file, output_obs_file, output_errcov_file, opt_veach
+  namelist /spinup_output/ initial_true_file, initial_sim_file
+  namelist /exp_output/ &
+    output_true_file, output_anl_file, output_sim_file, output_obs_file, output_errcov_file, output_anlinc_file, opt_veach
   
   read(5, nml=set_parm, iostat=ierr)
   read(5, nml=set_exp, iostat=ierr)
@@ -110,7 +116,8 @@ program lorenz96_main
   read(5, nml=enkf_setting, iostat = ierr)
   read(5, nml=set_period, iostat=ierr)
   read(5, nml=set_mobs, iostat=ierr)
-  read(5, nml=output, iostat=ierr)
+  read(5, nml=spinup_output, iostat=ierr)
+  read(5, nml=exp_output, iostat=ierr)
   ! name list io check
   if (ierr < 0 ) then
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
@@ -119,10 +126,10 @@ program lorenz96_main
   else if (ierr > 0) then
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
     write(6,*) '   *** Warning : Not appropriate names in namelist !! Check !!'
-    write(6,*) '   Stop : lorenz63_main.f90              '
+    write(6,*) '   Stop : lorenz96_main.f90              '
     stop
   end if
-  
+
   kt_oneday = int(oneday/dt) ! Unit change for 1day
   if ( trim(tool) == 'spinup' ) then 
     allocate(x_true(1,nx), x_out(1, nx))
@@ -143,8 +150,7 @@ program lorenz96_main
     ! --- Temporal state vector
     allocate(xt_vec(nx,1))
     allocate(yt_vec(ny,1))
-    ! --- EnSRF setting
-    sqrt_mems = sqrt(float(mems-1))
+    allocate(anlinc(nx,1))
     
     !----------------------------------------------------------------------
     ! +++ Data assim. set 
@@ -176,6 +182,8 @@ program lorenz96_main
       allocate(hx(ny,1))
       allocate(hdxf(ny,1))
       
+      allocate(anlinc4out(obs_time, ny))
+
     end if
   end if
 
@@ -225,7 +233,8 @@ program lorenz96_main
     write(6,*) '-------------------------------------------------------'
     write(6,*) '+++ Data assimilation exp. start '
     write(6,*) ' >> Data assimilation method  :: ', da_method
-    
+    if ( trim(da_method) is 'EnKF' ) write(6,*) ' >> Localization is ', localization_mode
+
     ! making identity matrix
     Pf = 0.d0; Pa = 0.d0; I = 0.d0
     Kg = 0.d0;  H = 0.d0; R = 0.d0
@@ -321,7 +330,18 @@ program lorenz96_main
           call confirm_matrix(Kg, nx, ny)
           write(6,*) ''
 
-          x_anl(it,:) = x_anl(it,:) + matmul(Kg, (x_obs(it/obs_tintv,:) - matmul(H, x_anl(it,:))))
+          xt_vec(:,1) = x_anl(it,:); anlinc(:,1) = x_anl(it,:)
+          yt_vec(:,1) = x_obs(it/obs_tintv,:)
+          
+          hx = matmul(H, xt_vec)
+          hdxf = yt_vec - hx
+
+          ! for save increment
+          anlinc = matmul(Kg, hdxf)
+          anlinc4out(it/obs_tintv, :) = anlinc(:,1)
+
+          xt_vec = xt_vec + matmul(Kg, hdxf)
+          x_anl(it,:) = xt_vec(:,1)
           write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,1:5), '...'
           
           Pa = matmul((I - matmul(Kg, H)), Pf)
@@ -371,8 +391,9 @@ program lorenz96_main
           write(6,*) '  OBSERVE  = ', x_obs(it,1:5), '...'
           do ix = 1, nx
             x_anl(it, ix) = sum(x_anl_m(it,ix,1:mems))/mems
+            anlinc(ix,1) = x_anl(it,ix)
           end do
-          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,1:5), '...'
+          write(6,*) '  ANALYSIS (BEFORE) = ', anlinc(1:5, 1), '...'
           write(6,*) ''
           Pf = 0.0d0
           
@@ -388,17 +409,14 @@ program lorenz96_main
             x_prtb(:,imem) = x_anl_m(it,:,imem) - x_anl(it,:)
             Ef(:,imem) = x_prtb(:,imem)
           end do
-
+          
           write(6,*) ' PREDICTION ENSEMBLE VECTOR '
           call confirm_matrix(Ef, nx, mems)
           write(6,*) ''
-
-          write(6,*) '  PREDICTION ERROR COVARIANCE on present step'
+          
           Pf = matmul(Ef, transpose(Ef))
           Pf = Pf/(mems-1)
-          call confirm_matrix(Pf, nx, nx)
-          write(6,*) ''
-
+          
           !-----------------------------------------------------------
           ! +++ making inverse matrix
           !-----------------------------------------------------------
@@ -411,6 +429,28 @@ program lorenz96_main
           ! +++ adaptive inflation mode
           !-----------------------------------------------------------
           Pf = Pf*(1.0d0 + alpha)
+          
+          !-----------------------------------------------------------
+          ! +++ Localization mode
+          !-----------------------------------------------------------
+          if ( localization_mode == 1 ) then
+            dist = 0.05d0
+            do ix = 1, nx
+              do il = 1, nx
+                scale = abs(ix-il)
+                call enkf_schur(scale, dist, factor)
+                Pf(ix,il) = Pf(ix,il)*factor
+              end do
+            end do
+          end if
+
+          
+          write(6,*) '  PREDICTION ERROR COVARIANCE on present step'
+          call confirm_matrix(Pf, nx, nx)
+          call output_errcov(nx, it/obs_tintv, kt_oneday*normal_period/obs_tintv, Pf)
+          write(6,*) ''
+          !=======================================================
+
           write(6,*) ' KALMAN GAIN WEIGHTING MATRIX '
           Kg = matmul(matmul(Pf, transpose(H)), obs_inv)
           call confirm_matrix(Kg, nx, ny)
@@ -450,6 +490,7 @@ program lorenz96_main
             do ix = 1, nx
               x_anl(it, ix) = sum(x_anl_m(it, ix, :))/mems
             end do
+            anlinc4out(it/obs_tintv,:) = anlinc(:,1) - x_anl(it,:)
             write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,1:5), '...'
             write(6,*) ''
             write(6,*) ' CHECK ENSEMBLE PART FOR UPDATE (AFTER) on ', it 
@@ -466,7 +507,14 @@ program lorenz96_main
             !----------------------------------------------------------- 
 
             ! +++ (1) Average step 
-            x_anl(it,:) = x_anl(it,:) + matmul(Kg, (x_obs(it/obs_tintv,:) - matmul(H, x_anl(it,:))))
+            xt_vec(:,1) = x_anl(it,:)
+            yt_vec(:,1) = x_obs(it/obs_tintv,:)
+            
+            hx = matmul(H, xt_vec)
+            hdxf = yt_vec - hx
+            xt_vec = xt_vec + matmul(Kg, hdxf)
+            
+            x_anl(it,:) = xt_vec(:,1)
             write(6,*) '  ANALYSIS (AVERAGE STEP) = ', x_anl(it,1:5), '...'
             write(6,*) ''
 
@@ -512,6 +560,7 @@ program lorenz96_main
             do ix = 1, nx
               x_anl(it, ix) = x_anl(it, ix) + sum(Ea(ix, :))/mems
             end do
+            anlinc4out(it/obs_tintv,:) = anlinc(:,1) - x_anl(it,:)
             write(6,*) '  ANALYSIS (PRTB STEP) = ', x_anl(it,1:5), '...'
             write(6,*) ''
 
@@ -562,7 +611,6 @@ program lorenz96_main
       open(22, file=trim(output_anl_file), form='formatted', status='replace')
       open(23, file=trim(output_sim_file), form='formatted', status='replace')
       do it = 0, kt_oneday*normal_period
-        
         write(linebuf, trim(cfmt)) x_true(it,:)
         call del_spaces(linebuf)
         write(21,'(a)') linebuf
@@ -577,16 +625,21 @@ program lorenz96_main
       close(22)
       close(23)
       
-      open(24, file=trim(output_obs_file), form='formatted', status='replace')
-        do it = 1, kt_oneday*normal_period/obs_tintv
-          cfmt_obs = '(xx(F15.7, ","), F15.7)'
-          write(cfmt_obsnum,"(I2)") ny-1
-          cfmt_obs(2:3) = cfmt_obsnum
-          write(linebuf, trim(cfmt_obs)) x_obs(it, :)
-          call del_spaces(linebuf)
-          write(24,'(a)') linebuf
+      open(30, file=trim(output_obs_file), form='formatted', status='replace')
+      open(31, file=trim(output_anlinc_file), form='formatted', status='replace')
+      do it = 1, kt_oneday*normal_period/obs_tintv
+        cfmt_obs = '(xx(F15.7, ","), F15.7)'
+        write(cfmt_obsnum,"(I2)") ny-1
+        cfmt_obs(2:3) = cfmt_obsnum
+        write(linebuf, trim(cfmt_obs)) x_obs(it, :)
+        call del_spaces(linebuf)
+        write(30,'(a)') linebuf
+        write(linebuf, trim(cfmt)) anlinc4out(it,:)
+        call del_spaces(linebuf)
+        write(31,'(a)') linebuf
         end do
-      close(24)
+      close(30)
+      close(31)
       write(6,*) ' && Successfuly output !!!        '  
     endif
     
@@ -640,7 +693,7 @@ contains
       end do
       write(*,*)
     end do
-    print *, "==============================="
+    !print *, "==============================="
   end subroutine
 
   subroutine output_errcov(nx, it, last_step, errcov_mtx)
@@ -651,8 +704,6 @@ contains
     character(100000) :: linebuf
     character(36)     :: cfmt
     character(4)      :: cfmt_num
-
-    logical, save   :: opt_veach = .false.
 
     cfmt = '(xxxx(F12.7, ","), F12.7)'
     write(cfmt_num,"(I4)") nx*nx -1
