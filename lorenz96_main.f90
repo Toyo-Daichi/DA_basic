@@ -115,7 +115,7 @@ program lorenz96_main
   read(5, nml=set_da_exp, iostat=ierr)
   read(5, nml=enkf_setting, iostat = ierr)
   read(5, nml=set_period, iostat=ierr)
-  read(5, nml=set_mobs, iostat=ierr)
+  read(5, nml=set_obs, iostat=ierr)
   read(5, nml=spinup_output, iostat=ierr)
   read(5, nml=exp_output, iostat=ierr)
   ! name list io check
@@ -243,12 +243,18 @@ program lorenz96_main
     forall ( il=1:nx ) Pa(il, il) = 1.0d0
     forall ( il=1:nx )  I(il, il) = 1.0d0
     forall ( il=1:ny )  R(il, il) = size_noise_obs
-
     
-    write(6,*) '  OBSERVATION OPERATER'
-    call confirm_matrix(H, ny, nx)
-    
-    
+    if ( obs_set == 0 ) then
+      forall ( il=1:ny )  H(il, il) = 1.0d0
+    else if (obs_set == 1) then
+      ix = obs_xintv
+      do iy = 1, ny
+        H(iy, ix) = 1.0d0
+        ix = ix + obs_xintv 
+      end do
+      write(6,*) ''
+      write(6,*) '  OBSERVATION OPERATER CHECK (LACK OBS EXP.) '
+      call confirm_matrix(H, ny, nx)
     end if
     !-------------------------------------------------------------------
     ! +++ making sim score
