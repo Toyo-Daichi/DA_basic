@@ -182,7 +182,7 @@ program lorenz96_main
       allocate(hx(ny,1))
       allocate(hdxf(ny,1))
       
-      allocate(anlinc4out(obs_time, ny))
+      allocate(anlinc4out(obs_time, nx))
 
     end if
   end if

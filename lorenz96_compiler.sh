@@ -25,7 +25,7 @@ spinup_period=365
 normal_period=40
 
 # +++ exp. info
-da_method='EnKF'
+da_method='KF'
 intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
@@ -39,8 +39,8 @@ alpha=0.0d0
 localization_mode=1
 
 # +++ making obs. info
-obs_xintv=1
-obs_tintv=1
+obs_xintv=5
+obs_tintv=5
 
 # +++ output info
 out_boolen='true' # write putput
