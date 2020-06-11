@@ -156,7 +156,7 @@ class lorenz96_score:
     rmse_v3_enkf_anl_list,
     rmse_v4_enkf_anl_list,
     rmse_v5_enkf_anl_list,
-    *, time_length=50, timeshape=161, obs_timeshape=160
+    *, time_length=50, timeshape=161, obs_timeshape=160, obs_tintv=1
     ) -> None:
     """LORENZ(1996)での双子実験で作成した真値とのRMSE
     Args:
@@ -169,13 +169,13 @@ class lorenz96_score:
         obs_timeshape (int, optional): 観測データが所持しているタイムステップ幅。 Defaults to 160.
     """
     fig, ax = plt.subplots(figsize=(6, 5))
-    time_list, obs_time_list = np.arange(timeshape), np.arange(obs_timeshape)
+    time_list, obs_time_list = np.arange(timeshape), np.arange(obs_tintv-1, obs_timeshape*obs_tintv, obs_tintv)
 
     _draw = ax
     _draw.plot(time_list[0:time_length], rmse_sim_list[0:time_length], ls=":", color='b', label='SIMULATION')
     _draw.plot(time_list[0:time_length], rmse_anl_list[0:time_length], ls="-", color='r', label='DATA ASSIM EKF')
 
-    # for added other kind rmse_anl_list
+    """ for added other kind rmse_anl_list """
     _draw.plot(time_list[0:time_length], rmse_v1_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=20m')
     #_draw.plot(time_list[0:time_length], rmse_v1_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=20m@loc')
     _draw.plot(time_list[0:time_length], rmse_v2_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=40m')
@@ -185,7 +185,8 @@ class lorenz96_score:
     _draw.plot(time_list[0:time_length], rmse_v4_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=500m')
     _draw.plot(time_list[0:time_length], rmse_v5_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=1000m')
 
-    _draw.scatter(obs_time_list[0:time_length], rmse_obs_list[0:time_length], marker='*', color='y', s=35, alpha=0.5, edgecolor='k', label='OBS')
+    obs_time_length = time_length//obs_tintv
+    _draw.scatter(obs_time_list[0:obs_time_length], rmse_obs_list[0:obs_time_length], marker='*', color='y', s=35, alpha=0.5, edgecolor='k', label='OBS')
     _draw.set_xlabel('TIMESTEP')
     _draw.set_ylabel('RMSE')
     _draw.set_title('LORENZ(1996) RMSE', loc='left')
@@ -195,7 +196,7 @@ class lorenz96_score:
     plt.savefig('./figure/lorenz96.png')
 
   def making_rmse_snap(
-    self, true_score, sim_score, anl_score, obs_score, timeshape, obs_timeshape, obs_xintv
+    self, true_score, sim_score, anl_score, obs_score, timeshape, obs_timeshape, obs_xintv=1
     ) -> list:
     """1ステップにあたる真値とのRMSEリストの作成
     Args:
@@ -222,7 +223,7 @@ class lorenz96_score:
 
     for _it in range(obs_timeshape):
       obs_true_score = []
-      for _obs in range(0, nx, obs_xintv):
+      for _obs in range(obs_xintv-1, nx, obs_xintv):
         obs_true_score.append(true_score[_it*obs_tintv+obs_tintv][_obs])
       rmse_obs = _accuracy_rmse_func(obs_true_score, obs_score[_it])
       rmse_obs_list.append(rmse_obs)
@@ -372,7 +373,7 @@ if __name__ == "__main__":
   path_kf_errcov = outdir + 'normal_KF_errcov_' + str(nx) + 'ndim.csv'
   path_kf_anlinc = outdir + 'normal_KF_anlinc_' + str(nx) + 'ndim.csv'
   
-  """Ensemble KF data set (basic is EnSRF.) """
+  """Ensemble KF data set (basic is EnSRF.)  """
   mems, loc = 20, ''
   v1_path_enkf = outdir + 'normal_EnKF' + str(mems) + 'm_anl_score_' + str(nx) + 'ndim' + loc +'.csv'
   v1_path_enkf_errcov = outdir + 'normal_EnKF' + str(mems) + 'm_errcov_' + str(nx) + 'ndim' + loc +'.csv'
@@ -406,12 +407,12 @@ if __name__ == "__main__":
   #  (1) lorenz96_score
   #  >> & anl_data set
   #---------------------------------------------------------- 
-  """
   lorenz96_score = lorenz96_score()
   
   kf_anl_score = _csv2list(path_kf).reshape(timeshape, nx)
   kf_anlinc_score = _csv2list(path_kf_anlinc).reshape(obs_timeshape, nx)
 
+  """ Ensemble KF data set (basic is EnSRF.)  """
   v1_enkf_anl_score = _csv2list(v1_path_enkf).reshape(timeshape, nx)
   v1_enkf_anlinc_score = _csv2list(v1_path_enkf_anlinc).reshape(obs_timeshape, nx)
 
@@ -426,7 +427,7 @@ if __name__ == "__main__":
 
   v5_enkf_anl_score = _csv2list(v5_path_enkf).reshape(timeshape, nx)
   v5_enkf_anlinc_score = _csv2list(v5_path_enkf_anlinc).reshape(obs_timeshape, nx)
-  """
+
 
   #---------------------------------------------------------- 
   # +++ Trajectory & Hovmeller 
@@ -437,9 +438,9 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ RMSE 
   #---------------------------------------------------------- 
-  """
   rmse_anl_list,rmse_sim_list,rmse_obs_list = \
   lorenz96_score.making_rmse_snap(true_score, sim_score, kf_anl_score, obs_score, timeshape, obs_timeshape, obs_xintv)
+
   rmse_v1_enkf_anl_list, _, _ = \
   lorenz96_score.making_rmse_snap(true_score, sim_score, v1_enkf_anl_score, obs_score, timeshape, obs_timeshape, obs_xintv)
   rmse_v2_enkf_anl_list, _, _ = \
@@ -450,18 +451,18 @@ if __name__ == "__main__":
   lorenz96_score.making_rmse_snap(true_score, sim_score, v4_enkf_anl_score, obs_score, timeshape, obs_timeshape, obs_xintv)
   rmse_v5_enkf_anl_list, _, _ = \
   lorenz96_score.making_rmse_snap(true_score, sim_score, v5_enkf_anl_score, obs_score, timeshape, obs_timeshape, obs_xintv)
-  """
 
-  #lorenz96_score.rmse_draw(rmse_sim_list, rmse_obs_list, rmse_anl_list,
-  #rmse_v1_enkf_anl_list, rmse_v2_enkf_anl_list, rmse_v3_enkf_anl_list, rmse_v4_enkf_anl_list, rmse_v5_enkf_anl_list,
-  #time_length=100
-  #)
+  lorenz96_score.rmse_draw(rmse_sim_list, rmse_obs_list, rmse_anl_list,
+  rmse_v1_enkf_anl_list, rmse_v2_enkf_anl_list, rmse_v3_enkf_anl_list, rmse_v4_enkf_anl_list, rmse_v5_enkf_anl_list,
+  time_length=160, obs_timeshape=obs_timeshape, obs_tintv=obs_tintv
+  )
 
   #---------------------------------------------------------- 
   # +++ class set
   #  (2) lorenz96_errcov
   #  >> & anl_data set
   #---------------------------------------------------------- 
+  """
   lorenz96_errcov = lorenz96_errcov()
   kf_anl_errcov = _csv2list(path_kf_errcov).reshape(obs_timeshape,nx,nx)
   v1_enkf_anl_errcov = _csv2list(v1_path_enkf_errcov).reshape(obs_timeshape,nx,nx)
@@ -486,7 +487,8 @@ if __name__ == "__main__":
   #for _it in tqdm(range(obs_timeshape)):
   #  cross_cov_list = kf_anl_errcov[_it, 19]
   #  lorenz96_errcov.cross_corr_draw(cross_corr_list[_it], cross_cov_list, gaussian_list[_it], time=_it+1)
-
+  """
+  
   print('Normal END')
 
 

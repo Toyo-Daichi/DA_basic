@@ -37,7 +37,7 @@ program lorenz96_main
   real(r_size), allocatable :: anlinc(:,:)
 
   ! *** Various parameters
-  real(r_size), parameter   :: size_noise_obs = 0.5d0
+  real(r_size), parameter   :: size_noise_obs = 3.0d0
   real(r_size)              :: gnoise, alpha
   real(r_dble)              :: delta
   real(r_size)              :: scale, dist, factor

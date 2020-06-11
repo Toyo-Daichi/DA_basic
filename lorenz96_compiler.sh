@@ -25,7 +25,7 @@ spinup_period=365
 normal_period=40
 
 # +++ exp. info
-da_method='KF'
+da_method='EnKF'
 intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
@@ -36,16 +36,17 @@ fi
 
 # +++ adaptive inflation & localization
 alpha=0.0d0
-localization_mode=1
+localization_mode=0
 
 # +++ making obs. info
-obs_xintv=2
+obs_xintv=1
 obs_tintv=1
 
 # >> For OBSERVATION OPERATER(H)
 #  OBS x coordinate set is full veriosn -> obs_set=0
 #  OBS x coordinate set is lack version -> obs_set=1
-obs_set=1
+obs_set=0
+if [ ${obs_xintv} != 1 ]; then obs_set=1 ;fi
 
 # +++ output info
 out_boolen='true' # write putput
