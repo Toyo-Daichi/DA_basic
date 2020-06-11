@@ -38,9 +38,14 @@ fi
 alpha=0.0d0
 localization_mode=1
 
+
 # +++ making obs. info
+# >> For OBSERVATION OPERATER(H)
+# >> OBS x coordinate set is full veriosn -> obs_set=0
+# >> OBS x coordinate set is lack version -> obs_set=1
+obs_set=0
 obs_xintv=5
-obs_tintv=5
+obs_tintv=1
 
 # +++ output info
 out_boolen='true' # write putput
@@ -115,7 +120,8 @@ gfortran -fbounds-check  \
     spinup_period = ${spinup_period},
     normal_period = ${normal_period}
   /
-  &set_mobs
+  &set_obs
+    obs_set = ${obs_set},
     obs_xintv = ${obs_xintv},
     obs_tintv = ${obs_tintv}
   /

@@ -42,7 +42,7 @@ program lorenz96_main
   real(r_dble)              :: delta
   real(r_size)              :: scale, dist, factor
   integer                   :: mems
-  integer                   :: localization_mode
+  integer                   :: obs_set, localization_mode
   
   ! --- Data assimilation exp.
   ! +++ Matrix setting
@@ -105,7 +105,7 @@ program lorenz96_main
   namelist /set_da_exp/ da_veach, da_method, alpha
   namelist /enkf_setting/ mems, enkf_method, localization_mode
   namelist /set_period/ spinup_period, normal_period
-  namelist /set_mobs/ obs_xintv, obs_tintv
+  namelist /set_obs/ obs_set, obs_xintv, obs_tintv
   namelist /spinup_output/ initial_true_file, initial_sim_file
   namelist /exp_output/ &
     output_true_file, output_anl_file, output_sim_file, output_obs_file, output_errcov_file, output_anlinc_file, opt_veach
@@ -243,8 +243,13 @@ program lorenz96_main
     forall ( il=1:nx ) Pa(il, il) = 1.0d0
     forall ( il=1:nx )  I(il, il) = 1.0d0
     forall ( il=1:ny )  R(il, il) = size_noise_obs
-    forall ( il=1:ny )  H(il, il) = 1.0d0 ! not regular matrix
+
     
+    write(6,*) '  OBSERVATION OPERATER'
+    call confirm_matrix(H, ny, nx)
+    
+    
+    end if
     !-------------------------------------------------------------------
     ! +++ making sim score
     !-------------------------------------------------------------------
@@ -275,17 +280,18 @@ program lorenz96_main
         call ting_rk4(one_loop, x_anl(it-1,:), x_anl(it,:))
         
         if ( mod(it, obs_tintv)==0 ) then
-          write(6,*) '  TRUTH    = ', x_true(it,1:5), '...'
-          write(6,*) '  PREDICT  = ', x_sim(it,1:5), '...'
-          write(6,*) '  OBSERVE  = ', x_obs(it,1:5), '...'
-          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,1:5), '...'
+          write(6,*) '  TRUTH    = ', x_true(it,obs_xintv:15:obs_xintv), '...'
+          write(6,*) '  PREDICT  = ', x_sim(it,obs_xintv:15:obs_xintv), '...'
+          write(6,*) '  OBSERVE  = ', x_obs(it/obs_tintv,1:5), '...'
+          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,obs_xintv:15:obs_xintv), '...'
           write(6,*) ''
           
           !-------------------------------------------------------------------
           ! +++ Making Jacobian matrix.
           ! >> Please note that time changes are included...
           !-------------------------------------------------------------------
-          delta = dt*obs_tintv
+          !delta = dt*obs_tintv
+          delta = dt
           JM = 0.0d0
           JM(1,1)     = 1.0d0 - delta
           JM(1,2)     = x_anl(it-1,nx)*delta
@@ -342,7 +348,7 @@ program lorenz96_main
 
           xt_vec = xt_vec + matmul(Kg, hdxf)
           x_anl(it,:) = xt_vec(:,1)
-          write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,1:5), '...'
+          write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,obs_xintv:15:obs_xintv), '...'
           
           Pa = matmul((I - matmul(Kg, H)), Pf)
           write(6,*) '  ANALYSIS ERROR COVARIANCE on present step.'
@@ -386,14 +392,14 @@ program lorenz96_main
 
         
         if ( mod(it, obs_tintv) == 0 .and. it /= 0) then
-          write(6,*) '  TRUTH    = ', x_true(it,1:5), '...'
-          write(6,*) '  PREDICT  = ', x_sim(it,1:5), '...'
-          write(6,*) '  OBSERVE  = ', x_obs(it,1:5), '...'
+          write(6,*) '  TRUTH    = ', x_true(it,obs_xintv:15:obs_xintv), '...'
+          write(6,*) '  PREDICT  = ', x_sim(it,obs_xintv:15:obs_xintv), '...'
+          write(6,*) '  OBSERVE  = ', x_obs(it/obs_xintv,1:5), '...'
           do ix = 1, nx
             x_anl(it, ix) = sum(x_anl_m(it,ix,1:mems))/mems
             anlinc(ix,1) = x_anl(it,ix)
           end do
-          write(6,*) '  ANALYSIS (BEFORE) = ', anlinc(1:5, 1), '...'
+          write(6,*) '  ANALYSIS (BEFORE) = ', anlinc(obs_xintv:15:obs_xintv, 1), '...'
           write(6,*) ''
           Pf = 0.0d0
           
@@ -491,7 +497,7 @@ program lorenz96_main
               x_anl(it, ix) = sum(x_anl_m(it, ix, :))/mems
             end do
             anlinc4out(it/obs_tintv,:) = anlinc(:,1) - x_anl(it,:)
-            write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,1:5), '...'
+            write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,obs_xintv:15:obs_xintv), '...'
             write(6,*) ''
             write(6,*) ' CHECK ENSEMBLE PART FOR UPDATE (AFTER) on ', it 
             write(6,*) x_anl_m(it,1,1:5)
@@ -561,7 +567,7 @@ program lorenz96_main
               x_anl(it, ix) = x_anl(it, ix) + sum(Ea(ix, :))/mems
             end do
             anlinc4out(it/obs_tintv,:) = anlinc(:,1) - x_anl(it,:)
-            write(6,*) '  ANALYSIS (PRTB STEP) = ', x_anl(it,1:5), '...'
+            write(6,*) '  ANALYSIS (PRTB STEP) = ', x_anl(it,obs_xintv:15:obs_xintv), '...'
             write(6,*) ''
 
           end if &
