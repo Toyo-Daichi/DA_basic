@@ -43,6 +43,7 @@ program lorenz96_main
   real(r_size)              :: scale, dist, factor
   integer                   :: mems
   integer                   :: obs_set, localization_mode
+  integer                   :: obs_bias_sgrd, obs_bias_egrd
   
   ! --- Data assimilation exp.
   ! +++ Matrix setting
@@ -105,7 +106,7 @@ program lorenz96_main
   namelist /set_da_exp/ da_veach, da_method, alpha
   namelist /enkf_setting/ mems, enkf_method, localization_mode
   namelist /set_period/ spinup_period, normal_period
-  namelist /set_obs/ obs_set, obs_xintv, obs_tintv
+  namelist /set_obs/ obs_set, obs_xintv, obs_tintv, obs_bias_sgrd, obs_bias_egrd
   namelist /spinup_output/ initial_true_file, initial_sim_file
   namelist /exp_output/ &
     output_true_file, output_anl_file, output_sim_file, output_obs_file, output_errcov_file, output_anlinc_file, opt_veach
@@ -213,14 +214,27 @@ program lorenz96_main
       !-------------------------------------------------------------------
       ! +++ making obs score
       !-------------------------------------------------------------------
+      Obs_making_time :&
       if ( mod (it,obs_tintv)==0 ) then
-        do ix=1,nx
-          if( mod(ix,obs_xintv)==0 ) then
+        Obs_making_xgrd :&
+        if ( obs_set == 0 .and. obs_set == 1) then
+          do ix=1,nx
+            if( mod(ix,obs_xintv)==0 ) then
+              call gaussian_noise(size_noise_obs, gnoise)
+              x_obs(it/obs_tintv, ix/obs_xintv) = x_true(it, ix) + gnoise
+            endif
+          enddo
+        else if ( obs_set == 2 ) then
+          ipiv = 1
+          do ix = obs_bias_sgrd, obs_bias_egrd
             call gaussian_noise(size_noise_obs, gnoise)
-            x_obs(it/obs_tintv, ix/obs_xintv) = x_true(it, ix) + gnoise
-          endif
-        enddo
-      endif
+            x_obs(it/obs_tintv, ipiv) = x_true(it, ix) + gnoise
+            ipiv = ipiv + 1
+          end do
+        end if &
+        Obs_making_xgrd
+      end if &
+      Obs_making_time
     end do
     close(2)
   end if
@@ -244,18 +258,33 @@ program lorenz96_main
     forall ( il=1:nx )  I(il, il) = 1.0d0
     forall ( il=1:ny )  R(il, il) = size_noise_obs
     
+    H_check :&
     if ( obs_set == 0 ) then
       forall ( il=1:ny )  H(il, il) = 1.0d0
-    else if (obs_set == 1) then
-      ix = obs_xintv
-      do iy = 1, ny
-        H(iy, ix) = 1.0d0
-        ix = ix + obs_xintv 
-      end do
+    else 
+      H_making :&
+      if ( obs_set == 1 ) then 
+        ix = obs_xintv
+        do iy = 1, ny
+          H(iy, ix) = 1.0d0
+          ix = ix + obs_xintv 
+        end do
+      else if ( obs_set == 2 ) then 
+        iy = 1
+        do ix = obs_bias_sgrd, obs_bias_egrd
+          H(iy, ix) = 1.0d0
+          iy = iy + 1
+        end do
+      end if &
+      H_making
+
       write(6,*) ''
       write(6,*) '  OBSERVATION OPERATER CHECK (LACK OBS EXP.) '
       call confirm_matrix(H, ny, nx)
-    end if
+
+    end if &
+    H_check
+
     !-------------------------------------------------------------------
     ! +++ making sim score
     !-------------------------------------------------------------------
