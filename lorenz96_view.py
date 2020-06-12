@@ -176,13 +176,18 @@ class lorenz96_score:
     _draw.plot(time_list[0:time_length], rmse_anl_list[0:time_length], ls="-", color='r', label='DATA ASSIM EKF')
 
     """ for added other kind rmse_anl_list """
+    #_draw.plot(time_list[0:time_length:obs_tintv], rmse_v1_enkf_anl_list[0:time_length:obs_tintv], ls="--", label='DATA ASSIM EnKF=20m')
     _draw.plot(time_list[0:time_length], rmse_v1_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=20m')
     #_draw.plot(time_list[0:time_length], rmse_v1_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=20m@loc')
+    #_draw.plot(time_list[0:time_length:obs_tintv], rmse_v2_enkf_anl_list[0:time_length:obs_tintv], ls="--", label='DATA ASSIM EnKF=40m')
     _draw.plot(time_list[0:time_length], rmse_v2_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=40m')
     #_draw.plot(time_list[0:time_length], rmse_v2_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=40m@loc')
+    #_draw.plot(time_list[0:time_length:obs_tintv], rmse_v3_enkf_anl_list[0:time_length:obs_tintv], ls="--", label='DATA ASSIM EnKF=100m')
     _draw.plot(time_list[0:time_length], rmse_v3_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=100m')
     #_draw.plot(time_list[0:time_length], rmse_v3_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=100m@loc')
+    #_draw.plot(time_list[0:time_length:obs_tintv], rmse_v4_enkf_anl_list[0:time_length:obs_tintv], ls="--", label='DATA ASSIM EnKF=500m')
     _draw.plot(time_list[0:time_length], rmse_v4_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=500m')
+    #_draw.plot(time_list[0:time_length:obs_tintv], rmse_v5_enkf_anl_list[0:time_length:obs_tintv], ls="--", label='DATA ASSIM EnKF=1000m')
     _draw.plot(time_list[0:time_length], rmse_v5_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=1000m')
 
     obs_time_length = time_length//obs_tintv
@@ -347,8 +352,8 @@ if __name__ == "__main__":
   # +++ info. setting
   #---------------------------------------------------------- 
   # (1) dimension
-  obs_xintv = 1
-  obs_tintv = 1
+  obs_xintv = 2
+  obs_tintv = 2
   day_tintv = 4
   init_step = 1
   nx = 40
