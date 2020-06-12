@@ -39,9 +39,9 @@ alpha=0.0d0
 localization_mode=0
 
 # +++ making obs. info
-obs_tintv=2
+obs_tintv=1
 # >> For OBSERVATION OPERATER(H)
-obs_xintv=2
+obs_xintv=5
 #  OBS x coordinate set is full veriosn -> obs_set=0
 #  OBS x coordinate set is interval lack version -> obs_set=1
 #  OBS x coordinate set is bias lack version     -> obs_set=2
@@ -51,8 +51,8 @@ obs_bias_egrd=0
 if [ ${obs_xintv} -ge 2  ]; then obs_set=1 ;fi
 if [ ${obs_xintv} -eq 99 ]; then 
   obs_set=2
-  obs_bias_sgrd=3
-  obs_bias_egrd=38
+  obs_bias_sgrd=6
+  obs_bias_egrd=40
 fi
 
 # +++ output info

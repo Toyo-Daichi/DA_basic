@@ -74,7 +74,7 @@ class lorenz96_score:
 
   def hovmeller_draw(
     self, true_score:np.ndarray, sim_score:np.ndarray, anl_score:np.ndarray, anl_inc_score:np.ndarray,
-    *, nx=40, timeshape=161) -> None:
+    *, nx=40, timeshape=161, obs_tintv=1) -> None:
     """それぞれのデータセットでのホフメラ図
     Args:
         true_score (np.ndarray): 真値
@@ -84,7 +84,8 @@ class lorenz96_score:
     """
     fig, ax = plt.subplots(1,3, figsize=(20,5))
     x_coord = np.arange(nx)
-    y_coord, y_coord_inc = np.arange(timeshape), np.arange(timeshape-1)
+    obs_time_length = (timeshape-1)//obs_tintv
+    y_coord, y_coord_inc = np.arange(timeshape), np.arange(obs_time_length)
    
     _, _ = self._hovmeller_basic(0,50,true_score,'TRUE',ax,x_coord,y_coord)
     _, _ = self._hovmeller_basic(1,50,sim_score,'SIMULATION',ax,x_coord,y_coord)
@@ -94,14 +95,14 @@ class lorenz96_score:
 
     fig, ax = plt.subplots(1,2, figsize=(11,5))
     levels = np.arange(-1.0, 1.0, 0.01)
-    _ax1, _cbar1 = self._hovmeller_basic(0,70,true_score-sim_score,'TRUE - SIMULATION',ax,x_coord,y_coord, cmap=plt.get_cmap('bwr'))
-    _ax2, _cbar2 = self._hovmeller_basic(1,70,true_score-anl_score,'TRUE - DATA ASSIM',ax,x_coord,y_coord, cmap=plt.get_cmap('bwr'), levels=levels)
+    _ax1, _cbar1 = self._hovmeller_basic(0,obs_time_length,true_score-sim_score,'TRUE - SIMULATION',ax,x_coord,y_coord, cmap=plt.get_cmap('bwr'))
+    _ax2, _cbar2 = self._hovmeller_basic(1,obs_time_length,true_score-anl_score,'TRUE - DATA ASSIM',ax,x_coord,y_coord, cmap=plt.get_cmap('bwr'), levels=levels)
     fig.colorbar(_cbar1, ax=_ax1)
     fig.colorbar(_cbar2, ax=_ax2)
     plt.savefig('./figure/houvmeller_diff.png')
 
     fig, ax = plt.subplots(1,1, figsize=(6,5))
-    _ax, _cbar = self._hovmeller_inc(50,anl_inc_score,'DATA ASSIM INCREMENT',ax,x_coord,y_coord_inc)
+    _ax, _cbar = self._hovmeller_inc(70,anl_inc_score,'DATA ASSIM INCREMENT',ax,x_coord,y_coord_inc)
     fig.colorbar(_cbar, ax=_ax)
     plt.savefig('./figure/houvmeller_inc.png')
 
@@ -176,19 +177,19 @@ class lorenz96_score:
     _draw.plot(time_list[0:time_length], rmse_anl_list[0:time_length], ls="-", color='r', label='DATA ASSIM EKF')
 
     """ for added other kind rmse_anl_list """
-    #_draw.plot(time_list[0:time_length:obs_tintv], rmse_v1_enkf_anl_list[0:time_length:obs_tintv], ls="--", label='DATA ASSIM EnKF=20m')
-    _draw.plot(time_list[0:time_length], rmse_v1_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=20m')
+    _draw.plot(time_list[0:time_length:obs_tintv], rmse_v1_enkf_anl_list[0:time_length:obs_tintv], ls="--", label='DATA ASSIM EnKF=20m')
+    #_draw.plot(time_list[0:time_length], rmse_v1_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=20m')
     #_draw.plot(time_list[0:time_length], rmse_v1_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=20m@loc')
-    #_draw.plot(time_list[0:time_length:obs_tintv], rmse_v2_enkf_anl_list[0:time_length:obs_tintv], ls="--", label='DATA ASSIM EnKF=40m')
-    _draw.plot(time_list[0:time_length], rmse_v2_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=40m')
+    _draw.plot(time_list[0:time_length:obs_tintv], rmse_v2_enkf_anl_list[0:time_length:obs_tintv], ls="--", label='DATA ASSIM EnKF=40m')
+    #_draw.plot(time_list[0:time_length], rmse_v2_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=40m')
     #_draw.plot(time_list[0:time_length], rmse_v2_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=40m@loc')
-    #_draw.plot(time_list[0:time_length:obs_tintv], rmse_v3_enkf_anl_list[0:time_length:obs_tintv], ls="--", label='DATA ASSIM EnKF=100m')
-    _draw.plot(time_list[0:time_length], rmse_v3_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=100m')
+    _draw.plot(time_list[0:time_length:obs_tintv], rmse_v3_enkf_anl_list[0:time_length:obs_tintv], ls="--", label='DATA ASSIM EnKF=100m')
+    #_draw.plot(time_list[0:time_length], rmse_v3_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=100m')
     #_draw.plot(time_list[0:time_length], rmse_v3_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=100m@loc')
-    #_draw.plot(time_list[0:time_length:obs_tintv], rmse_v4_enkf_anl_list[0:time_length:obs_tintv], ls="--", label='DATA ASSIM EnKF=500m')
-    _draw.plot(time_list[0:time_length], rmse_v4_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=500m')
-    #_draw.plot(time_list[0:time_length:obs_tintv], rmse_v5_enkf_anl_list[0:time_length:obs_tintv], ls="--", label='DATA ASSIM EnKF=1000m')
-    _draw.plot(time_list[0:time_length], rmse_v5_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=1000m')
+    _draw.plot(time_list[0:time_length:obs_tintv], rmse_v4_enkf_anl_list[0:time_length:obs_tintv], ls="--", label='DATA ASSIM EnKF=500m')
+    #_draw.plot(time_list[0:time_length], rmse_v4_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=500m')
+    _draw.plot(time_list[0:time_length:obs_tintv], rmse_v5_enkf_anl_list[0:time_length:obs_tintv], ls="--", label='DATA ASSIM EnKF=1000m')
+    #_draw.plot(time_list[0:time_length], rmse_v5_enkf_anl_list[0:time_length], ls="--", label='DATA ASSIM EnKF=1000m')
 
     obs_time_length = time_length//obs_tintv
     _draw.scatter(obs_time_list[0:obs_time_length], rmse_obs_list[0:obs_time_length], marker='*', color='y', s=35, alpha=0.5, edgecolor='k', label='OBS')
@@ -352,8 +353,8 @@ if __name__ == "__main__":
   # +++ info. setting
   #---------------------------------------------------------- 
   # (1) dimension
-  obs_xintv = 2
-  obs_tintv = 2
+  obs_xintv = 5
+  obs_tintv = 1
   day_tintv = 4
   init_step = 1
   nx = 40
@@ -437,8 +438,8 @@ if __name__ == "__main__":
   #---------------------------------------------------------- 
   # +++ Trajectory & Hovmeller 
   #---------------------------------------------------------- 
+  lorenz96_score.hovmeller_draw(true_score, sim_score, kf_anl_score, kf_anlinc_score, obs_tintv=obs_tintv)
   #lorenz96_score.trajectory_draw(true_score, sim_score, kf_anl_score, obs_score)
-  #lorenz96_score.hovmeller_draw(true_score, sim_score, kf_anl_score, kf_anlinc_score)
 
   #---------------------------------------------------------- 
   # +++ RMSE 
