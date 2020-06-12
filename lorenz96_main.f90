@@ -141,7 +141,11 @@ program lorenz96_main
     allocate(x_init(nx))
     
     ! --- OBS setting
-    ny = int(nx/obs_xintv)
+    if ( obs_set == 0 .and. obs_set == 1 ) then
+      ny = int(nx/obs_xintv)
+    else if ( obs_set == 2 ) then
+      ny = obs_bias_egrd - obs_bias_sgrd +1 
+    end if
     obs_time = int((kt_oneday*normal_period)/obs_tintv)
     lda = ny
     lwork = ny
@@ -216,6 +220,7 @@ program lorenz96_main
       !-------------------------------------------------------------------
       Obs_making_time :&
       if ( mod (it,obs_tintv)==0 ) then
+
         Obs_making_xgrd :&
         if ( obs_set == 0 .and. obs_set == 1) then
           do ix=1,nx
@@ -224,15 +229,18 @@ program lorenz96_main
               x_obs(it/obs_tintv, ix/obs_xintv) = x_true(it, ix) + gnoise
             endif
           enddo
+        
         else if ( obs_set == 2 ) then
           ipiv = 1
           do ix = obs_bias_sgrd, obs_bias_egrd
+            write(6,*) it/obs_tintv, ipiv
             call gaussian_noise(size_noise_obs, gnoise)
             x_obs(it/obs_tintv, ipiv) = x_true(it, ix) + gnoise
             ipiv = ipiv + 1
           end do
         end if &
         Obs_making_xgrd
+      
       end if &
       Obs_making_time
     end do
@@ -261,6 +269,7 @@ program lorenz96_main
     H_check :&
     if ( obs_set == 0 ) then
       forall ( il=1:ny )  H(il, il) = 1.0d0
+    
     else 
       H_making :&
       if ( obs_set == 1 ) then 
@@ -310,6 +319,7 @@ program lorenz96_main
       
       data_assim_KF_loop :&
       do it = 1, kt_oneday*normal_period
+        write(6,*) ''
         write(6,*) 'Data assim. time step: ', it
         write(6,*) ''
         call ting_rk4(one_loop, x_anl(it-1,:), x_anl(it,:))
