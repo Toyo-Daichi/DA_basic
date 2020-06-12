@@ -37,7 +37,7 @@ program lorenz96_main
   real(r_size), allocatable :: anlinc(:,:)
 
   ! *** Various parameters
-  real(r_size), parameter   :: size_noise_obs = 3.0d0
+  real(r_size), parameter   :: size_noise_obs = 0.5d0
   real(r_size)              :: gnoise, alpha
   real(r_dble)              :: delta
   real(r_size)              :: scale, dist, factor
@@ -130,7 +130,7 @@ program lorenz96_main
     write(6,*) '   Stop : lorenz96_main.f90              '
     stop
   end if
-
+  
   kt_oneday = int(oneday/dt) ! Unit change for 1day
   if ( trim(tool) == 'spinup' ) then 
     allocate(x_true(1,nx), x_out(1, nx))
@@ -141,10 +141,10 @@ program lorenz96_main
     allocate(x_init(nx))
     
     ! --- OBS setting
-    if ( obs_set == 0 .and. obs_set == 1 ) then
+    if ( obs_set <= 1 ) then
       ny = int(nx/obs_xintv)
     else if ( obs_set == 2 ) then
-      ny = obs_bias_egrd - obs_bias_sgrd +1 
+      ny = obs_bias_egrd-obs_bias_sgrd+1 
     end if
     obs_time = int((kt_oneday*normal_period)/obs_tintv)
     lda = ny
@@ -219,10 +219,9 @@ program lorenz96_main
       ! +++ making obs score
       !-------------------------------------------------------------------
       Obs_making_time :&
-      if ( mod (it,obs_tintv)==0 ) then
-
+      if ( mod (it,obs_tintv) ==0 ) then
         Obs_making_xgrd :&
-        if ( obs_set == 0 .and. obs_set == 1) then
+        if ( obs_set <= 1 ) then
           do ix=1,nx
             if( mod(ix,obs_xintv)==0 ) then
               call gaussian_noise(size_noise_obs, gnoise)
@@ -233,7 +232,6 @@ program lorenz96_main
         else if ( obs_set == 2 ) then
           ipiv = 1
           do ix = obs_bias_sgrd, obs_bias_egrd
-            write(6,*) it/obs_tintv, ipiv
             call gaussian_noise(size_noise_obs, gnoise)
             x_obs(it/obs_tintv, ipiv) = x_true(it, ix) + gnoise
             ipiv = ipiv + 1
@@ -272,7 +270,7 @@ program lorenz96_main
     
     else 
       H_making :&
-      if ( obs_set == 1 ) then 
+      if ( obs_set == 1 ) then
         ix = obs_xintv
         do iy = 1, ny
           H(iy, ix) = 1.0d0
@@ -325,10 +323,10 @@ program lorenz96_main
         call ting_rk4(one_loop, x_anl(it-1,:), x_anl(it,:))
         
         if ( mod(it, obs_tintv)==0 ) then
-          write(6,*) '  TRUTH    = ', x_true(it,obs_xintv:15:obs_xintv), '...'
-          write(6,*) '  PREDICT  = ', x_sim(it,obs_xintv:15:obs_xintv), '...'
+          write(6,*) '  TRUTH    = ', x_true(it,1:5), '...'
+          write(6,*) '  PREDICT  = ', x_sim(it,1:5), '...'
           write(6,*) '  OBSERVE  = ', x_obs(it/obs_tintv,1:5), '...'
-          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,obs_xintv:15:obs_xintv), '...'
+          write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,1:5), '...'
           write(6,*) ''
           
           !-------------------------------------------------------------------
@@ -393,7 +391,7 @@ program lorenz96_main
 
           xt_vec = xt_vec + matmul(Kg, hdxf)
           x_anl(it,:) = xt_vec(:,1)
-          write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,obs_xintv:15:obs_xintv), '...'
+          write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,1:5), '...'
           
           Pa = matmul((I - matmul(Kg, H)), Pf)
           write(6,*) '  ANALYSIS ERROR COVARIANCE on present step.'
@@ -437,14 +435,14 @@ program lorenz96_main
 
         
         if ( mod(it, obs_tintv) == 0 .and. it /= 0) then
-          write(6,*) '  TRUTH    = ', x_true(it,obs_xintv:15:obs_xintv), '...'
-          write(6,*) '  PREDICT  = ', x_sim(it,obs_xintv:15:obs_xintv), '...'
+          write(6,*) '  TRUTH    = ', x_true(it,1:5), '...'
+          write(6,*) '  PREDICT  = ', x_sim(it,1:5), '...'
           write(6,*) '  OBSERVE  = ', x_obs(it/obs_xintv,1:5), '...'
           do ix = 1, nx
             x_anl(it, ix) = sum(x_anl_m(it,ix,1:mems))/mems
             anlinc(ix,1) = x_anl(it,ix)
           end do
-          write(6,*) '  ANALYSIS (BEFORE) = ', anlinc(obs_xintv:15:obs_xintv, 1), '...'
+          write(6,*) '  ANALYSIS (BEFORE) = ', anlinc(1:5, 1), '...'
           write(6,*) ''
           Pf = 0.0d0
           
@@ -542,7 +540,7 @@ program lorenz96_main
               x_anl(it, ix) = sum(x_anl_m(it, ix, :))/mems
             end do
             anlinc4out(it/obs_tintv,:) = anlinc(:,1) - x_anl(it,:)
-            write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,obs_xintv:15:obs_xintv), '...'
+            write(6,*) '  ANALYSIS (AFTER) = ', x_anl(it,1:5), '...'
             write(6,*) ''
             write(6,*) ' CHECK ENSEMBLE PART FOR UPDATE (AFTER) on ', it 
             write(6,*) x_anl_m(it,1,1:5)
@@ -612,7 +610,7 @@ program lorenz96_main
               x_anl(it, ix) = x_anl(it, ix) + sum(Ea(ix, :))/mems
             end do
             anlinc4out(it/obs_tintv,:) = anlinc(:,1) - x_anl(it,:)
-            write(6,*) '  ANALYSIS (PRTB STEP) = ', x_anl(it,obs_xintv:15:obs_xintv), '...'
+            write(6,*) '  ANALYSIS (PRTB STEP) = ', x_anl(it,1:5), '...'
             write(6,*) ''
 
           end if &
