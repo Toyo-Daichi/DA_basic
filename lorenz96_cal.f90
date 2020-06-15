@@ -144,8 +144,8 @@ contains
     ELSE IF( dist <= 2*a ) THEN
       factor = 1.0d0/12.0d0*b**5 - 0.5d0*b**4 + 5.0d0/8.0d0*b**3 &
         & + 5.0d0/3.0d0*b**2 - 5.0d0*b + 4.0d0 - 2.0d0/3.0d0/b
-    ELSE IF( a == 0.0d0 ) THEN
-      factor = 1.0d0
+    !ELSE IF( a == 0.0d0 ) THEN
+    !  factor = 1.0d0
     ELSE
       factor = 0.0d0
     END IF

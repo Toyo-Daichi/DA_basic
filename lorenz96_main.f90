@@ -38,9 +38,10 @@ program lorenz96_main
 
   ! *** Various parameters
   real(r_size), parameter   :: size_noise_obs = 1.0d0
+  real(r_size), parameter   :: size_noise_sim = 1.0d0
   real(r_size)              :: gnoise, alpha
   real(r_dble)              :: delta
-  real(r_size)              :: scale, dist, factor
+  real(r_size)              :: scale, shchur_length_scale, factor
   integer                   :: mems
   integer                   :: obs_set, localization_mode
   integer                   :: obs_bias_sgrd, obs_bias_egrd
@@ -58,6 +59,7 @@ program lorenz96_main
   
   real(r_size), allocatable :: Ef(:,:), Ea(:,:) ! Ensemble pertubation
   real(r_size), allocatable :: obs_prtbmtx(:,:) ! Ensemble pertubation
+  real(r_size), allocatable :: EQ(:,:)
 
   real(r_size), allocatable :: hx(:,:)
   real(r_size), allocatable :: hdxf(:,:)
@@ -104,7 +106,7 @@ program lorenz96_main
   namelist /set_parm/ nx, dt, force, oneday
   namelist /set_exp/ tool, ts_check, intg_method
   namelist /set_da_exp/ da_veach, da_method, alpha
-  namelist /enkf_setting/ mems, enkf_method, localization_mode
+  namelist /enkf_setting/ mems, enkf_method, localization_mode, shchur_length_scale
   namelist /set_period/ spinup_period, normal_period
   namelist /set_obs/ obs_set, obs_xintv, obs_tintv, obs_bias_sgrd, obs_bias_egrd
   namelist /spinup_output/ initial_true_file, initial_sim_file
@@ -127,7 +129,7 @@ program lorenz96_main
   else if (ierr > 0) then
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
     write(6,*) '   *** Warning : Not appropriate names in namelist !! Check !!'
-    write(6,*) '   Stop : lorenz96_main.f90              '
+    write(6,*) '   Stop : lorenz96_main.f90       '
     stop
   end if
   
@@ -176,8 +178,9 @@ program lorenz96_main
       allocate(Kg(1:nx, 1:ny))
       allocate( H(1:ny, 1:nx))
       allocate( R(1:ny, 1:ny))
-
+      
       allocate(Ef(nx,mems), Ea(nx,mems), obs_prtbmtx(ny, mems))
+      allocate(EQ(nx,1))
 
       ! for kalmangain inverse calculate.
       allocate(obs_mtx(1:ny, 1:ny), obs_inv(1:ny, 1:ny))
@@ -243,6 +246,8 @@ program lorenz96_main
       Obs_making_time
     end do
     close(2)
+
+
   end if
   
   !======================================================================
@@ -329,6 +334,10 @@ program lorenz96_main
           write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,1:5), '...'
           write(6,*) ''
           
+          do ix = 1, nx
+            call gaussian_noise(size_noise_sim, gnoise)
+            EQ(ix, 1) = gnoise
+          end do
           !-------------------------------------------------------------------
           ! +++ Making Jacobian matrix.
           ! >> Please note that time changes are included...
@@ -358,7 +367,7 @@ program lorenz96_main
           JM(nx,nx-1) = (x_anl(it-1,1)-x_anl(it-1,nx-2))*delta
           JM(nx,nx) = 1.0d0 - delta
           
-          Pf = matmul(matmul(JM, Pa), transpose(JM))*(1.0d0 + alpha)
+          Pf = matmul(matmul(JM, Pa), transpose(JM))*(1.0d0 + alpha) + matmul(EQ, transpose(EQ))
           write(6,*) '  PREDICTION ERROR COVARIANCE on present step'
           call confirm_matrix(Pf, nx, nx)
           write(6,*) ''
@@ -483,11 +492,10 @@ program lorenz96_main
           ! +++ Localization mode
           !-----------------------------------------------------------
           if ( localization_mode == 1 ) then
-            dist = 0.05d0
             do ix = 1, nx
               do il = 1, nx
                 scale = abs(ix-il)
-                call enkf_schur(scale, dist, factor)
+                call enkf_schur(scale, shchur_length_scale, factor)
                 Pf(ix,il) = Pf(ix,il)*factor
               end do
             end do

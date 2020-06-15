@@ -22,26 +22,27 @@ oneday=0.2d0
 
 # +++ integral period(day)
 spinup_period=365
-normal_period=40
+normal_period=10
 
 # +++ exp. info
-da_method='EnKF'
+da_method='KF'
 intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
 if [ ${da_method} = 'EnKF' ]; then 
-  mem=1000
+  mem=10
   enkf_method='SRF' # 'PO' or "SRF"
 fi
 
 # +++ adaptive inflation & localization
 alpha=0.0d0
 localization_mode=0
+shchur_length_scale=0
 
 # +++ making obs. info
 obs_tintv=1
 # >> For OBSERVATION OPERATER(H)
-obs_xintv=5
+obs_xintv=99
 #  OBS x coordinate set is full veriosn -> obs_set=0
 #  OBS x coordinate set is interval lack version -> obs_set=1
 #  OBS x coordinate set is bias lack version     -> obs_set=2
@@ -51,8 +52,8 @@ obs_bias_egrd=0
 if [ ${obs_xintv} -ge 2  ]; then obs_set=1 ;fi
 if [ ${obs_xintv} -eq 99 ]; then 
   obs_set=2
-  obs_bias_sgrd=6
-  obs_bias_egrd=40
+  obs_bias_sgrd=22
+  obs_bias_egrd=27
 fi
 
 # +++ output info
@@ -81,7 +82,8 @@ if [ ${da_method} = 'EnKF' ]; then
   output_errcov_file=${output_dir}/'normal_'${da_method}${mem}'m_errcov_'${nx}'ndim.csv'
   exp_log=./log/${today}_${prg}_${da_method}_${enkf_method}.log
   if [ ${localization_mode} == 1 ]; then
-  output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc.csv'
+  output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc_'${shchur_length_scale}'_alpha_'${alpha}'.csv'
+  #output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc_.csv'
   output_anlinc_file=${output_dir}/'normal_'${da_method}${mem}'m_anlinc_'${nx}'ndim_loc.csv'
   output_errcov_file=${output_dir}/'normal_'${da_method}${mem}'m_errcov_'${nx}'ndim_loc.csv'
   exp_log=./log/${today}_${prg}_${da_method}_${enkf_method}_loc.log
@@ -122,7 +124,8 @@ gfortran -fbounds-check  \
   &enkf_setting
     mems = ${mem},
     enkf_method = '${enkf_method}'
-    localization_mode = ${localization_mode}
+    localization_mode = ${localization_mode},
+    shchur_length_scale = ${shchur_length_scale}
   /
   &set_period
     spinup_period = ${spinup_period},
