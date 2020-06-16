@@ -22,10 +22,10 @@ oneday=0.2d0
 
 # +++ integral period(day)
 spinup_period=365
-normal_period=10
+normal_period=3
 
 # +++ exp. info
-da_method='KF'
+da_method='EnKF'
 intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
@@ -36,24 +36,22 @@ fi
 
 # +++ adaptive inflation & localization
 alpha=0.0d0
-localization_mode=0
-shchur_length_scale=0
+localization_mode=1
+shchur_length_scale=3
 
 # +++ making obs. info
 obs_tintv=1
 # >> For OBSERVATION OPERATER(H)
-obs_xintv=99
+obs_xintv=1
 #  OBS x coordinate set is full veriosn -> obs_set=0
 #  OBS x coordinate set is interval lack version -> obs_set=1
-#  OBS x coordinate set is bias lack version     -> obs_set=2
+#  OBS x coordinate set is bias kacl(wind) version -> obs_set=2
 obs_set=0
-obs_bias_sgrd=0
-obs_bias_egrd=0
+obs_wnd_point=0
 if [ ${obs_xintv} -ge 2  ]; then obs_set=1 ;fi
 if [ ${obs_xintv} -eq 99 ]; then 
   obs_set=2
-  obs_bias_sgrd=22
-  obs_bias_egrd=27
+  obs_wnd_point=26
 fi
 
 # +++ output info
@@ -90,6 +88,11 @@ if [ ${da_method} = 'EnKF' ]; then
   fi
 fi
 
+# >> *** wind effect experiment
+input_wnd_errcov_file=''
+if [ ${obs_xintv} -eq 99  ]; then
+  input_wnd_errcov_file=${output_dir}'/input_KF_errcov_40ndim.csv'
+fi
 #----------------------------------------------------------------------
 # +++ Run exp.
 #----------------------------------------------------------------------
@@ -135,14 +138,14 @@ gfortran -fbounds-check  \
     obs_set = ${obs_set},
     obs_xintv = ${obs_xintv},
     obs_tintv = ${obs_tintv},
-    obs_bias_sgrd = ${obs_bias_sgrd},
-    obs_bias_egrd = ${obs_bias_egrd}
+    obs_wnd_point = ${obs_wnd_point}
   /
-  &spinup_output
+  &inoutput_file
     initial_true_file  = '${initial_true_file}',
-    initial_sim_file   = '${initial_sim_file}'
+    initial_sim_file   = '${initial_sim_file}',
+    input_wnd_errcov_file = '${input_wnd_errcov_file}'
   /
-  &exp_output
+  &exp_outputfile
     output_true_file   = '${output_true_file}',
     output_anl_file    = '${output_anl_file}',
     output_sim_file    = '${output_sim_file}',
@@ -151,6 +154,7 @@ gfortran -fbounds-check  \
     output_anlinc_file = '${output_anlinc_file}',
     opt_veach = .${out_boolen}.
   /
+
 EOF
 
 rm -rf *.mod *_mod.f* ${prg}

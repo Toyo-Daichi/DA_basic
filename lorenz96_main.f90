@@ -37,15 +37,15 @@ program lorenz96_main
   real(r_size), allocatable :: anlinc(:,:)
 
   ! *** Various parameters
-  real(r_size), parameter   :: size_noise_obs = 1.0d0
-  real(r_size), parameter   :: size_noise_sim = 1.0d0
+  real(r_size), parameter   :: size_noise_obs = 0.01d0
+  real(r_size), parameter   :: size_noise_sim = 1.00d0
   real(r_size)              :: gnoise, alpha
   real(r_dble)              :: delta
-  real(r_size)              :: scale, shchur_length_scale, factor
+  real(r_size)              :: shchur_length_scale
   integer                   :: mems
   integer                   :: obs_set, localization_mode
-  integer                   :: obs_bias_sgrd, obs_bias_egrd
-  
+  integer                   :: obs_wnd_point
+
   ! --- Data assimilation exp.
   ! +++ Matrix setting
   real(r_size), allocatable :: JM(:,:)  ! state transient matrix (=Jacobean　matrix)
@@ -56,10 +56,11 @@ program lorenz96_main
   real(r_size), allocatable :: Kg(:,:)  ! Kalman gain
   real(r_size), allocatable :: Kh(:,:)  ! Kalman gain for pertuvation
   real(r_size), allocatable ::  H(:,:)  ! Observation operator
+  real(r_size), allocatable :: Qe(:,:)  ! prediction error matrix 
   
   real(r_size), allocatable :: Ef(:,:), Ea(:,:) ! Ensemble pertubation
   real(r_size), allocatable :: obs_prtbmtx(:,:) ! Ensemble pertubation
-  real(r_size), allocatable :: EQ(:,:)
+  real(r_size), allocatable :: Pf_wnd(:,:)      ! Forecast error convariance matrix (for wnd effect exp)
 
   real(r_size), allocatable :: hx(:,:)
   real(r_size), allocatable :: hdxf(:,:)
@@ -83,6 +84,7 @@ program lorenz96_main
   character(256)        :: output_obs_file
   character(256)        :: output_anlinc_file
   character(256)        :: output_errcov_file
+  character(256)        :: input_wnd_errcov_file
 
   real(r_size), allocatable :: anlinc4out(:, :) ! increment info.
   
@@ -108,9 +110,9 @@ program lorenz96_main
   namelist /set_da_exp/ da_veach, da_method, alpha
   namelist /enkf_setting/ mems, enkf_method, localization_mode, shchur_length_scale
   namelist /set_period/ spinup_period, normal_period
-  namelist /set_obs/ obs_set, obs_xintv, obs_tintv, obs_bias_sgrd, obs_bias_egrd
-  namelist /spinup_output/ initial_true_file, initial_sim_file
-  namelist /exp_output/ &
+  namelist /set_obs/ obs_set, obs_xintv, obs_tintv, obs_wnd_point
+  namelist /inoutput_file/ initial_true_file, initial_sim_file, input_wnd_errcov_file
+  namelist /exp_outputfile/ &
     output_true_file, output_anl_file, output_sim_file, output_obs_file, output_errcov_file, output_anlinc_file, opt_veach
   
   read(5, nml=set_parm, iostat=ierr)
@@ -119,8 +121,7 @@ program lorenz96_main
   read(5, nml=enkf_setting, iostat = ierr)
   read(5, nml=set_period, iostat=ierr)
   read(5, nml=set_obs, iostat=ierr)
-  read(5, nml=spinup_output, iostat=ierr)
-  read(5, nml=exp_output, iostat=ierr)
+  read(5, nml=inoutput_file, iostat=ierr)
   ! name list io check
   if (ierr < 0 ) then
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
@@ -132,6 +133,7 @@ program lorenz96_main
     write(6,*) '   Stop : lorenz96_main.f90       '
     stop
   end if
+  read(5, nml=exp_outputfile, iostat=ierr)
   
   kt_oneday = int(oneday/dt) ! Unit change for 1day
   if ( trim(tool) == 'spinup' ) then 
@@ -145,10 +147,12 @@ program lorenz96_main
     ! --- OBS setting
     if ( obs_set <= 1 ) then
       ny = int(nx/obs_xintv)
+      obs_time = int((kt_oneday*normal_period)/obs_tintv)
     else if ( obs_set == 2 ) then
-      ny = obs_bias_egrd-obs_bias_sgrd+1 
+      ny = 1
+      obs_time = 1
     end if
-    obs_time = int((kt_oneday*normal_period)/obs_tintv)
+
     lda = ny
     lwork = ny
     allocate(x_obs(obs_time,ny))
@@ -178,9 +182,10 @@ program lorenz96_main
       allocate(Kg(1:nx, 1:ny))
       allocate( H(1:ny, 1:nx))
       allocate( R(1:ny, 1:ny))
+      allocate(Qe(1:nx, 1))
       
       allocate(Ef(nx,mems), Ea(nx,mems), obs_prtbmtx(ny, mems))
-      allocate(EQ(nx,1))
+      allocate(Pf_wnd(1:nx, 1:nx))
 
       ! for kalmangain inverse calculate.
       allocate(obs_mtx(1:ny, 1:ny), obs_inv(1:ny, 1:ny))
@@ -191,7 +196,6 @@ program lorenz96_main
       allocate(hdxf(ny,1))
       
       allocate(anlinc4out(obs_time, nx))
-
     end if
   end if
 
@@ -214,10 +218,9 @@ program lorenz96_main
     open(2, file=trim(initial_true_file), form='formatted', status='old')
       read(2,*) x_init
     close(2)
-    x_true(0, :) = x_init
+    x_true(0,:) = x_init
     do it = 1, kt_oneday*normal_period
       call ting_rk4(one_loop, x_true(it-1,:), x_true(it,:))
-      
       !-------------------------------------------------------------------
       ! +++ making obs score
       !-------------------------------------------------------------------
@@ -231,22 +234,17 @@ program lorenz96_main
               x_obs(it/obs_tintv, ix/obs_xintv) = x_true(it, ix) + gnoise
             endif
           enddo
-        
-        else if ( obs_set == 2 ) then
-          ipiv = 1
-          do ix = obs_bias_sgrd, obs_bias_egrd
-            call gaussian_noise(size_noise_obs, gnoise)
-            x_obs(it/obs_tintv, ipiv) = x_true(it, ix) + gnoise
-            ipiv = ipiv + 1
-          end do
         end if &
         Obs_making_xgrd
-      
       end if &
       Obs_making_time
     end do
     close(2)
 
+    if ( obs_set == 2 ) then
+      call gaussian_noise(size_noise_obs, gnoise)
+      x_obs(1,1) = x_true(1,obs_wnd_point) + gnoise
+    end if
 
   end if
   
@@ -272,7 +270,6 @@ program lorenz96_main
     H_check :&
     if ( obs_set == 0 ) then
       forall ( il=1:ny )  H(il, il) = 1.0d0
-    
     else 
       H_making :&
       if ( obs_set == 1 ) then
@@ -282,18 +279,20 @@ program lorenz96_main
           ix = ix + obs_xintv 
         end do
       else if ( obs_set == 2 ) then 
-        iy = 1
-        do ix = obs_bias_sgrd, obs_bias_egrd
-          H(iy, ix) = 1.0d0
-          iy = iy + 1
-        end do
+        H(1,obs_wnd_point) = 1.0d0
+        open(2, file=trim(input_wnd_errcov_file), form='formatted', status='old')
+          read(2,*) ((Pf_wnd(ix,iy),ix=1,nx),iy=1,nx)
+        close(2)
+        write(6,*) ''
+        write(6,*) '  PREPARE PREDICTION MATRIX CHECK '
+        call confirm_matrix(Pf_wnd, nx, nx)
+        Pf = Pf_wnd
       end if &
       H_making
 
       write(6,*) ''
       write(6,*) '  OBSERVATION OPERATER CHECK (LACK OBS EXP.) '
       call confirm_matrix(H, ny, nx)
-
     end if &
     H_check
 
@@ -301,9 +300,14 @@ program lorenz96_main
     ! +++ making sim score
     !-------------------------------------------------------------------
     open(2, file=trim(initial_sim_file), form='formatted', status='old')
-    read(2,*) x_init
+      read(2,*) x_init
     close(2)
-    x_sim(0,:) = x_init
+    
+    do ix = 1, nx
+      call gaussian_noise(size_noise_sim, gnoise)
+      x_sim(0,ix) = x_init(ix) + gnoise
+    end do
+    
     do it = 1, kt_oneday*normal_period
       call ting_rk4(one_loop, x_sim(it-1,:), x_sim(it,:))
     end do
@@ -327,16 +331,16 @@ program lorenz96_main
         write(6,*) ''
         call ting_rk4(one_loop, x_anl(it-1,:), x_anl(it,:))
         
-        if ( mod(it, obs_tintv)==0 ) then
+        if ( mod(it, obs_tintv) ==0 ) then
           write(6,*) '  TRUTH    = ', x_true(it,1:5), '...'
           write(6,*) '  PREDICT  = ', x_sim(it,1:5), '...'
-          write(6,*) '  OBSERVE  = ', x_obs(it/obs_tintv,1:5), '...'
+          write(6,*) '  OBSERVE  = ', x_obs(it/obs_tintv, :), '...'
           write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,1:5), '...'
           write(6,*) ''
           
           do ix = 1, nx
             call gaussian_noise(size_noise_sim, gnoise)
-            EQ(ix, 1) = gnoise
+            Qe(ix, 1) = gnoise
           end do
           !-------------------------------------------------------------------
           ! +++ Making Jacobian matrix.
@@ -367,7 +371,7 @@ program lorenz96_main
           JM(nx,nx-1) = (x_anl(it-1,1)-x_anl(it-1,nx-2))*delta
           JM(nx,nx) = 1.0d0 - delta
           
-          Pf = matmul(matmul(JM, Pa), transpose(JM))*(1.0d0 + alpha) + matmul(EQ, transpose(EQ))
+          Pf = matmul(matmul(JM, Pa), transpose(JM))*(1.0d0 + alpha) + matmul(Qe, transpose(Qe))
           write(6,*) '  PREDICTION ERROR COVARIANCE on present step'
           call confirm_matrix(Pf, nx, nx)
           write(6,*) ''
@@ -408,6 +412,14 @@ program lorenz96_main
           write(6,*) ''
 
           call output_errcov(nx, it/obs_tintv, kt_oneday*normal_period/obs_tintv, Pa)
+          
+          ! *** for obs(wind effect) experiment
+          if ( obs_set == 2 ) then
+            call wnd_exp_support(obs_tintv)
+            write(6,*) ' CHECK DATA ASSIMLATION INCREMENT '
+            write(6,*) matmul(Kg, hdxf)
+          end if
+
         end if
         
       end do &
@@ -441,16 +453,16 @@ program lorenz96_main
         do imem = 1, mems
           call ting_rk4(one_loop, x_anl_m(it-1,:,imem), x_anl_m(it,:,imem))
         end do
-
+        
+        do ix = 1, nx
+          x_anl(it, ix) = sum(x_anl_m(it,ix,1:mems))/mems
+          anlinc(ix,1) = x_anl(it,ix)
+        end do
         
         if ( mod(it, obs_tintv) == 0 .and. it /= 0) then
           write(6,*) '  TRUTH    = ', x_true(it,1:5), '...'
           write(6,*) '  PREDICT  = ', x_sim(it,1:5), '...'
-          write(6,*) '  OBSERVE  = ', x_obs(it/obs_xintv,1:5), '...'
-          do ix = 1, nx
-            x_anl(it, ix) = sum(x_anl_m(it,ix,1:mems))/mems
-            anlinc(ix,1) = x_anl(it,ix)
-          end do
+          write(6,*) '  OBSERVE  = ', x_obs(it/obs_xintv,:), '...'
           write(6,*) '  ANALYSIS (BEFORE) = ', anlinc(1:5, 1), '...'
           write(6,*) ''
           Pf = 0.0d0
@@ -491,17 +503,8 @@ program lorenz96_main
           !-----------------------------------------------------------
           ! +++ Localization mode
           !-----------------------------------------------------------
-          if ( localization_mode == 1 ) then
-            do ix = 1, nx
-              do il = 1, nx
-                scale = abs(ix-il)
-                call enkf_schur(scale, shchur_length_scale, factor)
-                Pf(ix,il) = Pf(ix,il)*factor
-              end do
-            end do
-          end if
+          if ( localization_mode == 1 ) call localize_errcov(Pf, shchur_length_scale)
 
-          
           write(6,*) '  PREDICTION ERROR COVARIANCE on present step'
           call confirm_matrix(Pf, nx, nx)
           call output_errcov(nx, it/obs_tintv, kt_oneday*normal_period/obs_tintv, Pf)
@@ -624,6 +627,9 @@ program lorenz96_main
           end if &
           da_enkf_method
         end if
+        
+        ! *** for obs(wind effect) experiment
+        if ( obs_set == 2 ) call wnd_exp_support(obs_tintv)
 
       end do &
       data_assim_EnKF_loop
@@ -681,22 +687,26 @@ program lorenz96_main
       close(21)
       close(22)
       close(23)
-      
-      open(30, file=trim(output_obs_file), form='formatted', status='replace')
-      open(31, file=trim(output_anlinc_file), form='formatted', status='replace')
-      do it = 1, kt_oneday*normal_period/obs_tintv
-        cfmt_obs = '(xx(F15.7, ","), F15.7)'
-        write(cfmt_obsnum,"(I2)") ny-1
-        cfmt_obs(2:3) = cfmt_obsnum
-        write(linebuf, trim(cfmt_obs)) x_obs(it, :)
-        call del_spaces(linebuf)
-        write(30,'(a)') linebuf
-        write(linebuf, trim(cfmt)) anlinc4out(it,:)
-        call del_spaces(linebuf)
-        write(31,'(a)') linebuf
+
+      observation_info_output :&
+      if ( obs_set /= 2 ) then
+        open(30, file=trim(output_obs_file), form='formatted', status='replace')
+        open(31, file=trim(output_anlinc_file), form='formatted', status='replace')
+        do it = 1, kt_oneday*normal_period/obs_tintv
+          cfmt_obs = '(xx(F15.7, ","), F15.7)'
+          write(cfmt_obsnum,"(I2)") ny-1
+          cfmt_obs(2:3) = cfmt_obsnum
+          write(linebuf, trim(cfmt_obs)) x_obs(it, :)
+          call del_spaces(linebuf)
+          write(30,'(a)') linebuf
+          write(linebuf, trim(cfmt)) anlinc4out(it,:)
+          call del_spaces(linebuf)
+          write(31,'(a)') linebuf
         end do
-      close(30)
-      close(31)
+        close(30)
+        close(31)
+      end if &
+      observation_info_output
       write(6,*) ' && Successfuly output !!!        '  
     endif
     
@@ -786,8 +796,44 @@ contains
         write(6,*) '+++ err covariance matrix last step '
       close(2)
     end if
-      
   end subroutine
 
+  subroutine localize_errcov(mtx, shchur_length_scale)
+    implicit none
+    real(r_size), intent(inout) :: mtx(nx, nx)
+    real(r_size), intent(in)    :: shchur_length_scale
+    !working variable
+    real(r_size) :: localize_mtx(nx, nx)
+    real(r_size) :: factor, length
+    integer      :: ix, iy, diff
+
+    forall ( il=1:nx ) localize_mtx(il, il) = 1.0d0 
+    do ix = 1, nx
+      do iy = 1, nx
+        length = abs(ix-iy)
+        if ( length > nx/2 ) then
+          diff = length - nx/2
+          length = nx/2 - diff
+        end if
+        if ( ix /= iy ) then 
+          call enkf_schur(shchur_length_scale, length, factor)
+          localize_mtx(ix,iy) = factor
+        end if 
+        !for debug
+        !write(6,'("ix: ",I2," iy: ",I2," len: ",F12.7)') ix, iy, length
+      end do
+    end do
+
+    !write(6,*) ' CHECK LOCALIZE MATRIX '
+    !call confirm_matrix(localize_mtx, nx, nx)
+    mtx = mtx*localize_mtx
+    return
+  end subroutine
+
+  subroutine wnd_exp_support(obs_tintv)
+    implicit none
+    integer, intent(inout) :: obs_tintv
+    obs_tintv = -9999
+  end subroutine
 
 end program lorenz96_main
