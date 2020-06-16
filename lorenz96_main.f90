@@ -37,8 +37,8 @@ program lorenz96_main
   real(r_size), allocatable :: anlinc(:,:)
 
   ! *** Various parameters
-  real(r_size), parameter   :: size_noise_obs = 0.01d0
-  real(r_size), parameter   :: size_noise_sim = 1.00d0
+  real(r_size), parameter   :: size_noise_obs = 1.0d0
+  real(r_size), parameter   :: size_noise_sim = 2.00d0
   real(r_size)              :: gnoise, alpha
   real(r_dble)              :: delta
   real(r_size)              :: shchur_length_scale
@@ -498,7 +498,7 @@ program lorenz96_main
           !-----------------------------------------------------------
           ! +++ adaptive inflation mode
           !-----------------------------------------------------------
-          Pf = Pf*(1.0d0 + alpha)
+          Pf = Pf*(1.0d0+alpha)
           
           !-----------------------------------------------------------
           ! +++ Localization mode

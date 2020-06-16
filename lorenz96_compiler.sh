@@ -22,7 +22,7 @@ oneday=0.2d0
 
 # +++ integral period(day)
 spinup_period=365
-normal_period=3
+normal_period=40
 
 # +++ exp. info
 da_method='EnKF'
@@ -35,7 +35,7 @@ if [ ${da_method} = 'EnKF' ]; then
 fi
 
 # +++ adaptive inflation & localization
-alpha=0.0d0
+alpha=0.02d0
 localization_mode=1
 shchur_length_scale=3
 
@@ -80,8 +80,8 @@ if [ ${da_method} = 'EnKF' ]; then
   output_errcov_file=${output_dir}/'normal_'${da_method}${mem}'m_errcov_'${nx}'ndim.csv'
   exp_log=./log/${today}_${prg}_${da_method}_${enkf_method}.log
   if [ ${localization_mode} == 1 ]; then
-  output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc_'${shchur_length_scale}'_alpha_'${alpha}'.csv'
-  #output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc_.csv'
+  #output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc_'${shchur_length_scale}'_alpha_'${alpha}'.csv'
+  output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc_.csv'
   output_anlinc_file=${output_dir}/'normal_'${da_method}${mem}'m_anlinc_'${nx}'ndim_loc.csv'
   output_errcov_file=${output_dir}/'normal_'${da_method}${mem}'m_errcov_'${nx}'ndim_loc.csv'
   exp_log=./log/${today}_${prg}_${da_method}_${enkf_method}_loc.log
