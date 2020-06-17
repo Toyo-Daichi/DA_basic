@@ -38,7 +38,7 @@ program lorenz96_main
   real(r_size), allocatable :: anlinc(:,:)
 
   ! *** Various parameters
-  real(r_size), parameter   :: size_noise_obs = 0.5d0
+  real(r_size), parameter   :: size_noise_obs = 1.0d0
   real(r_size), parameter   :: size_noise_sim = 1.0d0
   real(r_size)              :: gnoise, alpha
   real(r_dble)              :: delta
@@ -215,6 +215,8 @@ program lorenz96_main
   ! +++ making true run.
   !----------------------------------------------------------------------
 
+  write(6,*) 'LORENZ(1996) EXPERIMENT START'
+  write(6,*) ''
   write(6,*) 'Exp. setting            :: ', tool
   write(6,*) 'Integral method         :: ', intg_method
   
@@ -266,7 +268,7 @@ program lorenz96_main
     write(6,*) '+++ Data assimilation exp. start '
     write(6,*) ' >> Data assimilation method  :: ', da_method
     if ( trim(da_method) == 'EnKF' ) write(6,*) ' >> EnKF method is       ', trim(enkf_method)
-    if ( trim(da_method) == 'EnKF' ) write(6,*) ' >> Localization_mode is ', localization_mode
+    if ( trim(da_method) == 'EnKF' ) write(6,*) ' >> Localization_mode is ', localization_mode, shchur_length_scale
 
     ! making identity matrix
     Pf = 0.d0; Pa = 0.d0; I = 0.d0
@@ -345,7 +347,8 @@ program lorenz96_main
         if ( mod(it, obs_tintv) ==0 ) then
           write(6,*) '  TRUTH    = ', x_true(it,1:5), '...'
           write(6,*) '  PREDICT  = ', x_sim(it,1:5), '...'
-          write(6,*) '  OBSERVE  = ', x_obs(it/obs_tintv, :), '...'
+          if ( obs_set /= 2 ) write(6,*) '  OBSERVE  = ', x_obs(it/obs_tintv, 1:5), '...'
+          if ( obs_set == 2 ) write(6,*) '  OBSERVE  = ', x_obs(it/obs_tintv, :)
           write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,1:5), '...'
           write(6,*) ''
           
@@ -456,6 +459,7 @@ program lorenz96_main
       !-----------------------------------------------------------
       data_assim_EnKF_loop :&
       do it = 1, kt_oneday*normal_period
+        write(6,*) ''
         write(6,*) 'Data assim. time step: ', it
 
         write(6,*) ' CHECK ENSEMBLE PART FOR UPDATE (BEFORE) on ', it-1
@@ -473,7 +477,8 @@ program lorenz96_main
         if ( mod(it, obs_tintv) == 0 .and. it /= 0) then
           write(6,*) '  TRUTH    = ', x_true(it,1:5), '...'
           write(6,*) '  PREDICT  = ', x_sim(it,1:5), '...'
-          write(6,*) '  OBSERVE  = ', x_obs(it/obs_xintv,:), '...'
+          if ( obs_set /= 2 ) write(6,*) '  OBSERVE  = ', x_obs(it/obs_tintv, 1:5), '...'
+          if ( obs_set == 2 ) write(6,*) '  OBSERVE  = ', x_obs(it/obs_tintv, :)
           write(6,*) '  ANALYSIS (BEFORE) = ', anlinc(1:5, 1), '...'
           write(6,*) ''
           Pf = 0.0d0
@@ -879,6 +884,10 @@ contains
       end do
     end do
 
+    ! for debug
+    !open(50, file='./output/local_matrix/schprm.csv', form='formatted', status='replace')
+    !  write(50,'(*(g0:,","))') localize_mtx(:,:)
+    !close(50)
     !write(6,*) ' CHECK LOCALIZE MATRIX '
     !call confirm_matrix(localize_mtx, nx, nx)
     mtx = mtx*localize_mtx
