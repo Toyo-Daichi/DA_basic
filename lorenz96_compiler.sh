@@ -31,7 +31,7 @@ mem=1
 enkf_method='none'
 if [ ${da_method} = 'EnKF' ]; then 
   mem=10
-  enkf_method='SRF' # 'PO' or "SRF"
+  enkf_method='ETKF' # 'PO' or "SRF"
 fi
 
 # +++ adaptive inflation & localization
@@ -98,14 +98,22 @@ fi
 #----------------------------------------------------------------------
 cp ${CDIR}/common/common.f90 common_mod.f90
 cp ${CDIR}/common/common_mtx.f90 common_mtx_mod.f90
+cp ${CDIR}/common/common_enkf.f90 common_enkf_mod.f90
 cp ${CDIR}/common/SFMT.f90 SFMT_mod.f90
 cp ${CDIR}/common/netlib.f netlib_mod.f
 
 # +++ compile
 gfortran -fbounds-check  \
-  SFMT_mod.f90 common_mod.f90 netlib_mod.f common_mtx_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 \
+  SFMT_mod.f90 common_mod.f90 netlib_mod.f common_mtx_mod.f90 common_enkf_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 \
   -o ${prg} -I/usr/local/include -lm -lblas -llapack \
   -w # error message Suppression
+
+#for alpha in 0.01d0 0.02d0 0.03d0 0.04d0  0.05d0  0.06d0  0.07d0  0.08d0  0.09d0  0.10d0
+#do
+#for shchur_length_scale in 1 2 3 4 5 6 7 8 9 10
+#do
+#output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc_'${shchur_length_scale}'_alpha_'${alpha}'.csv'
+
 
 ./${prg} > ${exp_log} << EOF
   &set_parm
@@ -159,5 +167,6 @@ EOF
 
 rm -rf *.mod *_mod.f* ${prg}
 echo 'Normal END'
-
+#done
+#done
 exit

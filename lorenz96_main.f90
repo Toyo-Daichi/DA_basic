@@ -5,6 +5,7 @@ program lorenz96_main
 
   use common
   use common_mtx
+  use common_enkf
   use lorenz96_prm
   use lorenz96_cal
   
@@ -37,8 +38,8 @@ program lorenz96_main
   real(r_size), allocatable :: anlinc(:,:)
 
   ! *** Various parameters
-  real(r_size), parameter   :: size_noise_obs = 1.0d0
-  real(r_size), parameter   :: size_noise_sim = 2.00d0
+  real(r_size), parameter   :: size_noise_obs = 0.5d0
+  real(r_size), parameter   :: size_noise_sim = 1.0d0
   real(r_size)              :: gnoise, alpha
   real(r_dble)              :: delta
   real(r_size)              :: shchur_length_scale
@@ -57,20 +58,21 @@ program lorenz96_main
   real(r_size), allocatable :: Kh(:,:)  ! Kalman gain for pertuvation
   real(r_size), allocatable ::  H(:,:)  ! Observation operator
   real(r_size), allocatable :: Qe(:,:)  ! prediction error matrix 
-  
   real(r_size), allocatable :: Ef(:,:), Ea(:,:) ! Ensemble pertubation
   real(r_size), allocatable :: obs_prtbmtx(:,:) ! Ensemble pertubation
   real(r_size), allocatable :: Pf_wnd(:,:)      ! Forecast error convariance matrix (for wnd effect exp)
+  real(r_size), allocatable :: R_sqrt(:,:)      ! Root Observation error convariance matrix
 
   real(r_size), allocatable :: hx(:,:)
   real(r_size), allocatable :: hdxf(:,:)
   real(r_size), allocatable :: work(:)
 
+  real(r_size), allocatable :: obs_diag(:)
   real(r_size), allocatable :: obs_mtx(:,:)
   real(r_size), allocatable :: obs_inv(:,:)
 
   ! --- for EnSRF
-  real(r_size), allocatable :: obs_srf_mtx_v1(:,:), obs_srf_mtx_v2(:,:)
+  real(r_size), allocatable :: variance_sum(:,:), obs_srf_mtx_v2(:,:)
   real(r_size), allocatable :: obs_srf_inv_v1(:,:), obs_srf_inv_v2(:,:)
 
   ! --- Output control
@@ -186,10 +188,12 @@ program lorenz96_main
       
       allocate(Ef(nx,mems), Ea(nx,mems), obs_prtbmtx(ny, mems))
       allocate(Pf_wnd(1:nx, 1:nx))
+      allocate(R_sqrt(1:ny, 1:ny))
 
       ! for kalmangain inverse calculate.
+      allocate(obs_diag(1:ny))
       allocate(obs_mtx(1:ny, 1:ny), obs_inv(1:ny, 1:ny))
-      allocate(obs_srf_mtx_v1(1:ny, 1:ny), obs_srf_mtx_v2(1:ny, 1:ny))
+      allocate(variance_sum(1:ny, 1:ny), obs_srf_mtx_v2(1:ny, 1:ny))
       allocate(obs_srf_inv_v1(1:ny, 1:ny), obs_srf_inv_v2(1:ny, 1:ny))
       
       allocate(hx(ny,1))
@@ -256,7 +260,8 @@ program lorenz96_main
     write(6,*) '-------------------------------------------------------'
     write(6,*) '+++ Data assimilation exp. start '
     write(6,*) ' >> Data assimilation method  :: ', da_method
-    if ( trim(da_method) == 'EnKF' ) write(6,*) ' >> Localization is ', localization_mode
+    if ( trim(da_method) == 'EnKF' ) write(6,*) ' >> EnKF method is       ', trim(enkf_method)
+    if ( trim(da_method) == 'EnKF' ) write(6,*) ' >> Localization_mode is ', localization_mode
 
     ! making identity matrix
     Pf = 0.d0; Pa = 0.d0; I = 0.d0
@@ -266,6 +271,7 @@ program lorenz96_main
     forall ( il=1:nx ) Pa(il, il) = 1.0d0
     forall ( il=1:nx )  I(il, il) = 1.0d0
     forall ( il=1:ny )  R(il, il) = size_noise_obs
+    obs_diag(:) = size_noise_obs
     
     H_check :&
     if ( obs_set == 0 ) then
@@ -565,7 +571,7 @@ program lorenz96_main
             ! K^ = 
             ! Pf H^T [(H Pf H^T + R)^-1/2]^T [(H Pf H^T + R)^-1/2]^-1
             !----------------------------------------------------------- 
-
+            
             ! +++ (1) Average step 
             xt_vec(:,1) = x_anl(it,:)
             yt_vec(:,1) = x_obs(it/obs_tintv,:)
@@ -577,15 +583,20 @@ program lorenz96_main
             x_anl(it,:) = xt_vec(:,1)
             write(6,*) '  ANALYSIS (AVERAGE STEP) = ', x_anl(it,1:5), '...'
             write(6,*) ''
-
+            
             ! +++ (2) Pertubation step
-            obs_srf_mtx_v1 = matmul(H, matmul(Pf, transpose(H))) + R
-            call mtx_sqrt(ny, obs_srf_mtx_v1, obs_srf_inv_v1)
+            !----------------------------------------------------------- 
+            ! variance_sum = H*Pf*H^T + R
+            ! obs_srf_root = [H*Pf*H^T + R]^1/2
+
+            !----------------------------------------------------------- 
+            variance_sum = matmul(H, matmul(Pf, transpose(H))) + R
+            call mtx_sqrt(ny, variance_sum, obs_srf_inv_v1)
             
             call dgetrf(ny, ny, obs_srf_inv_v1, lda, ipiv, ierr)
             call dgetri(ny, obs_srf_inv_v1, lda, ipiv, work, lwork, ierr)
             
-            obs_srf_mtx_v2 = obs_srf_mtx_v1 + R
+            obs_srf_mtx_v2 = variance_sum + R
             call mtx_sqrt(ny, obs_srf_mtx_v2, obs_srf_inv_v2)
             obs_srf_inv_v2 = obs_srf_mtx_v2
             
@@ -613,8 +624,39 @@ program lorenz96_main
               x_anl_m(it, :, imem) = x_anl(it, :) + Ea(:,imem)
             end do
 
-            obs_srf_mtx_v1 = 0.0d0; obs_srf_mtx_v2 = 0.0d0
+            variance_sum = 0.0d0; obs_srf_mtx_v2 = 0.0d0
             obs_srf_inv_v1 = 0.0d0; obs_srf_inv_v2 = 0.0d0
+
+            ! +++ Union step (ave. + pertb)
+            do ix = 1, nx
+              x_anl(it, ix) = x_anl(it, ix) + sum(Ea(ix, :))/mems
+            end do
+            anlinc4out(it/obs_tintv,:) = anlinc(:,1) - x_anl(it,:)
+            write(6,*) '  ANALYSIS (PRTB STEP) = ', x_anl(it,1:5), '...'
+            write(6,*) ''
+
+          else if ( trim(enkf_method) == 'ETKF') then
+            xt_vec(:,1) = x_anl(it,:)
+            yt_vec(:,1) = x_obs(it/obs_tintv,:)
+            
+            hx = matmul(H, xt_vec)
+            hdxf = yt_vec - hx
+            xt_vec = xt_vec + matmul(Kg, hdxf)
+            
+            x_anl(it,:) = xt_vec(:,1)
+
+            call enkf_etkf(nx, ny, mems, hdxf, obs_diag, Ef, Ea)
+            call confirm_matrix(Ea, nx, mems)
+
+            write(6,*) ' && AVERAGE PERTUBATION   '
+            write(6,*) sum(Ea(1,:))/mems, sum(Ea(2,:))/mems, sum(Ea(3,:))/mems, &
+                       sum(Ea(4,:))/mems, sum(Ea(5,:))/mems, '...'
+            write(6,*) ''
+
+            ! +++ for next step, initiallize
+            do imem = 1, mems
+              x_anl_m(it, :, imem) = x_anl(it, :) + Ea(:,imem)
+            end do
 
             ! +++ Union step (ave. + pertb)
             do ix = 1, nx
@@ -816,7 +858,7 @@ contains
           length = nx/2 - diff
         end if
         if ( ix /= iy ) then 
-          call enkf_schur(shchur_length_scale, length, factor)
+          call enkf_schur_local(shchur_length_scale, length, factor)
           localize_mtx(ix,iy) = factor
         end if 
         !for debug

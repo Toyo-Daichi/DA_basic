@@ -128,7 +128,7 @@ contains
   ! >> Localization
   !    Schur Product
   !-----------------------------------------------------------------------
-  SUBROUTINE enkf_schur(scale,dist,factor)
+  SUBROUTINE enkf_schur_local(scale,dist,factor)
     IMPLICIT NONE
     REAL(r_size),INTENT(IN)  :: scale
     REAL(r_size),INTENT(IN)  :: dist
@@ -151,7 +151,7 @@ contains
     END IF
   
     RETURN
-  END SUBROUTINE enkf_schur
+  END SUBROUTINE enkf_schur_local
 
   subroutine del_spaces(space)
     implicit none
