@@ -72,6 +72,7 @@ program lorenz96_main
   real(r_size), allocatable :: obs_inv(:,:)
 
   ! --- for EnSRF
+  real(r_size), allocatable :: HE(:,:)
   real(r_size), allocatable :: variance_sum(:,:)
   real(r_size), allocatable :: variance_sum_root(:,:), variance_sum_root_inv(:,:)
   real(r_size), allocatable :: variance_sum_root_pobs(:,:)
@@ -197,6 +198,7 @@ program lorenz96_main
       allocate(obs_mtx(1:ny, 1:ny), obs_inv(1:ny, 1:ny))
 
       ! for EnSRF
+      allocate(HE(1:nx, 1:mems))
       allocate(variance_sum(1:ny, 1:ny))
       allocate(variance_sum_root(1:ny, 1:ny), variance_sum_root_inv(1:ny, 1:ny))
       allocate(variance_sum_root_pobs(1:ny, 1:ny), variance_sum_root_pobs_inv(1:ny, 1:ny))
@@ -573,9 +575,47 @@ program lorenz96_main
             write(6,*) x_anl_m(it,1,1:5)
             write(6,*) ''
           
+          else if ( trim(enkf_method) == 'EnSRF' ) then
+            ! +++ (1) Average step 
+            xt_vec(:,1) = x_anl(it,:)
+            yt_vec(:,1) = x_obs(it/obs_tintv,:)
+            
+            hx = matmul(H, xt_vec)
+            hdxf = yt_vec - hx
+            xt_vec = xt_vec + matmul(Kg, hdxf)
+            
+            x_anl(it,:) = xt_vec(:,1)
+            write(6,*) '  ANALYSIS (AVERAGE STEP) = ', x_anl(it,1:5), '...'
+            write(6,*) ''
+
+            HE = matmul(H, Ef)
+
+            do ix = 1, nx
+              call enkf_serial(         &
+                nx, mems, HE(ix,:),     &
+                size_noise_obs,         & ! image is rdiag(iy)
+                Ef, Kg, Ea              &
+                )
+            end do
+
+            write(6,*) ' ANALYSIS ENSEMBLE VECTOR '
+            call confirm_matrix(Ea, nx, mems)
+            
+            do imem = 1, mems
+              x_anl_m(it, :, imem) = x_anl(it, :) + Ea(:,imem)
+            end do
+            
+            ! +++ Union step (ave. + pertb)
+            do ix = 1, nx
+              x_anl(it, ix) = x_anl(it, ix) + sum(Ea(ix, :))/mems
+            end do
+
+            anlinc4out(it/obs_tintv,:) = anlinc(:,1) - x_anl(it,:)
+          
           else if ( trim(enkf_method) == 'SRF' ) then
             !----------------------------------------------------------- 
-            ! >> EnKF (-> Serial EnSRF)
+            ! 2020.6.17 error??
+            ! >> own work EnKF (-> Serial EnSRF)
             ! +++ Squared root fileter method (SRF)
             ! Ea = (I - K^H)*Ef
             ! K^ = 
@@ -600,7 +640,7 @@ program lorenz96_main
             ! variance_sum_root = [H*Pf*H^T + R]^1/2
             ! variance_sum_root_inv = [H*Pf*H^T + R]^-(1/2)
             !----------------------------------------------------------- 
-            variance_sum = matmul(H, matmul(Pf, transpose(H))) + R
+            variance_sum = matmul(H, matmul(Pf, transpose(H)))
             call mtx_sqrt(ny, variance_sum, variance_sum_root)
             
             variance_sum_root_inv = variance_sum_root

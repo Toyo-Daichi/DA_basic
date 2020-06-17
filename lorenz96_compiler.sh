@@ -30,8 +30,8 @@ intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
 if [ ${da_method} = 'EnKF' ]; then 
-  mem=15
-  enkf_method='SRF' # 'PO' or "SRF" or "ETKF"
+  mem=5
+  enkf_method='EnSRF' # 'PO' or "SRF" or "ETKF"
 fi
 
 # +++ adaptive inflation & localization
@@ -108,11 +108,12 @@ gfortran -fbounds-check  \
   -o ${prg} -I/usr/local/include -lm -lblas -llapack \
   -w # error message Suppression
 
-for alpha in 0.01d0 0.02d0 0.03d0 0.04d0  0.05d0  0.06d0  0.07d0  0.08d0  0.09d0  0.10d0
-do
-for shchur_length_scale in 1 2 3 4 5 6 7 8 9 10
-do
-output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc_'${shchur_length_scale}'_alpha_'${alpha}'.csv'
+#for alpha in 0.01d0 0.02d0 0.03d0 0.04d0  0.05d0  0.06d0  0.07d0  0.08d0  0.09d0  0.10d0
+#do
+#for shchur_length_scale in 1 2 3 4 5 6 7 8 9 10
+#do
+#output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc_'${shchur_length_scale}'_alpha_'${alpha}'.csv'
+
 ./${prg} > ${exp_log} << EOF
   &set_parm
     nx = ${nx},
@@ -163,8 +164,8 @@ output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndi
 
 EOF
 
-#rm -rf *.mod *_mod.f* ${prg}
+rm -rf *.mod *_mod.f* ${prg}
 echo 'Normal END'
-done
-done
+#done
+#done
 exit
