@@ -61,7 +61,7 @@ program lorenz96_main
   real(r_size), allocatable :: Ef(:,:), Ea(:,:) ! Ensemble pertubation
   real(r_size), allocatable :: obs_prtbmtx(:,:) ! Ensemble pertubation
   real(r_size), allocatable :: Pf_wnd(:,:)      ! Forecast error convariance matrix (for wnd effect exp)
-  real(r_size), allocatable :: R_sqrt(:,:)      ! Root Observation error convariance matrix
+  real(r_size), allocatable :: R_root(:,:)      ! Root Observation error convariance matrix
 
   real(r_size), allocatable :: hx(:,:)
   real(r_size), allocatable :: hdxf(:,:)
@@ -72,8 +72,10 @@ program lorenz96_main
   real(r_size), allocatable :: obs_inv(:,:)
 
   ! --- for EnSRF
-  real(r_size), allocatable :: variance_sum(:,:), obs_srf_mtx_v2(:,:)
-  real(r_size), allocatable :: obs_srf_inv_v1(:,:), obs_srf_inv_v2(:,:)
+  real(r_size), allocatable :: variance_sum(:,:)
+  real(r_size), allocatable :: variance_sum_root(:,:), variance_sum_root_inv(:,:)
+  real(r_size), allocatable :: variance_sum_root_pobs(:,:)
+  real(r_size), allocatable :: variance_sum_root_pobs_inv(:,:)
 
   ! --- Output control
   logical, save         :: opt_veach = .false.
@@ -188,13 +190,16 @@ program lorenz96_main
       
       allocate(Ef(nx,mems), Ea(nx,mems), obs_prtbmtx(ny, mems))
       allocate(Pf_wnd(1:nx, 1:nx))
-      allocate(R_sqrt(1:ny, 1:ny))
+      allocate(R_root(1:ny, 1:ny))
 
       ! for kalmangain inverse calculate.
       allocate(obs_diag(1:ny))
       allocate(obs_mtx(1:ny, 1:ny), obs_inv(1:ny, 1:ny))
-      allocate(variance_sum(1:ny, 1:ny), obs_srf_mtx_v2(1:ny, 1:ny))
-      allocate(obs_srf_inv_v1(1:ny, 1:ny), obs_srf_inv_v2(1:ny, 1:ny))
+
+      ! for EnSRF
+      allocate(variance_sum(1:ny, 1:ny))
+      allocate(variance_sum_root(1:ny, 1:ny), variance_sum_root_inv(1:ny, 1:ny))
+      allocate(variance_sum_root_pobs(1:ny, 1:ny), variance_sum_root_pobs_inv(1:ny, 1:ny))
       
       allocate(hx(ny,1))
       allocate(hdxf(ny,1))
@@ -587,24 +592,32 @@ program lorenz96_main
             ! +++ (2) Pertubation step
             !----------------------------------------------------------- 
             ! variance_sum = H*Pf*H^T + R
-            ! obs_srf_root = [H*Pf*H^T + R]^1/2
-
+            ! variance_sum_root = [H*Pf*H^T + R]^1/2
+            ! variance_sum_root_inv = [H*Pf*H^T + R]^-(1/2)
             !----------------------------------------------------------- 
             variance_sum = matmul(H, matmul(Pf, transpose(H))) + R
-            call mtx_sqrt(ny, variance_sum, obs_srf_inv_v1)
+            call mtx_sqrt(ny, variance_sum, variance_sum_root)
             
-            call dgetrf(ny, ny, obs_srf_inv_v1, lda, ipiv, ierr)
-            call dgetri(ny, obs_srf_inv_v1, lda, ipiv, work, lwork, ierr)
-            
-            obs_srf_mtx_v2 = variance_sum + R
-            call mtx_sqrt(ny, obs_srf_mtx_v2, obs_srf_inv_v2)
-            obs_srf_inv_v2 = obs_srf_mtx_v2
-            
-            call dgetrf(ny, ny, obs_srf_inv_v2, lda, ipiv, ierr)
-            call dgetri(ny, obs_srf_inv_v2, lda, ipiv, work, lwork, ierr)
+            variance_sum_root_inv = variance_sum_root
+            call dgetrf(ny, ny, variance_sum_root_inv, lda, ipiv, ierr)
+            call dgetri(ny, variance_sum_root_inv, lda, ipiv, work, lwork, ierr)
 
-            Kh = matmul(matmul(Pf, transpose(H)), transpose(obs_srf_inv_v1))
-            Kh = matmul(Kh, obs_srf_inv_v2)
+            !-----------------------------------------------------------------
+            ! R_root = R^1/2
+            ! variance_sum_root_pobs = [H*Pf*H^T + R]^1/2 + R^1/2
+            ! variance_sum_root_pobs_inv = [(H*Pf*H^T + R)^1/2 + R^1/2]^-1
+            !-----------------------------------------------------------------
+            call mtx_sqrt(ny, R, R_root)
+            
+            variance_sum_root_pobs = variance_sum_root + R_root
+            call mtx_sqrt(ny, variance_sum_root_pobs, variance_sum_root_pobs_inv)
+            variance_sum_root_pobs_inv = variance_sum_root_pobs
+            
+            call dgetrf(ny, ny, variance_sum_root_pobs_inv, lda, ipiv, ierr)
+            call dgetri(ny, variance_sum_root_pobs_inv, lda, ipiv, work, lwork, ierr)
+
+            Kh = matmul(matmul(Pf, transpose(H)), transpose(variance_sum_root_inv))
+            Kh = matmul(Kh, variance_sum_root_pobs_inv)
           
             write(6,*) ' KALMAN GAIN HAT WEIGHTING MATRIX '
             call confirm_matrix(Kh, nx, ny)
@@ -624,8 +637,8 @@ program lorenz96_main
               x_anl_m(it, :, imem) = x_anl(it, :) + Ea(:,imem)
             end do
 
-            variance_sum = 0.0d0; obs_srf_mtx_v2 = 0.0d0
-            obs_srf_inv_v1 = 0.0d0; obs_srf_inv_v2 = 0.0d0
+            variance_sum = 0.0d0; variance_sum_root_pobs = 0.0d0
+            variance_sum_root = 0.0d0; variance_sum_root_pobs_inv = 0.0d0
 
             ! +++ Union step (ave. + pertb)
             do ix = 1, nx
