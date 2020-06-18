@@ -39,7 +39,7 @@ program lorenz96_main
 
   ! *** Various parameters
   real(r_size), parameter   :: size_noise_obs = 1.00d0
-  real(r_size), parameter   :: size_noise_sim = 0.01d0
+  real(r_size), parameter   :: size_noise_sim = 0.10d0
   real(r_size)              :: gnoise, alpha
   real(r_dble)              :: delta
   real(r_size)              :: shchur_length_scale

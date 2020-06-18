@@ -31,7 +31,7 @@ mem=1
 enkf_method='none'
 if [ ${da_method} = 'EnKF' ]; then 
   mem=10
-  enkf_method='EnSRF' # 'PO' or "SRF" or "ETKF"
+  enkf_method='PO' # 'PO' or "SRF" or "ETKF"
 fi
 
 # +++ adaptive inflation & localization
