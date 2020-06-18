@@ -22,10 +22,10 @@ oneday=0.2d0
 
 # +++ integral period(day)
 spinup_period=365
-normal_period=40
+normal_period=100
 
 # +++ exp. info
-da_method='EnKF'
+da_method='KF'
 intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
@@ -35,7 +35,7 @@ if [ ${da_method} = 'EnKF' ]; then
 fi
 
 # +++ adaptive inflation & localization
-alpha=0.0d0
+alpha=0.2d0
 localization_mode=0
 shchur_length_scale=0
 
