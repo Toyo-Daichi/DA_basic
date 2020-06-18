@@ -16,7 +16,7 @@ echo ${today}
 #----------------------------------------------------------------------
 # +++ model dimension
 nx=40
-dt=0.05d0
+dt=0.01d0
 force=8.0d0
 oneday=0.2d0
 
@@ -30,29 +30,28 @@ intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
 if [ ${da_method} = 'EnKF' ]; then 
-  mem=1000
-  enkf_method='SRF' # 'PO' or "SRF"
+  mem=10
+  enkf_method='PO' # 'PO' or "SRF" or "ETKF"
 fi
 
 # +++ adaptive inflation & localization
 alpha=0.0d0
 localization_mode=0
+shchur_length_scale=0
 
 # +++ making obs. info
-obs_tintv=1
+obs_tintv=5
 # >> For OBSERVATION OPERATER(H)
-obs_xintv=5
+obs_xintv=1
 #  OBS x coordinate set is full veriosn -> obs_set=0
 #  OBS x coordinate set is interval lack version -> obs_set=1
-#  OBS x coordinate set is bias lack version     -> obs_set=2
+#  OBS x coordinate set is bias kacl(wind) version -> obs_set=2
 obs_set=0
-obs_bias_sgrd=0
-obs_bias_egrd=0
+obs_wnd_point=0
 if [ ${obs_xintv} -ge 2  ]; then obs_set=1 ;fi
 if [ ${obs_xintv} -eq 99 ]; then 
   obs_set=2
-  obs_bias_sgrd=6
-  obs_bias_egrd=40
+  obs_wnd_point=26
 fi
 
 # +++ output info
@@ -81,6 +80,7 @@ if [ ${da_method} = 'EnKF' ]; then
   output_errcov_file=${output_dir}/'normal_'${da_method}${mem}'m_errcov_'${nx}'ndim.csv'
   exp_log=./log/${today}_${prg}_${da_method}_${enkf_method}.log
   if [ ${localization_mode} == 1 ]; then
+  #output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc_'${shchur_length_scale}'_alpha_'${alpha}'.csv'
   output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc.csv'
   output_anlinc_file=${output_dir}/'normal_'${da_method}${mem}'m_anlinc_'${nx}'ndim_loc.csv'
   output_errcov_file=${output_dir}/'normal_'${da_method}${mem}'m_errcov_'${nx}'ndim_loc.csv'
@@ -88,17 +88,23 @@ if [ ${da_method} = 'EnKF' ]; then
   fi
 fi
 
+# >> *** wind effect experiment
+input_wnd_errcov_file=''
+if [ ${obs_xintv} -eq 99  ]; then
+  input_wnd_errcov_file=${output_dir}'/input_KF_errcov_40ndim.csv'
+fi
 #----------------------------------------------------------------------
 # +++ Run exp.
 #----------------------------------------------------------------------
 cp ${CDIR}/common/common.f90 common_mod.f90
 cp ${CDIR}/common/common_mtx.f90 common_mtx_mod.f90
+cp ${CDIR}/common/common_enkf.f90 common_enkf_mod.f90
 cp ${CDIR}/common/SFMT.f90 SFMT_mod.f90
 cp ${CDIR}/common/netlib.f netlib_mod.f
 
 # +++ compile
 gfortran -fbounds-check  \
-  SFMT_mod.f90 common_mod.f90 netlib_mod.f common_mtx_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 \
+  SFMT_mod.f90 common_mod.f90 netlib_mod.f common_mtx_mod.f90 common_enkf_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 \
   -o ${prg} -I/usr/local/include -lm -lblas -llapack \
   -w # error message Suppression
 
@@ -122,7 +128,8 @@ gfortran -fbounds-check  \
   &enkf_setting
     mems = ${mem},
     enkf_method = '${enkf_method}'
-    localization_mode = ${localization_mode}
+    localization_mode = ${localization_mode},
+    shchur_length_scale = ${shchur_length_scale}
   /
   &set_period
     spinup_period = ${spinup_period},
@@ -132,14 +139,14 @@ gfortran -fbounds-check  \
     obs_set = ${obs_set},
     obs_xintv = ${obs_xintv},
     obs_tintv = ${obs_tintv},
-    obs_bias_sgrd = ${obs_bias_sgrd},
-    obs_bias_egrd = ${obs_bias_egrd}
+    obs_wnd_point = ${obs_wnd_point}
   /
-  &spinup_output
+  &inoutput_file
     initial_true_file  = '${initial_true_file}',
-    initial_sim_file   = '${initial_sim_file}'
+    initial_sim_file   = '${initial_sim_file}',
+    input_wnd_errcov_file = '${input_wnd_errcov_file}'
   /
-  &exp_output
+  &exp_outputfile
     output_true_file   = '${output_true_file}',
     output_anl_file    = '${output_anl_file}',
     output_sim_file    = '${output_sim_file}',
@@ -148,9 +155,9 @@ gfortran -fbounds-check  \
     output_anlinc_file = '${output_anlinc_file}',
     opt_veach = .${out_boolen}.
   /
+
 EOF
 
 rm -rf *.mod *_mod.f* ${prg}
 echo 'Normal END'
-
 exit
