@@ -16,13 +16,13 @@ echo ${today}
 #----------------------------------------------------------------------
 # +++ model dimension
 nx=40
-dt=0.05d0
+dt=0.01d0
 force=8.0d0
 oneday=0.2d0
 
 # +++ integral period(day)
 spinup_period=365
-normal_period=40
+normal_period=100
 
 # +++ exp. info
 da_method='EnKF'
@@ -30,17 +30,17 @@ intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
 if [ ${da_method} = 'EnKF' ]; then 
-  mem=5
-  enkf_method='EnSRF' # 'PO' or "SRF" or "ETKF"
+  mem=10
+  enkf_method='SRF' # 'PO' or "SRF" or "ETKF"
 fi
 
 # +++ adaptive inflation & localization
-alpha=0.10d0
+alpha=0.07d0
 localization_mode=1
-shchur_length_scale=10
+shchur_length_scale=8
 
 # +++ making obs. info
-obs_tintv=1
+obs_tintv=4
 # >> For OBSERVATION OPERATER(H)
 obs_xintv=1
 #  OBS x coordinate set is full veriosn -> obs_set=0
@@ -81,7 +81,7 @@ if [ ${da_method} = 'EnKF' ]; then
   exp_log=./log/${today}_${prg}_${da_method}_${enkf_method}.log
   if [ ${localization_mode} == 1 ]; then
   #output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc_'${shchur_length_scale}'_alpha_'${alpha}'.csv'
-  output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc_.csv'
+  output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc.csv'
   output_anlinc_file=${output_dir}/'normal_'${da_method}${mem}'m_anlinc_'${nx}'ndim_loc.csv'
   output_errcov_file=${output_dir}/'normal_'${da_method}${mem}'m_errcov_'${nx}'ndim_loc.csv'
   exp_log=./log/${today}_${prg}_${da_method}_${enkf_method}_loc.log
@@ -107,12 +107,6 @@ gfortran -fbounds-check  \
   SFMT_mod.f90 common_mod.f90 netlib_mod.f common_mtx_mod.f90 common_enkf_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 \
   -o ${prg} -I/usr/local/include -lm -lblas -llapack \
   -w # error message Suppression
-
-#for alpha in 0.01d0 0.02d0 0.03d0 0.04d0  0.05d0  0.06d0  0.07d0  0.08d0  0.09d0  0.10d0
-#do
-#for shchur_length_scale in 1 2 3 4 5 6 7 8 9 10
-#do
-#output_anl_file=${output_dir}/'normal_'${da_method}${mem}'m_anl_score_'${nx}'ndim_loc_'${shchur_length_scale}'_alpha_'${alpha}'.csv'
 
 ./${prg} > ${exp_log} << EOF
   &set_parm
@@ -166,6 +160,4 @@ EOF
 
 rm -rf *.mod *_mod.f* ${prg}
 echo 'Normal END'
-#done
-#done
 exit

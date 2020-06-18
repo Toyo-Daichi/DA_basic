@@ -38,8 +38,8 @@ program lorenz96_main
   real(r_size), allocatable :: anlinc(:,:)
 
   ! *** Various parameters
-  real(r_size), parameter   :: size_noise_obs = 1.0d0
-  real(r_size), parameter   :: size_noise_sim = 1.0d0
+  real(r_size), parameter   :: size_noise_obs = 1.00d0
+  real(r_size), parameter   :: size_noise_sim = 0.01d0
   real(r_size)              :: gnoise, alpha
   real(r_dble)              :: delta
   real(r_size)              :: shchur_length_scale
@@ -588,21 +588,17 @@ program lorenz96_main
             write(6,*) '  ANALYSIS (AVERAGE STEP) = ', x_anl(it,1:5), '...'
             write(6,*) ''
 
-            HE = matmul(H, Ef)
+            HE = matmul(H,Ef)
 
             do ix = 1, nx
-              call enkf_serial(         &
-                nx, mems, HE(ix,:),     &
-                size_noise_obs,         & ! image is rdiag(iy)
-                Ef, Kg, Ea              &
-                )
+              call enkf_serial(1, mems, HE(ix,:), size_noise_obs, Ef(ix,:), Kg(ix,ix), Ea(ix,:))
             end do
 
             write(6,*) ' ANALYSIS ENSEMBLE VECTOR '
             call confirm_matrix(Ea, nx, mems)
             
             do imem = 1, mems
-              x_anl_m(it, :, imem) = x_anl(it, :) + Ea(:,imem)
+              x_anl_m(it,:,imem) = x_anl(it,:) + Ea(:,imem)
             end do
             
             ! +++ Union step (ave. + pertb)
@@ -614,7 +610,6 @@ program lorenz96_main
           
           else if ( trim(enkf_method) == 'SRF' ) then
             !----------------------------------------------------------- 
-            ! 2020.6.17 error??
             ! >> own work EnKF (-> Serial EnSRF)
             ! +++ Squared root fileter method (SRF)
             ! Ea = (I - K^H)*Ef
@@ -928,9 +923,13 @@ contains
     !open(50, file='./output/local_matrix/schprm.csv', form='formatted', status='replace')
     !  write(50,'(*(g0:,","))') localize_mtx(:,:)
     !close(50)
-    !write(6,*) ' CHECK LOCALIZE MATRIX '
-    !call confirm_matrix(localize_mtx, nx, nx)
-    mtx = mtx*localize_mtx
+    write(6,*) ' BEFORE LOCALIZE COVARIANCE MATRIX '
+    call confirm_matrix(mtx, nx, nx)
+    write(6,*) ' CHECK LOCALIZE MATRIX '
+    call confirm_matrix(localize_mtx, nx, nx)
+    mtx = localize_mtx*mtx
+    write(6,*) ' AFTER LOCALIZE COVARIANCE MATRIX '
+    call confirm_matrix(mtx, nx, nx)
     return
   end subroutine
 
