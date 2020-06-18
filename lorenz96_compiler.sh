@@ -22,7 +22,7 @@ oneday=0.2d0
 
 # +++ integral period(day)
 spinup_period=365
-normal_period=100
+normal_period=40
 
 # +++ exp. info
 da_method='EnKF'
@@ -35,12 +35,12 @@ if [ ${da_method} = 'EnKF' ]; then
 fi
 
 # +++ adaptive inflation & localization
-alpha=0.07d0
-localization_mode=1
-shchur_length_scale=8
+alpha=0.0d0
+localization_mode=0
+shchur_length_scale=0
 
 # +++ making obs. info
-obs_tintv=4
+obs_tintv=5
 # >> For OBSERVATION OPERATER(H)
 obs_xintv=1
 #  OBS x coordinate set is full veriosn -> obs_set=0

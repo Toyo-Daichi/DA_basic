@@ -923,13 +923,9 @@ contains
     !open(50, file='./output/local_matrix/schprm.csv', form='formatted', status='replace')
     !  write(50,'(*(g0:,","))') localize_mtx(:,:)
     !close(50)
-    write(6,*) ' BEFORE LOCALIZE COVARIANCE MATRIX '
-    call confirm_matrix(mtx, nx, nx)
-    write(6,*) ' CHECK LOCALIZE MATRIX '
-    call confirm_matrix(localize_mtx, nx, nx)
-    mtx = localize_mtx*mtx
-    write(6,*) ' AFTER LOCALIZE COVARIANCE MATRIX '
-    call confirm_matrix(mtx, nx, nx)
+    !write(6,*) ' CHECK LOCALIZE MATRIX '
+    !call confirm_matrix(localize_mtx, nx, nx)
+    !mtx = localize_mtx*mtx
     return
   end subroutine
 
