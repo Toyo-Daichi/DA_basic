@@ -16,31 +16,31 @@ echo ${today}
 #----------------------------------------------------------------------
 # +++ model dimension
 nx=40
-dt=0.01d0
+dt=0.05d0
 force=8.0d0
 oneday=0.2d0
 
 # +++ integral period(day)
 spinup_period=365
-normal_period=100
+normal_period=40
 
 # +++ exp. info
-da_method='KF'
+da_method='EnKF'
 intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
 if [ ${da_method} = 'EnKF' ]; then 
-  mem=10
-  enkf_method='PO' # 'PO' or "SRF" or "ETKF"
+  mem=1000
+  enkf_method='EnSRF' # 'PO' or "SRF" or "ETKF"
 fi
 
 # +++ adaptive inflation & localization
-alpha=0.2d0
+alpha=0.0d0
 localization_mode=0
 shchur_length_scale=0
 
 # +++ making obs. info
-obs_tintv=5
+obs_tintv=1
 # >> For OBSERVATION OPERATER(H)
 obs_xintv=1
 #  OBS x coordinate set is full veriosn -> obs_set=0

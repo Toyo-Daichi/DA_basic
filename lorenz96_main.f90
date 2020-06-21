@@ -95,8 +95,7 @@ program lorenz96_main
   
   ! --- Working variable
   character(1086) :: linebuf
-  character(36)   :: cfmt, cfmt_obs
-  character(4)    :: cfmt_num, cfmt_obsnum
+  character(36)   :: cfmt
   integer         :: spinup_period, normal_period
   integer         :: kt_oneday
   integer         :: ix, iy, it, il, imem, ierr, lda, ipiv, lwork
@@ -741,15 +740,7 @@ program lorenz96_main
   if ( opt_veach ) then
     write(6,*) '-------------------------------------------------------'
     write(6,*) '+++ Check Writing output system,  '
-    if (nx <= 100 ) then 
-      cfmt = '(xx(F12.7, ","), F12.7)'
-      write(cfmt_num,"(I2)") nx-1
-      cfmt(2:3) = cfmt_num
-    else if (nx >= 100 ) then
-      cfmt = 'xxx(F12.7, ","), F12.7)'
-      write(cfmt_num, "(I3)") nx-1
-      cfmt(2:4) = cfmt_num
-    end if
+    cfmt = '(*(g0:,","))'
     
     ! select open file
     if ( trim(tool) == 'spinup' ) then
@@ -788,10 +779,7 @@ program lorenz96_main
         open(30, file=trim(output_obs_file), form='formatted', status='replace')
         open(31, file=trim(output_anlinc_file), form='formatted', status='replace')
         do it = 1, kt_oneday*normal_period/obs_tintv
-          cfmt_obs = '(xx(F15.7, ","), F15.7)'
-          write(cfmt_obsnum,"(I2)") ny-1
-          cfmt_obs(2:3) = cfmt_obsnum
-          write(linebuf, trim(cfmt_obs)) x_obs(it, :)
+          write(linebuf, trim(cfmt)) x_obs(it, :)
           call del_spaces(linebuf)
           write(30,'(a)') linebuf
           write(linebuf, trim(cfmt)) anlinc4out(it,:)
@@ -865,11 +853,8 @@ contains
 
     character(100000) :: linebuf
     character(36)     :: cfmt
-    character(4)      :: cfmt_num
 
-    cfmt = '(xxxx(F12.7, ","), F12.7)'
-    write(cfmt_num,"(I4)") nx*nx -1
-    cfmt(2:5) = cfmt_num
+    cfmt = '(*(g0:,","))'
 
     if ( it == 1 ) then
       open(2, file=trim(output_errcov_file), status='replace')
