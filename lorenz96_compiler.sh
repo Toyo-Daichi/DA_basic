@@ -104,7 +104,8 @@ cp ${CDIR}/common/netlib.f netlib_mod.f
 
 # +++ compile
 gfortran -fbounds-check  \
-  SFMT_mod.f90 common_mod.f90 netlib_mod.f common_mtx_mod.f90 common_enkf_mod.f90 lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 \
+  SFMT_mod.f90 common_mod.f90 netlib_mod.f common_mtx_mod.f90 common_enkf_mod.f90 \
+  lorenz96_prm.f90 lorenz96_cal.f90 lorenz96_main.f90 \
   -o ${prg} -I/usr/local/include -lm -lblas -llapack \
   -w # error message Suppression
 
