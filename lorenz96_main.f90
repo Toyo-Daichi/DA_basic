@@ -5,6 +5,7 @@ program lorenz96_main
 
   use common
   use common_mtx
+  use common_enkf
   use lorenz96_prm
   use lorenz96_cal
   
@@ -37,13 +38,15 @@ program lorenz96_main
   real(r_size), allocatable :: anlinc(:,:)
 
   ! *** Various parameters
-  real(r_size), parameter   :: size_noise_obs = 0.5d0
+  real(r_size), parameter   :: size_noise_obs = 0.0d0
+  real(r_size), parameter   :: size_noise_sim = 0.1d0
   real(r_size)              :: gnoise, alpha
   real(r_dble)              :: delta
-  real(r_size)              :: scale, dist, factor
+  real(r_size)              :: shchur_length_scale
   integer                   :: mems
-  integer                   :: localization_mode
-  
+  integer                   :: obs_set, localization_mode
+  integer                   :: obs_wnd_point
+
   ! --- Data assimilation exp.
   ! +++ Matrix setting
   real(r_size), allocatable :: JM(:,:)  ! state transient matrix (=Jacobean　matrix)
@@ -54,20 +57,26 @@ program lorenz96_main
   real(r_size), allocatable :: Kg(:,:)  ! Kalman gain
   real(r_size), allocatable :: Kh(:,:)  ! Kalman gain for pertuvation
   real(r_size), allocatable ::  H(:,:)  ! Observation operator
-  
+  real(r_size), allocatable :: Qe(:,:)  ! prediction error matrix 
   real(r_size), allocatable :: Ef(:,:), Ea(:,:) ! Ensemble pertubation
   real(r_size), allocatable :: obs_prtbmtx(:,:) ! Ensemble pertubation
+  real(r_size), allocatable :: Pf_wnd(:,:)      ! Forecast error convariance matrix (for wnd effect exp)
+  real(r_size), allocatable :: R_root(:,:)      ! Root Observation error convariance matrix
 
   real(r_size), allocatable :: hx(:,:)
   real(r_size), allocatable :: hdxf(:,:)
   real(r_size), allocatable :: work(:)
 
+  real(r_size), allocatable :: obs_diag(:)
   real(r_size), allocatable :: obs_mtx(:,:)
   real(r_size), allocatable :: obs_inv(:,:)
 
   ! --- for EnSRF
-  real(r_size), allocatable :: obs_srf_mtx_v1(:,:), obs_srf_mtx_v2(:,:)
-  real(r_size), allocatable :: obs_srf_inv_v1(:,:), obs_srf_inv_v2(:,:)
+  real(r_size), allocatable :: HE(:,:)
+  real(r_size), allocatable :: variance_sum(:,:)
+  real(r_size), allocatable :: variance_sum_root(:,:), variance_sum_root_inv(:,:)
+  real(r_size), allocatable :: variance_sum_root_pobs(:,:)
+  real(r_size), allocatable :: variance_sum_root_pobs_inv(:,:)
 
   ! --- Output control
   logical, save         :: opt_veach = .false.
@@ -80,13 +89,13 @@ program lorenz96_main
   character(256)        :: output_obs_file
   character(256)        :: output_anlinc_file
   character(256)        :: output_errcov_file
+  character(256)        :: input_wnd_errcov_file
 
   real(r_size), allocatable :: anlinc4out(:, :) ! increment info.
   
   ! --- Working variable
   character(1086) :: linebuf
-  character(36)   :: cfmt, cfmt_obs
-  character(4)    :: cfmt_num, cfmt_obsnum
+  character(36)   :: cfmt
   integer         :: spinup_period, normal_period
   integer         :: kt_oneday
   integer         :: ix, iy, it, il, imem, ierr, lda, ipiv, lwork
@@ -103,11 +112,11 @@ program lorenz96_main
   namelist /set_parm/ nx, dt, force, oneday
   namelist /set_exp/ tool, ts_check, intg_method
   namelist /set_da_exp/ da_veach, da_method, alpha
-  namelist /enkf_setting/ mems, enkf_method, localization_mode
+  namelist /enkf_setting/ mems, enkf_method, localization_mode, shchur_length_scale
   namelist /set_period/ spinup_period, normal_period
-  namelist /set_mobs/ obs_xintv, obs_tintv
-  namelist /spinup_output/ initial_true_file, initial_sim_file
-  namelist /exp_output/ &
+  namelist /set_obs/ obs_set, obs_xintv, obs_tintv, obs_wnd_point
+  namelist /inoutput_file/ initial_true_file, initial_sim_file, input_wnd_errcov_file
+  namelist /exp_outputfile/ &
     output_true_file, output_anl_file, output_sim_file, output_obs_file, output_errcov_file, output_anlinc_file, opt_veach
   
   read(5, nml=set_parm, iostat=ierr)
@@ -115,9 +124,8 @@ program lorenz96_main
   read(5, nml=set_da_exp, iostat=ierr)
   read(5, nml=enkf_setting, iostat = ierr)
   read(5, nml=set_period, iostat=ierr)
-  read(5, nml=set_mobs, iostat=ierr)
-  read(5, nml=spinup_output, iostat=ierr)
-  read(5, nml=exp_output, iostat=ierr)
+  read(5, nml=set_obs, iostat=ierr)
+  read(5, nml=inoutput_file, iostat=ierr)
   ! name list io check
   if (ierr < 0 ) then
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
@@ -126,10 +134,11 @@ program lorenz96_main
   else if (ierr > 0) then
     write(6,*) '   Msg : Main[ .sh /  @namelist ] '
     write(6,*) '   *** Warning : Not appropriate names in namelist !! Check !!'
-    write(6,*) '   Stop : lorenz96_main.f90              '
+    write(6,*) '   Stop : lorenz96_main.f90       '
     stop
   end if
-
+  read(5, nml=exp_outputfile, iostat=ierr)
+  
   kt_oneday = int(oneday/dt) ! Unit change for 1day
   if ( trim(tool) == 'spinup' ) then 
     allocate(x_true(1,nx), x_out(1, nx))
@@ -140,8 +149,14 @@ program lorenz96_main
     allocate(x_init(nx))
     
     ! --- OBS setting
-    ny = int(nx/obs_xintv)
-    obs_time = int((kt_oneday*normal_period)/obs_tintv)
+    if ( obs_set <= 1 ) then
+      ny = int(nx/obs_xintv)
+      obs_time = int((kt_oneday*normal_period)/obs_tintv)
+    else if ( obs_set == 2 ) then
+      ny = 1
+      obs_time = 1
+    end if
+
     lda = ny
     lwork = ny
     allocate(x_obs(obs_time,ny))
@@ -171,19 +186,26 @@ program lorenz96_main
       allocate(Kg(1:nx, 1:ny))
       allocate( H(1:ny, 1:nx))
       allocate( R(1:ny, 1:ny))
-
+      allocate(Qe(1:nx, 1))
+      
       allocate(Ef(nx,mems), Ea(nx,mems), obs_prtbmtx(ny, mems))
+      allocate(Pf_wnd(1:nx, 1:nx))
+      allocate(R_root(1:ny, 1:ny))
 
       ! for kalmangain inverse calculate.
+      allocate(obs_diag(1:ny))
       allocate(obs_mtx(1:ny, 1:ny), obs_inv(1:ny, 1:ny))
-      allocate(obs_srf_mtx_v1(1:ny, 1:ny), obs_srf_mtx_v2(1:ny, 1:ny))
-      allocate(obs_srf_inv_v1(1:ny, 1:ny), obs_srf_inv_v2(1:ny, 1:ny))
+
+      ! for EnSRF
+      allocate(HE(1:nx, 1:mems))
+      allocate(variance_sum(1:ny, 1:ny))
+      allocate(variance_sum_root(1:ny, 1:ny), variance_sum_root_inv(1:ny, 1:ny))
+      allocate(variance_sum_root_pobs(1:ny, 1:ny), variance_sum_root_pobs_inv(1:ny, 1:ny))
       
       allocate(hx(ny,1))
       allocate(hdxf(ny,1))
       
       allocate(anlinc4out(obs_time, nx))
-
     end if
   end if
 
@@ -194,6 +216,8 @@ program lorenz96_main
   ! +++ making true run.
   !----------------------------------------------------------------------
 
+  write(6,*) 'LORENZ(1996) EXPERIMENT START'
+  write(6,*) ''
   write(6,*) 'Exp. setting            :: ', tool
   write(6,*) 'Integral method         :: ', intg_method
   
@@ -206,23 +230,34 @@ program lorenz96_main
     open(2, file=trim(initial_true_file), form='formatted', status='old')
       read(2,*) x_init
     close(2)
-    x_true(0, :) = x_init
+    x_true(0,:) = x_init
     do it = 1, kt_oneday*normal_period
       call ting_rk4(one_loop, x_true(it-1,:), x_true(it,:))
-      
       !-------------------------------------------------------------------
       ! +++ making obs score
       !-------------------------------------------------------------------
-      if ( mod (it,obs_tintv)==0 ) then
-        do ix=1,nx
-          if( mod(ix,obs_xintv)==0 ) then
-            call gaussian_noise(size_noise_obs, gnoise)
-            x_obs(it/obs_tintv, ix/obs_xintv) = x_true(it, ix) + gnoise
-          endif
-        enddo
-      endif
+      Obs_making_time :&
+      if ( mod (it,obs_tintv) ==0 ) then
+        Obs_making_xgrd :&
+        if ( obs_set <= 1 ) then
+          do ix=1,nx
+            if( mod(ix,obs_xintv)==0 ) then
+              call gaussian_noise(size_noise_obs, gnoise)
+              x_obs(it/obs_tintv, ix/obs_xintv) = x_true(it, ix) + gnoise
+            endif
+          enddo
+        end if &
+        Obs_making_xgrd
+      end if &
+      Obs_making_time
     end do
     close(2)
+
+    if ( obs_set == 2 ) then
+      call gaussian_noise(size_noise_obs, gnoise)
+      x_obs(1,1) = x_true(obs_tintv,obs_wnd_point) + gnoise
+    end if
+
   end if
   
   !======================================================================
@@ -233,7 +268,8 @@ program lorenz96_main
     write(6,*) '-------------------------------------------------------'
     write(6,*) '+++ Data assimilation exp. start '
     write(6,*) ' >> Data assimilation method  :: ', da_method
-    if ( trim(da_method) == 'EnKF' ) write(6,*) ' >> Localization is ', localization_mode
+    if ( trim(da_method) == 'EnKF' ) write(6,*) ' >> EnKF method is       ', trim(enkf_method)
+    if ( trim(da_method) == 'EnKF' ) write(6,*) ' >> Localization_mode is ', localization_mode, shchur_length_scale
 
     ! making identity matrix
     Pf = 0.d0; Pa = 0.d0; I = 0.d0
@@ -243,15 +279,49 @@ program lorenz96_main
     forall ( il=1:nx ) Pa(il, il) = 1.0d0
     forall ( il=1:nx )  I(il, il) = 1.0d0
     forall ( il=1:ny )  R(il, il) = size_noise_obs
-    forall ( il=1:ny )  H(il, il) = 1.0d0 ! not regular matrix
+    obs_diag(:) = size_noise_obs
     
+    H_check :&
+    if ( obs_set == 0 ) then
+      forall ( il=1:ny )  H(il, il) = 1.0d0
+    else 
+      H_making :&
+      if ( obs_set == 1 ) then
+        ix = obs_xintv
+        do iy = 1, ny
+          H(iy, ix) = 1.0d0
+          ix = ix + obs_xintv 
+        end do
+      else if ( obs_set == 2 ) then 
+        H(1,obs_wnd_point) = 1.0d0
+        open(2, file=trim(input_wnd_errcov_file), form='formatted', status='old')
+          read(2,*) ((Pf_wnd(ix,iy),ix=1,nx),iy=1,nx)
+        close(2)
+        write(6,*) ''
+        write(6,*) '  PREPARE PREDICTION MATRIX CHECK '
+        call confirm_matrix(Pf_wnd, nx, nx)
+        Pf = Pf_wnd
+      end if &
+      H_making
+
+      write(6,*) ''
+      write(6,*) '  OBSERVATION OPERATER CHECK (LACK OBS EXP.) '
+      call confirm_matrix(H, ny, nx)
+    end if &
+    H_check
+
     !-------------------------------------------------------------------
     ! +++ making sim score
     !-------------------------------------------------------------------
     open(2, file=trim(initial_sim_file), form='formatted', status='old')
-    read(2,*) x_init
+      read(2,*) x_init
     close(2)
-    x_sim(0,:) = x_init
+    
+    do ix = 1, nx
+      call gaussian_noise(size_noise_sim, gnoise)
+      x_sim(0,ix) = x_init(ix) + gnoise
+    end do
+    
     do it = 1, kt_oneday*normal_period
       call ting_rk4(one_loop, x_sim(it-1,:), x_sim(it,:))
     end do
@@ -270,22 +340,31 @@ program lorenz96_main
       
       data_assim_KF_loop :&
       do it = 1, kt_oneday*normal_period
+        write(6,*) ''
         write(6,*) 'Data assim. time step: ', it
         write(6,*) ''
         call ting_rk4(one_loop, x_anl(it-1,:), x_anl(it,:))
         
-        if ( mod(it, obs_tintv)==0 ) then
-          write(6,*) '  TRUTH    = ', x_true(it,1:5), '...'
-          write(6,*) '  PREDICT  = ', x_sim(it,1:5), '...'
-          write(6,*) '  OBSERVE  = ', x_obs(it,1:5), '...'
+        if ( mod(it, obs_tintv) ==0 ) then
+          if ( obs_set /= 2 ) write(6,*) '  TRUTH    = ', x_true(it,1:5), '...'
+          if ( obs_set == 2 ) write(6,*) '  TRUTH    = ', x_true(it/obs_tintv,obs_wnd_point)
+          if ( obs_set /= 2 ) write(6,*) '  PREDICT  = ', x_sim(it,1:5), '...'
+          if ( obs_set == 2 ) write(6,*) '  PREDICT  = ', x_sim(it/obs_tintv,obs_wnd_point)
+          if ( obs_set /= 2 ) write(6,*) '  OBSERVE  = ', x_obs(it/obs_tintv, 1:5), '...'
+          if ( obs_set == 2 ) write(6,*) '  OBSERVE  = ', x_obs(it/obs_tintv, :)
           write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,1:5), '...'
           write(6,*) ''
           
+          do ix = 1, nx
+            call gaussian_noise(size_noise_sim, gnoise)
+            Qe(ix, 1) = gnoise
+          end do
           !-------------------------------------------------------------------
           ! +++ Making Jacobian matrix.
           ! >> Please note that time changes are included...
           !-------------------------------------------------------------------
-          delta = dt*obs_tintv
+          !delta = dt*obs_tintv
+          delta = dt
           JM = 0.0d0
           JM(1,1)     = 1.0d0 - delta
           JM(1,2)     = x_anl(it-1,nx)*delta
@@ -309,7 +388,7 @@ program lorenz96_main
           JM(nx,nx-1) = (x_anl(it-1,1)-x_anl(it-1,nx-2))*delta
           JM(nx,nx) = 1.0d0 - delta
           
-          Pf = matmul(matmul(JM, Pa), transpose(JM))*(1.0d0 + alpha)
+          Pf = matmul(matmul(JM, Pa), transpose(JM))*(1.0d0 + alpha) + matmul(Qe, transpose(Qe))
           write(6,*) '  PREDICTION ERROR COVARIANCE on present step'
           call confirm_matrix(Pf, nx, nx)
           write(6,*) ''
@@ -350,6 +429,14 @@ program lorenz96_main
           write(6,*) ''
 
           call output_errcov(nx, it/obs_tintv, kt_oneday*normal_period/obs_tintv, Pa)
+          
+          ! *** for obs(wind effect) experiment
+          if ( obs_set == 2 ) then
+            call wnd_exp_support(obs_tintv)
+            write(6,*) ' CHECK DATA ASSIMLATION INCREMENT '
+            write(6,*) matmul(Kg, hdxf)
+          end if
+
         end if
         
       end do &
@@ -375,6 +462,7 @@ program lorenz96_main
       !-----------------------------------------------------------
       data_assim_EnKF_loop :&
       do it = 1, kt_oneday*normal_period
+        write(6,*) ''
         write(6,*) 'Data assim. time step: ', it
 
         write(6,*) ' CHECK ENSEMBLE PART FOR UPDATE (BEFORE) on ', it-1
@@ -383,16 +471,17 @@ program lorenz96_main
         do imem = 1, mems
           call ting_rk4(one_loop, x_anl_m(it-1,:,imem), x_anl_m(it,:,imem))
         end do
-
+        
+        do ix = 1, nx
+          x_anl(it, ix) = sum(x_anl_m(it,ix,1:mems))/mems
+          anlinc(ix,1) = x_anl(it,ix)
+        end do
         
         if ( mod(it, obs_tintv) == 0 .and. it /= 0) then
           write(6,*) '  TRUTH    = ', x_true(it,1:5), '...'
           write(6,*) '  PREDICT  = ', x_sim(it,1:5), '...'
-          write(6,*) '  OBSERVE  = ', x_obs(it,1:5), '...'
-          do ix = 1, nx
-            x_anl(it, ix) = sum(x_anl_m(it,ix,1:mems))/mems
-            anlinc(ix,1) = x_anl(it,ix)
-          end do
+          if ( obs_set /= 2 ) write(6,*) '  OBSERVE  = ', x_obs(it/obs_tintv, 1:5), '...'
+          if ( obs_set == 2 ) write(6,*) '  OBSERVE  = ', x_obs(it/obs_tintv, :)
           write(6,*) '  ANALYSIS (BEFORE) = ', anlinc(1:5, 1), '...'
           write(6,*) ''
           Pf = 0.0d0
@@ -428,23 +517,13 @@ program lorenz96_main
           !-----------------------------------------------------------
           ! +++ adaptive inflation mode
           !-----------------------------------------------------------
-          Pf = Pf*(1.0d0 + alpha)
+          Pf = Pf*(1.0d0+alpha)
           
           !-----------------------------------------------------------
           ! +++ Localization mode
           !-----------------------------------------------------------
-          if ( localization_mode == 1 ) then
-            dist = 0.05d0
-            do ix = 1, nx
-              do il = 1, nx
-                scale = abs(ix-il)
-                call enkf_schur(scale, dist, factor)
-                Pf(ix,il) = Pf(ix,il)*factor
-              end do
-            end do
-          end if
+          if ( localization_mode == 1 ) call localize_errcov(Pf, shchur_length_scale)
 
-          
           write(6,*) '  PREDICTION ERROR COVARIANCE on present step'
           call confirm_matrix(Pf, nx, nx)
           call output_errcov(nx, it/obs_tintv, kt_oneday*normal_period/obs_tintv, Pf)
@@ -497,15 +576,7 @@ program lorenz96_main
             write(6,*) x_anl_m(it,1,1:5)
             write(6,*) ''
           
-          else if ( trim(enkf_method) == 'SRF' ) then
-            !----------------------------------------------------------- 
-            ! >> EnKF (-> Serial EnSRF)
-            ! +++ Squared root fileter method (SRF)
-            ! Ea = (I - K^H)*Ef
-            ! K^ = 
-            ! Pf H^T [(H Pf H^T + R)^-1/2]^T [(H Pf H^T + R)^-1/2]^-1
-            !----------------------------------------------------------- 
-
+          else if ( trim(enkf_method) == 'EnSRF' ) then
             ! +++ (1) Average step 
             xt_vec(:,1) = x_anl(it,:)
             yt_vec(:,1) = x_obs(it/obs_tintv,:)
@@ -518,22 +589,76 @@ program lorenz96_main
             write(6,*) '  ANALYSIS (AVERAGE STEP) = ', x_anl(it,1:5), '...'
             write(6,*) ''
 
-            ! +++ (2) Pertubation step
-            obs_srf_mtx_v1 = matmul(H, matmul(Pf, transpose(H))) + R
-            call mtx_sqrt(ny, obs_srf_mtx_v1, obs_srf_inv_v1)
-            
-            call dgetrf(ny, ny, obs_srf_inv_v1, lda, ipiv, ierr)
-            call dgetri(ny, obs_srf_inv_v1, lda, ipiv, work, lwork, ierr)
-            
-            obs_srf_mtx_v2 = obs_srf_mtx_v1 + R
-            call mtx_sqrt(ny, obs_srf_mtx_v2, obs_srf_inv_v2)
-            obs_srf_inv_v2 = obs_srf_mtx_v2
-            
-            call dgetrf(ny, ny, obs_srf_inv_v2, lda, ipiv, ierr)
-            call dgetri(ny, obs_srf_inv_v2, lda, ipiv, work, lwork, ierr)
+            HE = matmul(H,Ef)
 
-            Kh = matmul(matmul(Pf, transpose(H)), transpose(obs_srf_inv_v1))
-            Kh = matmul(Kh, obs_srf_inv_v2)
+            do ix = 1, nx
+              call enkf_serial(1, mems, HE(ix,:), size_noise_obs, Ef(ix,:), Kg(ix,ix), Ea(ix,:))
+            end do
+
+            write(6,*) ' ANALYSIS ENSEMBLE VECTOR '
+            call confirm_matrix(Ea, nx, mems)
+            
+            do imem = 1, mems
+              x_anl_m(it,:,imem) = x_anl(it,:) + Ea(:,imem)
+            end do
+            
+            ! +++ Union step (ave. + pertb)
+            do ix = 1, nx
+              x_anl(it, ix) = x_anl(it, ix) + sum(Ea(ix, :))/mems
+            end do
+
+            anlinc4out(it/obs_tintv,:) = anlinc(:,1) - x_anl(it,:)
+          
+          else if ( trim(enkf_method) == 'SRF' ) then
+            !----------------------------------------------------------- 
+            ! >> own work EnKF (-> Serial EnSRF)
+            ! +++ Squared root fileter method (SRF)
+            ! Ea = (I - K^H)*Ef
+            ! K^ = 
+            ! Pf H^T [(H Pf H^T + R)^-1/2]^T [(H Pf H^T + R)^-1/2]^-1
+            !----------------------------------------------------------- 
+            
+            ! +++ (1) Average step 
+            xt_vec(:,1) = x_anl(it,:)
+            yt_vec(:,1) = x_obs(it/obs_tintv,:)
+            
+            hx = matmul(H, xt_vec)
+            hdxf = yt_vec - hx
+            xt_vec = xt_vec + matmul(Kg, hdxf)
+            
+            x_anl(it,:) = xt_vec(:,1)
+            write(6,*) '  ANALYSIS (AVERAGE STEP) = ', x_anl(it,1:5), '...'
+            write(6,*) ''
+            
+            ! +++ (2) Pertubation step
+            !----------------------------------------------------------- 
+            ! variance_sum = H*Pf*H^T + R
+            ! variance_sum_root = [H*Pf*H^T + R]^1/2
+            ! variance_sum_root_inv = [H*Pf*H^T + R]^-(1/2)
+            !----------------------------------------------------------- 
+            variance_sum = matmul(H, matmul(Pf, transpose(H)))
+            call mtx_sqrt(ny, variance_sum, variance_sum_root)
+            
+            variance_sum_root_inv = variance_sum_root
+            call dgetrf(ny, ny, variance_sum_root_inv, lda, ipiv, ierr)
+            call dgetri(ny, variance_sum_root_inv, lda, ipiv, work, lwork, ierr)
+
+            !-----------------------------------------------------------------
+            ! R_root = R^1/2
+            ! variance_sum_root_pobs = [H*Pf*H^T + R]^1/2 + R^1/2
+            ! variance_sum_root_pobs_inv = [(H*Pf*H^T + R)^1/2 + R^1/2]^-1
+            !-----------------------------------------------------------------
+            call mtx_sqrt(ny, R, R_root)
+            
+            variance_sum_root_pobs = variance_sum_root + R_root
+            call mtx_sqrt(ny, variance_sum_root_pobs, variance_sum_root_pobs_inv)
+            variance_sum_root_pobs_inv = variance_sum_root_pobs
+            
+            call dgetrf(ny, ny, variance_sum_root_pobs_inv, lda, ipiv, ierr)
+            call dgetri(ny, variance_sum_root_pobs_inv, lda, ipiv, work, lwork, ierr)
+
+            Kh = matmul(matmul(Pf, transpose(H)), transpose(variance_sum_root_inv))
+            Kh = matmul(Kh, variance_sum_root_pobs_inv)
           
             write(6,*) ' KALMAN GAIN HAT WEIGHTING MATRIX '
             call confirm_matrix(Kh, nx, ny)
@@ -553,8 +678,39 @@ program lorenz96_main
               x_anl_m(it, :, imem) = x_anl(it, :) + Ea(:,imem)
             end do
 
-            obs_srf_mtx_v1 = 0.0d0; obs_srf_mtx_v2 = 0.0d0
-            obs_srf_inv_v1 = 0.0d0; obs_srf_inv_v2 = 0.0d0
+            variance_sum = 0.0d0; variance_sum_root_pobs = 0.0d0
+            variance_sum_root = 0.0d0; variance_sum_root_pobs_inv = 0.0d0
+
+            ! +++ Union step (ave. + pertb)
+            do ix = 1, nx
+              x_anl(it, ix) = x_anl(it, ix) + sum(Ea(ix, :))/mems
+            end do
+            anlinc4out(it/obs_tintv,:) = anlinc(:,1) - x_anl(it,:)
+            write(6,*) '  ANALYSIS (PRTB STEP) = ', x_anl(it,1:5), '...'
+            write(6,*) ''
+
+          else if ( trim(enkf_method) == 'ETKF') then
+            xt_vec(:,1) = x_anl(it,:)
+            yt_vec(:,1) = x_obs(it/obs_tintv,:)
+            
+            hx = matmul(H, xt_vec)
+            hdxf = yt_vec - hx
+            xt_vec = xt_vec + matmul(Kg, hdxf)
+            
+            x_anl(it,:) = xt_vec(:,1)
+
+            call enkf_etkf(nx, ny, mems, hdxf, obs_diag, Ef, Ea)
+            call confirm_matrix(Ea, nx, mems)
+
+            write(6,*) ' && AVERAGE PERTUBATION   '
+            write(6,*) sum(Ea(1,:))/mems, sum(Ea(2,:))/mems, sum(Ea(3,:))/mems, &
+                       sum(Ea(4,:))/mems, sum(Ea(5,:))/mems, '...'
+            write(6,*) ''
+
+            ! +++ for next step, initiallize
+            do imem = 1, mems
+              x_anl_m(it, :, imem) = x_anl(it, :) + Ea(:,imem)
+            end do
 
             ! +++ Union step (ave. + pertb)
             do ix = 1, nx
@@ -567,6 +723,9 @@ program lorenz96_main
           end if &
           da_enkf_method
         end if
+        
+        ! *** for obs(wind effect) experiment
+        if ( obs_set == 2 ) call wnd_exp_support(obs_tintv)
 
       end do &
       data_assim_EnKF_loop
@@ -583,15 +742,7 @@ program lorenz96_main
   if ( opt_veach ) then
     write(6,*) '-------------------------------------------------------'
     write(6,*) '+++ Check Writing output system,  '
-    if (nx <= 100 ) then 
-      cfmt = '(xx(F12.7, ","), F12.7)'
-      write(cfmt_num,"(I2)") nx-1
-      cfmt(2:3) = cfmt_num
-    else if (nx >= 100 ) then
-      cfmt = 'xxx(F12.7, ","), F12.7)'
-      write(cfmt_num, "(I3)") nx-1
-      cfmt(2:4) = cfmt_num
-    end if
+    cfmt = '(*(g0:,","))'
     
     ! select open file
     if ( trim(tool) == 'spinup' ) then
@@ -624,22 +775,23 @@ program lorenz96_main
       close(21)
       close(22)
       close(23)
-      
-      open(30, file=trim(output_obs_file), form='formatted', status='replace')
-      open(31, file=trim(output_anlinc_file), form='formatted', status='replace')
-      do it = 1, kt_oneday*normal_period/obs_tintv
-        cfmt_obs = '(xx(F15.7, ","), F15.7)'
-        write(cfmt_obsnum,"(I2)") ny-1
-        cfmt_obs(2:3) = cfmt_obsnum
-        write(linebuf, trim(cfmt_obs)) x_obs(it, :)
-        call del_spaces(linebuf)
-        write(30,'(a)') linebuf
-        write(linebuf, trim(cfmt)) anlinc4out(it,:)
-        call del_spaces(linebuf)
-        write(31,'(a)') linebuf
+
+      observation_info_output :&
+      if ( obs_set /= 2 ) then
+        open(30, file=trim(output_obs_file), form='formatted', status='replace')
+        open(31, file=trim(output_anlinc_file), form='formatted', status='replace')
+        do it = 1, kt_oneday*normal_period/obs_tintv
+          write(linebuf, trim(cfmt)) x_obs(it, :)
+          call del_spaces(linebuf)
+          write(30,'(a)') linebuf
+          write(linebuf, trim(cfmt)) anlinc4out(it,:)
+          call del_spaces(linebuf)
+          write(31,'(a)') linebuf
         end do
-      close(30)
-      close(31)
+        close(30)
+        close(31)
+      end if &
+      observation_info_output
       write(6,*) ' && Successfuly output !!!        '  
     endif
     
@@ -703,11 +855,8 @@ contains
 
     character(100000) :: linebuf
     character(36)     :: cfmt
-    character(4)      :: cfmt_num
 
-    cfmt = '(xxxx(F12.7, ","), F12.7)'
-    write(cfmt_num,"(I4)") nx*nx -1
-    cfmt(2:5) = cfmt_num
+    cfmt = '(*(g0:,","))'
 
     if ( it == 1 ) then
       open(2, file=trim(output_errcov_file), status='replace')
@@ -729,8 +878,48 @@ contains
         write(6,*) '+++ err covariance matrix last step '
       close(2)
     end if
-      
   end subroutine
 
+  subroutine localize_errcov(mtx, shchur_length_scale)
+    implicit none
+    real(r_size), intent(inout) :: mtx(nx, nx)
+    real(r_size), intent(in)    :: shchur_length_scale
+    !working variable
+    real(r_size) :: localize_mtx(nx, nx)
+    real(r_size) :: factor, length
+    integer      :: ix, iy, diff
+
+    forall ( il=1:nx ) localize_mtx(il, il) = 1.0d0 
+    do ix = 1, nx
+      do iy = 1, nx
+        length = abs(ix-iy)
+        if ( length > nx/2 ) then
+          diff = length - nx/2
+          length = nx/2 - diff
+        end if
+        if ( ix /= iy ) then 
+          call enkf_schur_local(shchur_length_scale, length, factor)
+          localize_mtx(ix,iy) = factor
+        end if 
+        !for debug
+        !write(6,'("ix: ",I2," iy: ",I2," len: ",F12.7)') ix, iy, length
+      end do
+    end do
+
+    ! for debug
+    !open(50, file='./output/local_matrix/schprm.csv', form='formatted', status='replace')
+    !  write(50,'(*(g0:,","))') localize_mtx(:,:)
+    !close(50)
+    !write(6,*) ' CHECK LOCALIZE MATRIX '
+    !call confirm_matrix(localize_mtx, nx, nx)
+    !mtx = localize_mtx*mtx
+    return
+  end subroutine
+
+  subroutine wnd_exp_support(obs_tintv)
+    implicit none
+    integer, intent(inout) :: obs_tintv
+    obs_tintv = -9999
+  end subroutine
 
 end program lorenz96_main
