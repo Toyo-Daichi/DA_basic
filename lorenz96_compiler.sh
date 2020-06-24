@@ -16,21 +16,21 @@ echo ${today}
 #----------------------------------------------------------------------
 # +++ model dimension
 nx=40
-dt=0.05d0
+dt=0.01d0
 force=8.0d0
 oneday=0.2d0
 
 # +++ integral period(day)
 spinup_period=365
-normal_period=40
+normal_period=3
 
 # +++ exp. info
-da_method='EnKF'
+da_method='KF'
 intg_method='Runge-Kutta'
 mem=1
 enkf_method='none'
 if [ ${da_method} = 'EnKF' ]; then 
-  mem=1000
+  mem=20
   enkf_method='EnSRF' # 'PO' or "SRF" or "ETKF"
 fi
 
@@ -40,9 +40,9 @@ localization_mode=0
 shchur_length_scale=0
 
 # +++ making obs. info
-obs_tintv=1
+obs_tintv=5
 # >> For OBSERVATION OPERATER(H)
-obs_xintv=1
+obs_xintv=99
 #  OBS x coordinate set is full veriosn -> obs_set=0
 #  OBS x coordinate set is interval lack version -> obs_set=1
 #  OBS x coordinate set is bias kacl(wind) version -> obs_set=2

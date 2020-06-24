@@ -38,8 +38,8 @@ program lorenz96_main
   real(r_size), allocatable :: anlinc(:,:)
 
   ! *** Various parameters
-  real(r_size), parameter   :: size_noise_obs = 1.00d0
-  real(r_size), parameter   :: size_noise_sim = 0.00d0
+  real(r_size), parameter   :: size_noise_obs = 0.00d0
+  real(r_size), parameter   :: size_noise_sim = 0.1d0
   real(r_size)              :: gnoise, alpha
   real(r_dble)              :: delta
   real(r_size)              :: shchur_length_scale
@@ -346,8 +346,10 @@ program lorenz96_main
         call ting_rk4(one_loop, x_anl(it-1,:), x_anl(it,:))
         
         if ( mod(it, obs_tintv) ==0 ) then
-          write(6,*) '  TRUTH    = ', x_true(it,1:5), '...'
-          write(6,*) '  PREDICT  = ', x_sim(it,1:5), '...'
+          if ( obs_set /= 2 ) write(6,*) '  TRUTH    = ', x_true(it,1:5), '...'
+          if ( obs_set == 2 ) write(6,*) '  TRUTH    = ', x_true(it/obs_tintv,:)
+          if ( obs_set /= 2 ) write(6,*) '  PREDICT  = ', x_sim(it,1:5), '...'
+          if ( obs_set == 2 ) write(6,*) '  PREDICT  = ', x_sim(it/obs_tintv,:)
           if ( obs_set /= 2 ) write(6,*) '  OBSERVE  = ', x_obs(it/obs_tintv, 1:5), '...'
           if ( obs_set == 2 ) write(6,*) '  OBSERVE  = ', x_obs(it/obs_tintv, :)
           write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it,1:5), '...'

@@ -353,7 +353,7 @@ if __name__ == "__main__":
   # +++ info. setting
   #---------------------------------------------------------- 
   # (1) dimension
-  obs_xintv = 5
+  obs_xintv = 1
   obs_tintv = 1
   day_tintv = 4
   init_step = 1
