@@ -15,7 +15,7 @@ echo ${today}
 # +++ Set intial setting
 #----------------------------------------------------------------------
 # +++ model dimension
-nx=40
+nx=24
 dt=0.01d0
 force=8.0d0
 oneday=0.2d0
@@ -51,7 +51,7 @@ obs_wnd_point=0
 if [ ${obs_xintv} -ge 2  ]; then obs_set=1 ;fi
 if [ ${obs_xintv} -eq 99 ]; then 
   obs_set=2
-  obs_wnd_point=26
+  obs_wnd_point=20
 fi
 
 # +++ output info
@@ -91,7 +91,7 @@ fi
 # >> *** wind effect experiment
 input_wnd_errcov_file=''
 if [ ${obs_xintv} -eq 99  ]; then
-  input_wnd_errcov_file=${output_dir}'/input_KF_errcov_40ndim.csv'
+  input_wnd_errcov_file=${output_dir}'/input_KF_errcov_'${nx}'ndim.csv'
 fi
 #----------------------------------------------------------------------
 # +++ Run exp.
