@@ -17,12 +17,12 @@ echo ${today}
 # +++ model dimension
 nx=24
 dt=0.01d0
-force=8.0d0
+force=2.75d0
 oneday=0.2d0
 
 # +++ integral period(day)
 spinup_period=365
-normal_period=3
+normal_period=5
 
 # +++ exp. info
 da_method='KF'
@@ -51,7 +51,7 @@ obs_wnd_point=0
 if [ ${obs_xintv} -ge 2  ]; then obs_set=1 ;fi
 if [ ${obs_xintv} -eq 99 ]; then 
   obs_set=2
-  obs_wnd_point=20
+  obs_wnd_point=10
 fi
 
 # +++ output info
