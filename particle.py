@@ -64,11 +64,7 @@ def observation(x:np.array, err):
 
 def likelihood(x,y):
   """Likelihood function """
-  likelihood = np.exp(-1*((y-observation(x,0)))@(y-observation(x,0))/4)
-  #print(y)
-  #print(observation(x,0))
-  #print(y-observation(x,0))
-  #print(likelihood)
+  likelihood = np.exp(-((y-observation(x,0)))@(y-observation(x,0))/4)
   return likelihood
 
 def importance_sampling(weight,x_fcst,x_obs):
@@ -103,7 +99,7 @@ def particle_filter(x_step,x_obs,weight,particle,parm):
    
 if __name__ == '__main__':
   # set initial parm.
-  step     = 100
+  step     = 10
   particle = 10
   err      = 4.0
   #
@@ -126,7 +122,7 @@ if __name__ == '__main__':
 
   # make initial score & weight
   for i_particle in range(particle):
-    x_particle[0,i_particle,:] = np.random.randn(2)
+    x_particle[0,i_particle,:] = np.random.randn(2)*20
     weight[0,i_particle] = 1.0
 
   """ DA(particle filter) """
