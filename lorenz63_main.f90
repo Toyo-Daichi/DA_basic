@@ -52,6 +52,9 @@ program lorenz63
   real(r_size), allocatable :: Kg(:,:)  ! Kalman gain
   real(r_size), allocatable :: Kh(:,:)  ! Kalman gain for pertuvation
   real(r_size), allocatable ::  H(:,:)  ! Observation operator
+  !
+  real(r_size), allocatable :: logL(:)
+  real(r_size), allocatable :: cweight(:), weight(:)  ! Likelihood, weight
 
   real(r_size), allocatable :: hx(:,:)
   real(r_size), allocatable :: hdxf(:,:)
@@ -81,6 +84,10 @@ program lorenz63
   real(r_size) :: dt_obs
   real(r_dble) :: Gnoise ! Gaussian noise
   real(r_size) :: alpha  ! inflation
+  
+  ! PF
+  real(r_size) :: logLmax
+  real(r_size) :: Lsum
   
   !real(r_size), parameter:: undef = -999.e0
   
@@ -156,8 +163,7 @@ program lorenz63
   allocate(obs_srf_mtx_v1(1:ny, 1:ny), obs_srf_mtx_v2(1:ny, 1:ny))
   allocate(obs_srf_inv_v1(1:ny, 1:ny), obs_srf_inv_v2(1:ny, 1:ny))
   
-  allocate(hx(ny,1))
-  allocate(hdxf(ny,1))
+  allocate(hx(ny,1), hdxf(ny,1))
   
   lda = ny; lwork = ny
   allocate(work(1:ny))
@@ -269,6 +275,7 @@ program lorenz63
   end do
   
   !====================================================================== 
+  !
   ! --- Sec4. Data assimilation
 
   if ( da_method == 'KF' ) then
@@ -284,21 +291,18 @@ program lorenz63
         !------------------------------------------------------- 
         ! +++ Euler method
         !------------------------------------------------------- 
-        
         call cal_Lorenz(                         &
         x_anl(it-1), y_anl(it-1), z_anl(it-1),   & ! IN
         x_k(1), y_k(1), z_k(1)                   & ! OUT
         )
-        
         x_anl(it) = x_anl(it-1) + dt * x_k(1)
         y_anl(it) = y_anl(it-1) + dt * y_k(1)
         z_anl(it) = z_anl(it-1) + dt * z_k(1)
           
       else if ( trim(intg_method) == 'Runge-Kutta' ) then 
-          !------------------------------------------------------- 
-          ! +++ Runge-Kutta method
-          !------------------------------------------------------- 
-          
+        !------------------------------------------------------- 
+        ! +++ Runge-Kutta method
+        !------------------------------------------------------- 
         call Lorenz63_Runge_Kutta(                &
         x_anl(it-1), y_anl(it-1), z_anl(it-1),    & ! IN
         x_anl(it), y_anl(it), z_anl(it)           & ! OUT
@@ -329,9 +333,9 @@ program lorenz63
         ! write(6,*) x_trend, y_trend, z_trend
         !
         ! >> Jacobian　matrix (*** origin form)
-        !JM(1,1) = -sig              ;JM(1,2) = sig             ;JM(1,3) = 0.0d0
-        !JM(2,1) = gamm -z_anl(it-1) ;JM(2,2) = -1.d0           ;JM(2,3) = -x_anl(it-1)
-        !JM(3,1) = y_anl(it-1)       ;JM(3,2) = x_anl(it-1)     ;JM(3,3) = -b
+        ! JM(1,1) = -sig              ;JM(1,2) = sig             ;JM(1,3) = 0.0d0
+        ! JM(2,1) = gamm -z_anl(it-1) ;JM(2,2) = -1.d0           ;JM(2,3) = -x_anl(it-1)
+        ! JM(3,1) = y_anl(it-1)       ;JM(3,2) = x_anl(it-1)     ;JM(3,3) = -b
         !--------------------------------------------------------------------------------
         
         ! >> Jacobian　matrix with time evolution
@@ -424,6 +428,7 @@ program lorenz63
         
         !------------------------------------------------------- 
         ! +++ Euler method
+        !------------------------------------------------------- 
         if ( trim(intg_method) == 'Euler' ) then
           x_anl_m(it, imem) = x_anl_m(it-1, imem) + dt * x_k(1)
           y_anl_m(it, imem) = y_anl_m(it-1, imem) + dt * y_k(1)
@@ -431,8 +436,8 @@ program lorenz63
           
         !------------------------------------------------------- 
         ! +++ Runge-Kutta method
+        !------------------------------------------------------- 
         else if ( trim(intg_method) == 'Runge-Kutta' ) then
-          
           call Lorenz63_Runge_Kutta(                                          &
             x_anl_m(it-1, imem), y_anl_m(it-1, imem), z_anl_m(it-1, imem),    & ! IN
             x_anl_m(it, imem), y_anl_m(it, imem), z_anl_m(it, imem)           & ! OUT
@@ -605,6 +610,93 @@ program lorenz63
         end if
       end if
     end do
+  
+  else if ( da_method == 'PF' ) then
+    ! +++ resetting
+    allocate(hx(ny,mems))
+    allocate(hdxf(ny,mems))
+    allocate(weight(mems))
+    allocate(cweight(0:mems))
+    
+    ! +++ initial setting
+    do imem = 1, mems
+      call gaussian_noise(sqrt(Pa(1,1)), Gnoise)
+      x_anl_m(0, imem) = x_sim(0) + Gnoise
+      call gaussian_noise(sqrt(Pa(2,2)), Gnoise)
+      y_anl_m(0, imem) = y_sim(0) + Gnoise
+      call gaussian_noise(sqrt(Pa(3,3)), Gnoise)
+      z_anl_m(0, imem) = z_sim(0) + Gnoise
+    end do
+      
+    x_anl(0) = sum(x_anl_m(0, 1:mems))/mems 
+    y_anl(0) = sum(y_anl_m(0, 1:mems))/mems
+    z_anl(0) = sum(z_anl_m(0, 1:mems))/mems
+    
+    do it = 1, nt_asm
+      ! 4.1: Time integration
+      do imem = 1, mems
+        call cal_Lorenz(                                                   &
+          x_anl_m(it-1, imem), y_anl_m(it-1, imem), z_anl_m(it-1, imem),   & ! IN
+          x_k(1), y_k(1), z_k(1)                                           & ! OUT
+        )
+          
+        !------------------------------------------------------- 
+        ! +++ Euler method
+        !------------------------------------------------------- 
+        if ( trim(intg_method) == 'Euler' ) then
+          x_anl_m(it, imem) = x_anl_m(it-1, imem) + dt * x_k(1)
+          y_anl_m(it, imem) = y_anl_m(it-1, imem) + dt * y_k(1)
+          z_anl_m(it, imem) = z_anl_m(it-1, imem) + dt * z_k(1)
+            
+        !------------------------------------------------------- 
+        ! +++ Runge-Kutta method
+        !------------------------------------------------------- 
+        else if ( trim(intg_method) == 'Runge-Kutta' ) then
+          call Lorenz63_Runge_Kutta(                                          &
+            x_anl_m(it-1, imem), y_anl_m(it-1, imem), z_anl_m(it-1, imem),    & ! IN
+            x_anl_m(it, imem), y_anl_m(it, imem), z_anl_m(it, imem)           & ! OUT
+          )
+        end if
+      end do
+
+      if(mod(it, obs_interval) == 0) then
+        write(6,*) 'Data assim. time == ', it*dt, 'sec.'
+        write(6,*) ''
+        write(6,*) '  TRUTH    = ', x_true(it), y_true(it), z_true(it)
+        write(6,*) '  PREDICT  = ', x_sim(it), y_sim(it), z_sim(it)
+        write(6,*) '  OBSERVE  = ', x_obs(it/obs_interval), y_obs(it/obs_interval), z_obs(it/obs_interval)
+        x_anl(it) = sum(x_anl_m(it, 1:mems))/mems
+        y_anl(it) = sum(y_anl_m(it, 1:mems))/mems
+        z_anl(it) = sum(z_anl_m(it, 1:mems))/mems
+        write(6,*) '  ANALYSIS (BEFORE) = ', x_anl(it), y_anl(it), z_anl(it)
+        write(6,*) ''
+      
+        ! *** calculate likelihood for particle
+        do imem = 1, mems
+          ! Hx
+          hx(1,imem) = matmul(H,x_anl_m(it,imem))
+          hx(2,imem) = matmul(H,y_anl_m(it,imem))
+          hx(3,imem) = matmul(H,z_anl_m(it,imem))
+      
+          ! y - Hx
+          hdxf(1,imem) = x_obs(it) - hx(1,imem)
+          hdxf(2,imem) = y_obs(it) - hx(2,imem)
+          hdxf(3,imem) = z_obs(it) - hx(3,imem)
+        
+          logL(imem) = -0.5d0*sum(hdxf(:,imem))
+        end do
+        logLmax = maxval(logL(:))
+
+        ! ** calculate weight for particle
+        cweight(0) = 0.0d0
+        Lsum = sum(exp(logL(:)-logLmax))
+        do imem = 1, mems
+          weight(imem) = exp(logL(imem)-logLmax)/Lsum
+          cweight(imem) = sum(weight(1:imem))
+        end do
+
+    end do
+  
   end if
   
   ! --- Sec5. Prediction after Data assimilation
